@@ -46,7 +46,7 @@ class Profile:
     def status(self):
         cfg = self.config()
         return {'profile_id': self.profile_id, **cfg,
-                'scheduler': 'explicit python -m finix.scheduler service; not activated automatically'}
+                'scheduler': 'automatic while native plugin is loaded; optional python -m finix.scheduler when host is offline'}
 
     def recipient(self, profile_id, recipient, expected):
         if profile_id != self.profile_id:
@@ -161,8 +161,24 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
 
 
 def register(ctx):
+    from hermes_constants import (get_hermes_home, set_hermes_home_override,
+                                  reset_hermes_home_override)
+    from .scheduler import Worker
+    home = get_hermes_home().expanduser().resolve()
+
     def handle(raw_args, **kwargs):
-        return command(raw_args, owner_id=ctx.get_config('owner_id', ''),
-                       owner_platform=ctx.get_config('owner_platform', ''), **kwargs)
+        token = set_hermes_home_override(home)
+        try:
+            return command(raw_args, owner_id=ctx.get_config('owner_id', ''),
+                           owner_platform=ctx.get_config('owner_platform', ''), **kwargs)
+        finally:
+            reset_hermes_home_override(token)
+
     ctx.register_command('finix', handler=handle, description='Owner-only encrypted profile backups',
                          args_hint='[status|setup|backup|configure|recipient|restore]')
+    # Uninstalled development imports have no native credential grant or lifecycle
+    # ownership. Only an actual payload in this profile may start unattended work.
+    if Path(ctx.manifest.path).resolve().is_relative_to(home / 'plugins'):
+        worker = Worker(home)
+        ctx.on_unload(worker.stop)
+        worker.start()
