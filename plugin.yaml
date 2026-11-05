@@ -1,0 +1,19 @@
+name: finix
+version: 0.1.0
+description: Owner-controlled age-encrypted profile backups
+provides_tools: []
+provides_hooks: []
+optional_env:
+  - name: FINIX_GOOGLE_CLIENT_ID
+    secret: false
+  - name: FINIX_GOOGLE_CLIENT_SECRET
+    secret: true
+oauth:
+  - id: google
+    authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+    token_url: https://oauth2.googleapis.com/token
+    scopes: ["https://www.googleapis.com/auth/drive.file"]
+    client_id_env: FINIX_GOOGLE_CLIENT_ID
+    client_secret_env: FINIX_GOOGLE_CLIENT_SECRET
+    hosts: [www.googleapis.com]
+    authorize_params: {access_type: offline, prompt: consent}

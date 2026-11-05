@@ -14,3 +14,10 @@ finix = "finix.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["finix*"]
+
+[tool.setuptools.data-files]
+"share/finix" = ["plugin.yaml", "__init__.py", "README.md"]
+"share/finix/finix" = ["finix/*.py"]
+"share/finix/dashboard" = ["dashboard/manifest.json", "dashboard/plugin_api.py", "dashboard/index.js"]
+"share/finix/desktop" = ["desktop/plugin.js", "desktop/SDK-CONTRACT.md"]
+"share/finix/dist" = ["dist/keygen.html"]

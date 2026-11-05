@@ -1,0 +1,1 @@
+{"name":"finix","label":"Finix","version":"0.1.0","description":"Encrypted backup backend; Desktop UI is provided separately","api":"plugin_api.py","entry":"index.js","tab":{"hidden":true}}
