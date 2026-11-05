@@ -1,6 +1,6 @@
 // desktop/src/plugin.mjs
-import * as sdk from "@hermes/plugin-sdk";
-import { jsx, jsxs } from "react/jsx-runtime";
+import * as sdk2 from "@hermes/plugin-sdk";
+import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 
 // node_modules/@noble/hashes/utils.js
 function isBytes(a) {
@@ -2201,9 +2201,9 @@ function validateObject(object, fields = {}, optFields = {}) {
     const val = object[fieldName];
     if (isOpt && val === void 0)
       return;
-    const current = typeof val;
-    if (current !== expectedType || val === null)
-      throw new Error(`param "${fieldName}" is invalid: expected ${expectedType}, got ${current}`);
+    const current2 = typeof val;
+    if (current2 !== expectedType || val === null)
+      throw new Error(`param "${fieldName}" is invalid: expected ${expectedType}, got ${current2}`);
   }
   const iter = (f, isOpt) => Object.entries(f).forEach(([k, v]) => checkField(k, v, isOpt));
   iter(fields, false);
@@ -5669,9 +5669,9 @@ function validateObject2(object, fields = {}, optFields = {}, title = "object") 
     }
     if (isOpt && val === void 0)
       return;
-    const current = typeof val;
-    if (current !== expectedType || val === null)
-      throw new TypeError(`${label} is invalid: expected ${expectedType}, got ${current}`);
+    const current2 = typeof val;
+    if (current2 !== expectedType || val === null)
+      throw new TypeError(`${label} is invalid: expected ${expectedType}, got ${current2}`);
   }
   const iter = (f, isOpt) => Object.entries(f).forEach(([k, v]) => checkField(k, v, isOpt));
   iter(fields, false);
@@ -8577,11 +8577,11 @@ function createKeySession() {
       verified = false;
     },
     async generate() {
-      const current = ++revision;
+      const current2 = ++revision;
       pair = null;
       verified = false;
       const next = await generateKeyPair();
-      if (current !== revision) return null;
+      if (current2 !== revision) return null;
       pair = next;
       return next.recipient;
     },
@@ -8601,18 +8601,143 @@ ${pair.identity}
     async verify(file) {
       verified = false;
       if (!pair) throw new Error("Generate a key first");
-      const current = revision;
+      const current2 = revision;
       const recipient = await recipientFromKeyFile(file);
-      if (current !== revision) return false;
+      if (current2 !== revision) return false;
       verified = recipient === pair.recipient;
       return verified;
     }
   };
 }
 
+// desktop/src/cloud.mjs
+import * as sdk from "@hermes/plugin-sdk";
+import { jsx, jsxs } from "react/jsx-runtime";
+var current = () => ({ profile: sdk.host.state.profile.get(), epoch: sdk.gatewayActivationEpoch?.() });
+function createCloud(ctx) {
+  const state = sdk.atom({
+    data: null,
+    provider: "workspace",
+    folder: "Finix",
+    consent: false,
+    local: false,
+    busy: false,
+    message: "\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u043C\u0430\u0441\u0442\u0435\u0440 \u0434\u043B\u044F \u0442\u0435\u043A\u0443\u0449\u0435\u0433\u043E backend."
+  });
+  let owner = null, disposed = false;
+  const set = (patch) => {
+    if (!disposed) state.set({ ...state.get(), ...patch });
+  };
+  const fence = () => {
+    const now = current();
+    if (disposed || !owner || owner.profile !== now.profile || owner.epoch !== now.epoch || !Number.isSafeInteger(now.epoch)) {
+      set({ data: null, consent: false, local: false });
+      throw new Error("scope");
+    }
+  };
+  const run = async (fn) => {
+    if (state.get().busy || disposed) return;
+    set({ busy: true });
+    try {
+      await fn();
+    } catch {
+      set({ message: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u0440\u043E\u0444\u0438\u043B\u044C, \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0431\u0440\u0430\u0443\u0437\u0435\u0440, rclone/Google OAuth client \u0438 \u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E\u0441\u0442\u0438. \u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u043D\u0435 \u0437\u0430\u043C\u0435\u043D\u0435\u043D\u043E; \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u0442\u0430\u0442\u0443\u0441. \u041D\u0435 \u043F\u0440\u0438\u0441\u044B\u043B\u0430\u0439\u0442\u0435 \u043A\u043E\u0434\u044B \u0438\u043B\u0438 config \u0432 \u0447\u0430\u0442." });
+    } finally {
+      set({ busy: false });
+    }
+  };
+  const refresh = () => run(async () => {
+    const now = current();
+    if (!owner || owner.profile !== now.profile || owner.epoch !== now.epoch) {
+      owner = now;
+      set({ data: null, consent: false, local: false });
+    }
+    fence();
+    const data = await ctx.rest("/connection");
+    fence();
+    if (typeof data.profile_id !== "string" || typeof data.ticket !== "string") throw new Error("contract");
+    set({ data, message: `\u0421\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435: ${data.session.status}. \u041D\u0430\u0441\u0442\u043E\u044F\u0449\u0438\u0439 \u0434\u043E\u0441\u0442\u0443\u043F \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u0442\u0441\u044F \u0434\u043E \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u044F; \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F \u0435\u0449\u0451 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u043B\u0430\u0441\u044C.` });
+  });
+  const action = (action2, extra = {}) => run(async () => {
+    fence();
+    const s = state.get();
+    if (!s.data) throw new Error("load");
+    const before = s.data;
+    const data = await ctx.rest("/connection", { method: "POST", body: {
+      profile_id: before.profile_id,
+      ticket: before.ticket,
+      action: action2,
+      session_id: before.session.id ?? "",
+      provider: s.provider,
+      folder: s.folder,
+      confirmed: s.consent,
+      local_browser: s.local,
+      ...extra
+    } });
+    fence();
+    if (data.profile_id !== before.profile_id) throw new Error("binding");
+    const readback = await ctx.rest("/connection");
+    fence();
+    if (readback.session.id !== data.session.id) throw new Error("session");
+    set({ data: readback, message: `\u0421\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435: ${readback.session.status}. ${readback.session.status === "applied" ? "\u0425\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043E \u0438 \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043E \u043E\u0431\u0440\u0430\u0442\u043D\u043E. \u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0437\u0430\u0448\u0438\u0444\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0439 \u043A\u043E\u043F\u0438\u0438 \u2014 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u0430\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u0430 backup." : "\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435\xBB \u043F\u043E\u0441\u043B\u0435 \u0432\u0445\u043E\u0434\u0430."}` });
+  });
+  ctx.onDispose(() => {
+    disposed = true;
+    owner = null;
+    state.set({ ...state.get(), data: null });
+  });
+  return { state, set, refresh, action, open: () => run(async () => {
+    fence();
+    const url = state.get().data?.session.url;
+    if (!url || !await ctx.os?.openExternal(url)) throw new Error("browser");
+    fence();
+  }) };
+}
+function Cloud({ cloud }) {
+  const s = sdk.useValue(cloud.state), a = cloud, session = s.data?.session;
+  const button = (label, onClick, disabled = false) => jsx(sdk.Button, { type: "button", onClick, disabled: s.busy || disabled, children: label });
+  const active = session && ["working", "authorize", "choice", "verified"].includes(session.status);
+  return jsxs("section", { "aria-label": "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043E\u0431\u043B\u0430\u043A\u0430", children: [
+    jsx("h2", { children: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043E\u0431\u043B\u0430\u043A\u0430" }),
+    jsx("p", { children: "\u041D\u043E\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0431\u0440\u0430\u0443\u0437\u0435\u0440 \u0438 Hermes backend \u043D\u0430\u0445\u043E\u0434\u044F\u0442\u0441\u044F \u043D\u0430 \u043E\u0434\u043D\u043E\u0439 \u043C\u0430\u0448\u0438\u043D\u0435. \u041D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435 \u0441 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u043C \u0441\u0435\u0440\u0432\u0435\u0440\u043E\u043C localhost \u043D\u0435 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442. \u041D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439\u0442\u0435 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0440\u0435\u0436\u0438\u043C \u0434\u043B\u044F \u0442\u0430\u043A\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0435\u0440\u0430. \u041F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 callback/\u043C\u043E\u0431\u0438\u043B\u044C\u043D\u044B\u0439 \u0432\u0445\u043E\u0434 \u043F\u043E\u043A\u0430 \u043D\u0435 \u0440\u0435\u0430\u043B\u0438\u0437\u043E\u0432\u0430\u043D\u044B." }),
+    button("\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", a.refresh),
+    jsxs("label", { children: ["\u041E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 \u0441\u0435\u0440\u0432\u0438\u0441", jsx("select", {
+      value: s.provider,
+      disabled: s.busy || active,
+      onChange: (e) => a.set({ provider: e.currentTarget.value, consent: false }),
+      children: Object.entries({ workspace: "Google Workspace", yandex: "\u042F\u043D\u0434\u0435\u043A\u0441 \u0414\u0438\u0441\u043A", onedrive: "OneDrive", dropbox: "Dropbox" }).map(([value, label]) => jsx("option", { value, children: label }, value))
+    })] }),
+    jsxs("label", { children: ["\u041F\u0430\u043F\u043A\u0430 rclone (Workspace \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u0441\u0432\u043E\u044E \u043F\u0440\u043E\u0444\u0438\u043B\u044C\u043D\u0443\u044E \u043F\u0430\u043F\u043A\u0443 Finix)", jsx("input", {
+      value: s.folder,
+      disabled: s.busy || active || s.provider === "workspace",
+      onChange: (e) => a.set({ folder: e.currentTarget.value })
+    })] }),
+    jsxs("label", { children: [jsx("input", {
+      type: "checkbox",
+      checked: s.local,
+      disabled: s.busy || active,
+      onChange: (e) => a.set({ local: e.currentTarget.checked })
+    }), "\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u043D\u0430\u0445\u043E\u0434\u0438\u0442\u0441\u044F \u043D\u0430 \u043C\u0430\u0448\u0438\u043D\u0435 Hermes backend (\u043D\u0435 \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 \u0441\u0435\u0440\u0432\u0435\u0440)"] }),
+    jsx("p", { children: "\u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u043C\u043E\u0433\u0443\u0442 \u0432\u043A\u043B\u044E\u0447\u0430\u0442\u044C \u0447\u0442\u0435\u043D\u0438\u0435, \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0438 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0432\u0441\u0435\u0433\u043E \u0434\u0438\u0441\u043A\u0430, \u043D\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0430\u043F\u043A\u0438 Finix. Google \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 Workspace \u0430\u043A\u043A\u0430\u0443\u043D\u0442; \u043F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 Desktop OAuth client JSON \u0432\u043B\u0430\u0434\u0435\u043B\u044C\u0446\u0430 (Google Cloud Console) \u0432 google_client_secret.json \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F \u0438 google-auth-oauthlib. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 setup.py --client-secret FILE; \u043D\u0435 \u043F\u0435\u0440\u0435\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0444\u0430\u0439\u043B\u0430 \u0432 \u0447\u0430\u0442. rclone \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0432\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u0435 OAuth \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F. \u0412\u0445\u043E\u0434 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442 backup." }),
+    jsxs("label", { children: [jsx("input", {
+      type: "checkbox",
+      checked: s.consent,
+      disabled: s.busy || active,
+      onChange: (e) => a.set({ consent: e.currentTarget.checked })
+    }), "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u044E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0438\u0441\u0430 \u0438 \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u044B\u0435 \u0448\u0438\u0440\u043E\u043A\u0438\u0435 \u043F\u0440\u0430\u0432\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u0430"] }),
+    button("\u041D\u0430\u0447\u0430\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", () => a.action("start"), !s.data || !s.local || !s.consent || active),
+    session?.url && button("\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0432\u0445\u043E\u0434 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435", a.open),
+    session?.status === "choice" && jsx("p", { children: `OneDrive: ${session.question}. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u0434\u0438\u0441\u043A\u0430/\u0442\u0438\u043F\u0430 \u0432 \u043F\u043E\u0440\u044F\u0434\u043A\u0435 rclone; \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u044B\u0439 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u043D\u0435\u044F\u0441\u0435\u043D, \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u043D\u044B\u0439 remote \u0432\u0440\u0443\u0447\u043D\u0443\u044E.` }),
+    ...(session?.choices ?? []).map((c) => button(c.label, () => a.action("answer", { choice: c.id }))),
+    button("\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", () => a.action("apply"), session?.status !== "verified"),
+    button("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", () => a.action("cancel"), !active),
+    jsx("p", { role: "status", "aria-live": "polite", children: s.message })
+  ] });
+}
+
 // desktop/src/plugin.mjs
 function scope() {
-  return { profile: sdk.host.state.profile.get(), epoch: sdk.gatewayActivationEpoch?.() };
+  return { profile: sdk2.host.state.profile.get(), epoch: sdk2.gatewayActivationEpoch?.() };
 }
 function sameScope(a, b) {
   return a.profile === b.profile && a.epoch === b.epoch;
@@ -8622,7 +8747,7 @@ function validStatus(value) {
 }
 function createWorkflow(ctx) {
   const key = createKeySession();
-  const state = sdk.atom({
+  const state = sdk2.atom({
     recipient: null,
     saved: false,
     verified: false,
@@ -8712,22 +8837,22 @@ function createWorkflow(ctx) {
       assertOwner();
       const before = state.get();
       if (!before.saved || !before.verified || !key.verified || !before.backend) throw new Error("not ready");
-      const current = await readStatus();
+      const current2 = await readStatus();
       assertOwner();
-      if (current.profile_id !== before.backend.profile_id || current.recipient !== before.backend.recipient) {
-        publish({ backend: current, replacement: false });
+      if (current2.profile_id !== before.backend.profile_id || current2.recipient !== before.backend.recipient) {
+        publish({ backend: current2, replacement: false });
         throw new Error("status changed");
       }
-      if (current.recipient !== null && current.recipient !== key.recipient && !before.replacement) throw new Error("confirm replacement");
+      if (current2.recipient !== null && current2.recipient !== key.recipient && !before.replacement) throw new Error("confirm replacement");
       assertOwner();
       await ctx.rest("/recipient", { method: "POST", body: {
-        profile_id: current.profile_id,
+        profile_id: current2.profile_id,
         recipient: key.recipient,
-        expected_recipient: current.recipient
+        expected_recipient: current2.recipient
       } });
       assertOwner();
       const after = await readStatus();
-      if (after.profile_id !== current.profile_id || after.recipient !== key.recipient) throw new Error("readback mismatch");
+      if (after.profile_id !== current2.profile_id || after.recipient !== key.recipient) throw new Error("readback mismatch");
       publish({ backend: after, replacement: false, message: "Public recipient registered and read back exactly. The private recovery key stayed on this device." });
     }, "Registration not confirmed. Check status and profile/backend, verify the saved key, and explicitly confirm any replacement before retrying."),
     copy: () => run(async () => {
@@ -8751,25 +8876,25 @@ function createWorkflow(ctx) {
   return { state, actions };
 }
 function Finix({ workflow }) {
-  const s = sdk.useValue(workflow.state);
-  const profile = sdk.useValue(sdk.host.state.profile);
+  const s = sdk2.useValue(workflow.state);
+  const profile = sdk2.useValue(sdk2.host.state.profile);
   const a = workflow.actions;
-  const button = (label, onClick, disabled = false) => jsx(sdk.Button, { type: "button", disabled: s.busy || disabled, onClick, children: label });
+  const button = (label, onClick, disabled = false) => jsx2(sdk2.Button, { type: "button", disabled: s.busy || disabled, onClick, children: label });
   const replacing = s.backend?.recipient && s.backend.recipient !== s.recipient;
-  return jsxs("section", {
+  return jsxs2("section", {
     "aria-label": "Finix recovery keys",
     style: { padding: "16px", overflow: "auto", height: "100%", color: "var(--ui-text-primary)" },
     children: [
-      jsx("h1", { children: "Finix" }),
-      jsx("p", { children: `Gateway profile: ${profile}. Keys are generated on this device, including when the backend is remote.` }),
-      jsx("p", { children: "Store the private recovery file outside Hermes in a safe local folder. Never send it in chat. Registration sends only the public recipient. Clearing or generating again discards the in-memory key." }),
+      jsx2("h1", { children: "Finix" }),
+      jsx2("p", { children: `Gateway profile: ${profile}. Keys are generated on this device, including when the backend is remote.` }),
+      jsx2("p", { children: "Store the private recovery file outside Hermes in a safe local folder. Never send it in chat. Registration sends only the public recipient. Clearing or generating again discards the in-memory key." }),
       button("Generate new key", a.generate),
       button("Clear key", a.clear, !s.recipient),
-      jsx("p", { children: "Public age recipient" }),
-      jsx("output", { "aria-label": "Public age recipient", style: { overflowWrap: "anywhere", display: "block" }, children: s.recipient ?? "No key generated" }),
+      jsx2("p", { children: "Public age recipient" }),
+      jsx2("output", { "aria-label": "Public age recipient", style: { overflowWrap: "anywhere", display: "block" }, children: s.recipient ?? "No key generated" }),
       button("Copy public recipient", a.copy, !s.recipient),
       button("Save private key to local folder", a.save, !s.recipient),
-      jsxs("label", { children: ["Verify saved recovery file (maximum 4096 bytes)", jsx("input", {
+      jsxs2("label", { children: ["Verify saved recovery file (maximum 4096 bytes)", jsx2("input", {
         type: "file",
         accept: ".txt,text/plain",
         disabled: s.busy || !s.saved,
@@ -8779,17 +8904,18 @@ function Finix({ workflow }) {
           if (file) return a.verify(file);
         }
       })] }),
-      jsx("p", { children: s.verified ? "Saved key: verified" : "Saved key: not verified" }),
+      jsx2("p", { children: s.verified ? "Saved key: verified" : "Saved key: not verified" }),
       button("Refresh backend status", a.refresh, !s.recipient),
-      jsx("p", { children: s.backend ? `Backend profile: ${s.backend.profile_id}; configured recipient: ${s.backend.recipient ?? "none"}` : "Backend registration unavailable until status is loaded." }),
-      replacing && jsxs("label", { children: [jsx("input", {
+      jsx2("p", { children: s.backend ? `Backend profile: ${s.backend.profile_id}; configured recipient: ${s.backend.recipient ?? "none"}` : "Backend registration unavailable until status is loaded." }),
+      replacing && jsxs2("label", { children: [jsx2("input", {
         type: "checkbox",
         checked: s.replacement,
         disabled: s.busy,
         onChange: (event) => a.replacement(event.currentTarget.checked)
       }), "I explicitly confirm replacing the configured recipient shown above. I have kept the old recovery key for existing backups."] }),
       button("Register public recipient", a.register, !s.saved || !s.verified || !s.backend || replacing && !s.replacement),
-      jsx("p", { role: "status", "aria-live": "polite", children: s.message })
+      jsx2("p", { role: "status", "aria-live": "polite", children: s.message }),
+      jsx2(Cloud, { cloud: workflow.cloud })
     ]
   });
 }
@@ -8798,11 +8924,12 @@ var plugin_default = {
   name: "Finix",
   register(ctx) {
     const workflow = createWorkflow(ctx);
-    const render = () => jsx(Finix, { workflow });
+    workflow.cloud = createCloud(ctx);
+    const render = () => jsx2(Finix, { workflow });
     ctx.register({ id: "pane", area: "panes", title: "Finix", data: { placement: "right", width: "380px" }, render });
-    ctx.register({ id: "page", area: sdk.ROUTES_AREA, data: { path: "/finix" }, render });
-    ctx.register({ id: "nav", area: sdk.SIDEBAR_NAV_AREA, data: { path: "/finix", label: "Finix", codicon: "shield" } });
-    ctx.register({ id: "open", area: sdk.PALETTE_AREA, data: { id: "finix.open", label: "Open Finix", run: () => sdk.host.navigate("/finix") } });
+    ctx.register({ id: "page", area: sdk2.ROUTES_AREA, data: { path: "/finix" }, render });
+    ctx.register({ id: "nav", area: sdk2.SIDEBAR_NAV_AREA, data: { path: "/finix", label: "Finix", codicon: "shield" } });
+    ctx.register({ id: "open", area: sdk2.PALETTE_AREA, data: { id: "finix.open", label: "Open Finix", run: () => sdk2.host.navigate("/finix") } });
   }
 };
 export {

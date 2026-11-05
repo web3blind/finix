@@ -1,7 +1,7 @@
 # Finix: owner-controlled encrypted Hermes backups
 
 Standalone Python CLI, native Hermes plugin, Desktop pane and offline browser key generator.
-Requires **Linux**, Python 3.11–3.14, `age` and `age-keygen` on PATH. No runtime Python dependencies. Run from this checkout, or install the package in a separate virtual environment. Never install it into a running Hermes environment for testing.
+Requires **Linux**, Python 3.11–3.14, `age` and `age-keygen` on PATH. The local CLI has no runtime Python dependencies. Optional Google login additionally uses the owning Hermes runtime's `google-auth-oauthlib` and Google API libraries; optional rclone login uses a reviewed `rclone` on PATH. Run from this checkout, or install the package in a separate virtual environment. Never install it into a running Hermes environment for testing.
 
 ```sh
 # Run on the owner's device. Only the public recipient is printed.
@@ -389,16 +389,95 @@ public helper's resumable-upload contract with a fake service. All account data
 in these tests is synthetic. **No real Google account smoke, auth, activation or
 publication was performed.**
 
+## Пользовательский мастер подключения (локальный backend)
+
+Откройте **Finix → Подключение облака** в включённом Desktop-плагине.
+`/finix connect` — owner-only инструкция; команда **не** возвращает ссылки
+авторизации, OAuth-коды, токены или CSRF tickets в чат/модель.
+
+1. «Обновить подключение» связывает UI с текущим backend/profile.
+2. Выберите **Google Workspace / Яндекс Диск / OneDrive / Dropbox**. Для rclone
+   задайте относительную папку (по умолчанию `Finix`); Workspace использует
+   существующий профильный folder workflow. Новое подключение не заменяет
+   выбранное хранилище автоматически.
+3. Подтвердите возможные широкие права (чтение/изменение/удаление всего диска)
+   и что браузер действительно находится **на машине backend**.
+4. «Начать подключение» → «Обновить подключение» → «Открыть вход в браузере».
+   Введите пароль только на сайте провайдера, не в Finix/чате. Вернитесь и
+   обновите статус. OneDrive выбирает обычный `onedrive` route, предлагает
+   список дисков; SharePoint/site/search/free-form token questions fail closed.
+5. Только после `verified` (read-only cloud probe) нажмите **«Применить
+   подключение»**. UI проверяет readback. Затем отдельно настройте public age
+   recipient и выполните `/finix backup`: именно backup проверяет передачу
+   ciphertext и полный SHA-256 readback. Вход не загружает тестовые данные,
+   не удаляет файлы и не включает расписание.
+
+**Google Workspace:** существующее подключение этого профиля проверяется через
+credential-owning Workspace helper и используется без нового grant/сужения
+scopes. Первый вход требует Desktop OAuth client JSON владельца: создайте client
+в Google Cloud Console, включите Drive API, при Testing добавьте свой аккаунт в
+Test users. Сохраните JSON локально через настоящий Workspace
+`skills/productivity/google-workspace/scripts/setup.py --client-secret FILE`
+в нужном owning profile (явный `HERMES_HOME`). Не отправляйте содержимое JSON
+агенту. Мастер требует `google-auth-oauthlib`, `google-auth`,
+`google-api-python-client` в Hermes runtime; ничего сам не устанавливает.
+Новый grant запрашивает Drive scope, не Gmail/Calendar. Токен создаётся сначала
+в приватном candidate, только явное применение эксклюзивно добавляет
+`google_token.json`; существующий токен никогда не перезаписывается.
+Legacy `setup.py --auth-url` / `--auth-code CODE` (localhost:1 и code в argv)
+**не** используется мастером.
+
+**rclone:** поддержан текущий протокол v1.75.2 `config create --non-interactive`
+→ `Option/State` → `config update --continue --state/--result` → пустой State.
+`config_auth_no_browser=true` передаётся как config option; флаг
+`authorize --auth-no-open-browser` не является флагом `config create`.
+У каждого подключения отдельный 0700 candidate/0600 config и ledger namespace;
+старые credentials/ledger не перезаписываются. Config и provider stdout/stderr
+остаются внутри child process; UI получает только ограниченные статусы,
+подтверждённую auth URL и выбор диска. Grants не принимаются как API fields.
+
+**Границы:** API монтируется только существующим authenticated Hermes host
+через `/api/plugins/finix/connection`; не запускайте standalone public server.
+Read-issued 5-minute UI ticket дополнительно защищает POST от CSRF; profile ID,
+random session ID, SDK activation epoch, single active callback and settings CAS
+отсекают старые профили/сессии. Ссылка существует только в памяти owner UI,
+не localStorage/настройках/общем status. Максимум 5 минут на session; отмена
+завершает process group и удаляет неприменённый candidate. Перезапуск инвалидирует
+session, child имеет hard timeout. Crash может оставить private candidate:
+автоматического credential sweeper нет; не удаляйте config активного подключения.
+Авторизация у провайдера после отмены может требовать ручного отзыва grant.
+
+**Удалённый сервер / телефон:** новый вход этим мастером **не поддержан**:
+localhost браузера указывает на телефон/ПК, а не сервер. Честное prerequisite —
+локальный backend либо отдельно согласованный authenticated HTTPS callback/
+секрет-безопасный companion/import. Finix не создаёт public tunnel/hosting и не
+предлагает вставить rclone `config_token` или OAuth redirect URL в чат. Проверен
+официальный remote setup: `rclone authorize` возвращает credential-bearing blob,
+для его безопасного возврата ещё нужен отдельный защищённый transport. Существующие
+серверные Workspace/rclone подключения по-прежнему можно использовать через
+описанные адаптеры; это не новый мобильный login.
+
+**Проверка:** реальные rclone v1.75.2 pre-auth state transitions и старт/отмена
+loopback callback для трёх backend без обращения к провайдерам; synthetic child
++ настоящий HTTP callback с wrong-state rejection, private token staging,
+explicit apply/CAS/cancel/expiry/restart/profile/CSRF checks. Google использует
+реальную google-auth-oauthlib loopback/code exchange с локальным synthetic token
+issuer, fake Drive probe; никакого настоящего Google account. Desktop проверяется
+исполняемым собранным ESM через public SDK contracts. Live accounts, реальный
+Desktop OS browser и телефон не проверялись; cloud permissions/quotas/VPN policies
+остаются live-account gates.
+
 ## Optional existing rclone connections (`rclone`)
 
 Implemented for configured **Yandex Disk (`yandex`), OneDrive Personal
 (`onedrive`) and Dropbox (`dropbox`)** remotes. This is a subprocess storage
-adapter, not a new authorization wizard. Supply a reviewed rclone executable on
-the plugin host's PATH and an already authorized config. Nothing downloads or
-installs rclone at runtime. Finix does not start OAuth, create an account, read
-token values or copy credentials. Built-in rclone app IDs can be used where the
-provider permits them; a custom OAuth application is not inherently required.
-Headless/localhost authorization is separate owner setup, outside this slice.
+adapter. You can reuse an already authorized config as described here, or use
+the new local connection wizard below. Supply a reviewed rclone executable on
+the plugin host's PATH. Nothing downloads or installs rclone at runtime. The
+storage adapter does not read token values; the wizard's isolated child owns
+OAuth and its private candidate config. Built-in rclone app IDs can be used
+where the provider permits them; a custom OAuth application is not inherently
+required. Remote/headless authorization is a separate owner setup prerequisite.
 See the official [Yandex](https://rclone.org/yandex/),
 [OneDrive](https://rclone.org/onedrive/), [Dropbox](https://rclone.org/dropbox/)
 and [remote setup](https://rclone.org/remote_setup/) documentation.

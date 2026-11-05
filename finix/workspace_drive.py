@@ -137,7 +137,7 @@ class WorkspaceDrive:
         token = (self.home / 'google_token.json').is_file()
         code = 'HELPER_MISSING' if not script else 'DEPENDENCIES_MISSING' if not deps else 'TOKEN_ABSENT' if not token else 'LOCAL_READY'
         return {'ready': code == 'LOCAL_READY', 'code': code, 'live_google_verified': False,
-                'action': 'Existing profile authorization must include Drive write access; Finix never starts OAuth.'}
+                'action': 'Existing profile authorization must include Drive write access; new local login is available in the authenticated Finix UI.'}
 
     def metadata(self, obj):
         result = self.runner('metadata', identifier(obj))

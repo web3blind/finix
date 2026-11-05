@@ -60,7 +60,13 @@ class Profile:
         if any(not cfg.get(key) for key in required):
             from .rclone_storage import RcloneError
             raise RcloneError('SELECTION_REQUIRED')
-        return RcloneStorage(self.home, self.profile_id, self.root / 'rclone',
+        state = self.root / 'rclone'
+        if cfg.get('rclone_connection'):
+            import re
+            if not re.fullmatch(r'[a-f0-9]{32}', cfg['rclone_connection']):
+                raise core.FinixError('Invalid connection binding')
+            state = state / cfg['rclone_connection']
+        return RcloneStorage(self.home, self.profile_id, state,
                              cfg['rclone_config'], cfg['rclone_remote'], cfg['rclone_root'])
 
     def status(self):
@@ -112,6 +118,7 @@ class Profile:
                 from .rclone_storage import config_path, remote_name, relative_root
                 validator = {'rclone_config': config_path, 'rclone_remote': remote_name, 'rclone_root': relative_root}[key]
                 value = str(validator(value))
+                cfg.pop('rclone_connection', None)
                 if key == 'rclone_config' and Path(value).is_relative_to(self.home):
                     raise core.FinixError('Rclone credentials must remain outside the backed-up profile')
             elif key in {'connector_account', 'connector_alias', 'connector_folder'}:
@@ -192,6 +199,18 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
         profile = current_profile()
         if not args or args == ['status']:
             return json.dumps(profile.status())
+        if args and args[0] == 'connect':
+            # Authorization URLs and CSRF tickets belong only to authenticated
+            # UI, never chat/model/tool output. Owner attestation above is still
+            # mandatory for these instructions.
+            return ('Откройте Finix в Hermes Desktop → «Подключение облака». '
+                    'Выберите Google Workspace, Яндекс Диск, OneDrive или Dropbox. '
+                    'Для нового входа браузер должен быть на машине backend. '
+                    'На удалённом сервере/телефоне localhost не работает; мастер '
+                    'откажется без подтверждения локального браузера. Не присылайте '
+                    'пароли, коды, токены или config-файлы в чат. Workspace: '
+                    'существующий аккаунт проверяется и используется без нового входа; '
+                    'для первого входа требуется Desktop OAuth client JSON в профиле.')
         if args == ['setup']:
             return ('Generate and save your private key only on your device: open the shipped '
                     'dist/keygen.html offline (authenticated backend download: '
@@ -203,7 +222,8 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
                     'connector_alias, connector_folder; no automatic login); '
                     'workspace (existing owning-profile Google Workspace authorization; no token copy or login); '
                     'rclone (existing Yandex Disk, OneDrive Personal or Dropbox remote; explicit rclone_config absolute path, '
-                    'rclone_remote name and rclone_root relative folder; config outside the backed-up profile; no OAuth wizard).')
+                    'rclone_remote name and rclone_root relative folder; config outside the backed-up profile). '
+                    'New account connection: /finix connect opens instructions for the authenticated Desktop wizard.')
         if args[0] == 'recipient' and len(args) in {3, 4}:
             expected = None if args[2] == 'none' else args[2]
             if expected is not None and args[3:] != ['confirm']:
@@ -242,7 +262,7 @@ def register(ctx):
             reset_hermes_home_override(token)
 
     ctx.register_command('finix', handler=handle, description='Owner-only encrypted profile backups',
-                         args_hint='[status|setup|backup|configure|recipient|restore]')
+                         args_hint='[status|setup|connect|backup|configure|recipient|restore]')
     # Uninstalled development imports have no native credential grant or lifecycle
     # ownership. Only an actual payload in this profile may start unattended work.
     if Path(ctx.manifest.path).resolve().is_relative_to(home / 'plugins'):

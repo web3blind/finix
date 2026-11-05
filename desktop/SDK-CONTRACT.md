@@ -57,6 +57,30 @@ registration fails closed. A POST already dispatched to its original route
 cannot be revoked by a later profile switch; a switched view will not show it as
 success or issue its follow-up status request.
 
+## Cloud connection UI
+
+`desktop/src/cloud.mjs` is bundled into the same shipped ESM. It uses the public
+`ctx.os.openExternal` and `ctx.rest` doors, never a private Electron bridge.
+`GET /connection` provides a short-lived CSRF ticket and backend binding;
+`POST /connection` accepts only closed actions (start/answer/cancel/apply), provider,
+folder, consent, local-browser attestation, profile ID and random session ID.
+No grant/code/token/config fields are admitted. The auth URL/ticket stay only in
+memory, not plugin/browser persistence or chat. Google/rclone credentials stay in
+the credential-owning subprocess. Manual refresh is intentional: no custom poll
+loop or hidden account login. Apply requires a read-only verified session and
+exact settings CAS; the UI reads its result back. SDK profile/activation epoch
+checks fence async results, browser opening and mutations. A backend switch
+requires a new refresh and new confirmations. Older SDKs fail closed.
+
+The wizard has Russian labels, explicit checkboxes, native select/inputs,
+keyboard-operable buttons and a polite live status region. New login requires
+browser and backend on the same machine; remote/mobile callback infrastructure
+is not provided. Existing Workspace reuse and fresh Google client prerequisites,
+rclone OneDrive choice limits and crash leftovers are documented in README.
+The built-bundle tests cover consent/local-mode gates, verified-only apply,
+readback and route/unload fences. They are not a native browser-opening or
+screen-reader test.
+
 ## Evidence and limitations
 
 The contract suite imports/evaluates the actual built ESM under Node VM modules,

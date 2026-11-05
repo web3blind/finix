@@ -1,6 +1,7 @@
 import * as sdk from '@hermes/plugin-sdk';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { createKeySession, validateRecipient } from '../../web/keys.mjs';
+import { createCloud, Cloud } from './cloud.mjs';
 
 // Authority is window-route scoped, not the currently focused chat's profile.
 // Older hosts may generate/save keys, but cannot safely register them.
@@ -154,7 +155,8 @@ function Finix({ workflow }) {
         onChange: event => a.replacement(event.currentTarget.checked)
       }), 'I explicitly confirm replacing the configured recipient shown above. I have kept the old recovery key for existing backups.'] }),
       button('Register public recipient', a.register, !s.saved || !s.verified || !s.backend || (replacing && !s.replacement)),
-      jsx('p', { role: 'status', 'aria-live': 'polite', children: s.message })
+      jsx('p', { role: 'status', 'aria-live': 'polite', children: s.message }),
+      jsx(Cloud, { cloud: workflow.cloud })
     ]
   });
 }
@@ -163,6 +165,7 @@ export default {
   id: 'finix', name: 'Finix',
   register(ctx) {
     const workflow = createWorkflow(ctx);
+    workflow.cloud = createCloud(ctx);
     const render = () => jsx(Finix, { workflow });
     ctx.register({ id: 'pane', area: 'panes', title: 'Finix', data: { placement: 'right', width: '380px' }, render });
     ctx.register({ id: 'page', area: sdk.ROUTES_AREA, data: { path: '/finix' }, render });

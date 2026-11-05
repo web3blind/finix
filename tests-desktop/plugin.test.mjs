@@ -46,6 +46,7 @@ async function harness(options = {}) {
     os: { writeClipboard: async text => { clipboard.push(text); return true; } },
     rest: async (path, opts) => {
       calls.push([path, opts]);
+      if (options.rest) return options.rest(path, opts);
       if (options.offline) throw new Error('offline');
       if (path === '/status') return options.status ? options.status({ recipient, afterPost }) : { profile_id: 'default', recipient };
       assert.equal(path, '/recipient');
@@ -211,4 +212,50 @@ test('route switch after dispatch cannot revoke in-flight POST, but never publis
 test('unload clears key authority and blocks retained callbacks', async () => {
   const h = await harness(); await h.ready(); await h.click('Refresh backend status'); h.dispose();
   await h.invoke('Register public recipient'); assert.equal(posts(h).length, 0);
+});
+
+function cloudControls(h) {
+  const node = h.controls().at(-1);
+  return node.type(node.props).props.children;
+}
+const cloudButton = (h, label) => cloudControls(h).find(n => n?.type === 'button' && n.props.children === label);
+const cloudChecks = h => cloudControls(h).filter(n => n?.type === 'label').flatMap(n => n.props.children).filter(n => n?.type === 'input' && n.props.type === 'checkbox');
+
+test('cloud wizard requires local-browser and explicit scope consent, applies only verified sessions, and reads back', async () => {
+  let status = 'idle';
+  const view = () => ({ profile_id: 'bound-backend', ticket: 'synthetic-csrf', session: { id: 'synthetic-session', status } });
+  const h = await harness({ rest: async (path, opts) => {
+    assert.equal(path, '/connection');
+    if (opts) {
+      assert.equal(opts.body.profile_id, 'bound-backend'); assert.equal(opts.body.ticket, 'synthetic-csrf');
+      assert.equal(opts.body.confirmed, true); assert.equal(opts.body.local_browser, true);
+      status = opts.body.action === 'start' ? 'working' : 'applied';
+    }
+    return view();
+  } });
+  assert.equal(cloudButton(h, 'Начать подключение').props.disabled, true);
+  await cloudButton(h, 'Обновить подключение').props.onClick();
+  assert.equal(cloudButton(h, 'Начать подключение').props.disabled, true);
+  cloudChecks(h).forEach(c => c.props.onChange({ currentTarget: { checked: true } }));
+  assert.equal(cloudButton(h, 'Начать подключение').props.disabled, false);
+  await cloudButton(h, 'Начать подключение').props.onClick();
+  assert.equal(cloudButton(h, 'Применить подключение').props.disabled, true);
+  status = 'verified'; await cloudButton(h, 'Обновить подключение').props.onClick();
+  assert.equal(cloudButton(h, 'Применить подключение').props.disabled, false);
+  await cloudButton(h, 'Применить подключение').props.onClick();
+  assert.match(h.text(), /Хранилище выбрано и прочитано обратно/);
+  assert.ok(h.calls.filter(([, o]) => !o).length >= 4);
+  assert.ok(!h.text().includes('synthetic-csrf'));
+});
+
+test('cloud wizard fences backend switches and unload before mutation', async () => {
+  const h = await harness({ rest: async () => ({ profile_id: 'bound', ticket: 'csrf', session: { id: 'session', status: 'verified' } }) });
+  await cloudButton(h, 'Обновить подключение').props.onClick();
+  cloudChecks(h).forEach(c => c.props.onChange({ currentTarget: { checked: true } }));
+  const oldApply = cloudButton(h, 'Применить подключение').props.onClick;
+  h.switchRoute(); await oldApply();
+  assert.equal(h.calls.filter(([, o]) => o?.method === 'POST').length, 0);
+  await cloudButton(h, 'Обновить подключение').props.onClick();
+  h.dispose(); await oldApply();
+  assert.equal(h.calls.filter(([, o]) => o?.method === 'POST').length, 0);
 });

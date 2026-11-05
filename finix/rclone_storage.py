@@ -158,7 +158,7 @@ class RcloneStorage:
         try:
             kind = self.selected_type()
             return {'ready': True, 'code': 'LOCAL_READY', 'type': kind, 'live_cloud_verified': False,
-                    'action': 'Local config discovery only; account/permissions checked on explicit backup. No OAuth wizard.'}
+                    'action': 'Local config discovery only; account/permissions checked on explicit backup. New local login is available in the authenticated Finix UI.'}
         except RcloneError as exc:
             return {'ready': False, 'code': exc.code, 'live_cloud_verified': False, 'action': str(exc)}
 
