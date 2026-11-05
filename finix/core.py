@@ -21,10 +21,24 @@ import uuid
 
 MAX_BYTES = 128 * 1024 * 1024
 MAX_FILES = 10000
-FILE_ROOTS = frozenset({'config.yaml', '.env', 'auth.json', 'auth_state.json', 'state.db'})
-TREE_ROOTS = frozenset({'memories', 'skills'})
-# Cron output/history and executable plugin code are deliberately not included.
-EXACT_FILES = frozenset({'cron/jobs.json'})
+# Canonical profile-relative user state (never chase configured external paths).
+# Executable plugin/skill bytes are inert archive data; restore never imports them.
+FILE_ROOTS = frozenset({
+    'config.yaml', '.env', 'auth.json', 'auth_state.json', 'state.db',
+    'memory_store.db', 'response_store.db', 'projects.db', 'verification_evidence.db',
+    'kanban.db', 'gateway_state.json', 'channel_directory.json', 'channel_aliases.json',
+    'processes.json', 'feishu_comment_pairing.json',
+})
+TREE_ROOTS = frozenset({
+    'memories', 'skills', 'plugins', 'plugin-data', 'desktop-plugins', 'vault',
+    'secrets', 'sessions', 'pairing', 'platforms/pairing', 'kanban/boards',
+})
+EXACT_FILES = frozenset({
+    'cron/jobs.json', 'cron/executions.db', 'gateway/discord_message_recovery.db',
+})
+# Only plugin source dependency/checkouts and Python caches are regenerable here.
+# Do not apply these exclusions to plugin-data or other user-state trees.
+PLUGIN_SOURCE_EXCLUSIONS = frozenset({'node_modules', '.git', '__pycache__'})
 RECIPIENT = re.compile(r'age1[023456789acdefghjklmnpqrstuvwxyz]{58}')
 
 
@@ -32,12 +46,18 @@ class FinixError(Exception):
     """Safe, non-secret diagnostic suitable for the CLI."""
 
 
+def excluded(name):
+    parts = PurePosixPath(name).parts
+    return (bool(parts) and parts[0] in {'plugins', 'desktop-plugins'}
+            and any(p in PLUGIN_SOURCE_EXCLUSIONS for p in parts[1:]))
+
+
 def allowed(name):
     parts = PurePosixPath(name).parts
     return (bool(parts) and len(parts) <= 32 and not name.startswith('/') and str(PurePosixPath(name)) == name
-            and all(p not in {'.', '..', ''} for p in parts)
+            and all(p not in {'.', '..', ''} for p in parts) and not excluded(name)
             and (name in FILE_ROOTS or name in EXACT_FILES
-                 or (len(parts) > 1 and parts[0] in TREE_ROOTS)))
+                 or any(name.startswith(root + '/') for root in TREE_ROOTS)))
 
 
 def checked_path(value):
@@ -103,9 +123,10 @@ def scan(rootfd):
             raise FinixError('Source directory count or depth exceeds limit')
         for name in sorted(os.listdir(fd)):
             relative = f'{prefix}/{name}' if prefix else name
-            descend = (relative in TREE_ROOTS or relative == 'cron'
-                       or prefix.split('/')[0] in TREE_ROOTS)
-            if not (descend or allowed(relative)):
+            descend = (any(relative == root or relative.startswith(root + '/')
+                           or root.startswith(relative + '/') for root in TREE_ROOTS)
+                       or any(path.startswith(relative + '/') for path in EXACT_FILES))
+            if excluded(relative) or not (descend or allowed(relative)):
                 continue
             s = os.stat(name, dir_fd=fd, follow_symlinks=False)
             if stat.S_ISDIR(s.st_mode) and descend:
@@ -185,13 +206,45 @@ def sqlite_snapshot(fd, parent, name):
         memory.close()
 
 
+def normalize_cron(data):
+    """Accept Hermes's three storage shapes without silently dropping bad jobs."""
+    try:
+        payload = json.loads(data)
+        if isinstance(payload, list):
+            payload = {'jobs': payload}
+        if not isinstance(payload, dict) or not isinstance(payload.get('jobs'), (list, dict)):
+            raise FinixError('Unsupported cron jobs format')
+        jobs = payload['jobs']
+        if isinstance(jobs, dict):
+            if not all(isinstance(job, dict) for job in jobs.values()):
+                raise FinixError('Unsupported cron job')
+            jobs = [{**job, 'id': job.get('id') or key} for key, job in jobs.items()]
+        if not all(isinstance(job, dict) for job in jobs):
+            raise FinixError('Unsupported cron job')
+        payload['jobs'] = jobs
+        return json.dumps(payload).encode()
+    except (ValueError, TypeError, RecursionError):
+        raise FinixError('Invalid cron JSON') from None
+
+
 def make_archive(rootfd):
     inventory = scan(rootfd)
     entries = {}
+    companions = set()
     total = 0
     for name, expected in inventory.items():
+        if name in companions:
+            continue
         with source_file(rootfd, name, expected) as (fd, parent, leaf):
-            data = sqlite_snapshot(fd, parent, leaf) if name == 'state.db' else read_regular(fd)
+            if os.pread(fd, 16, 0) == b'SQLite format 3\x00':
+                data = sqlite_snapshot(fd, parent, leaf)
+                companions.update(name + suffix for suffix in ('-wal', '-shm', '-journal'))
+            else:
+                data = read_regular(fd, MAX_BYTES)
+        if name == 'cron/jobs.json':
+            if len(data) > 4 * 1024 * 1024:
+                raise FinixError('Cron JSON exceeds plaintext limit')
+            data = normalize_cron(data)
         total += len(data)
         if total > MAX_BYTES or (name == 'cron/jobs.json' and len(data) > 4 * 1024 * 1024):
             raise FinixError('Snapshot or cron JSON exceeds plaintext limit')
@@ -211,9 +264,13 @@ def make_archive(rootfd):
             info.size = len(data)
             info.mode = 0o600
             archive.addfile(info, io.BytesIO(data))
-    if len(buffer.getvalue()) > MAX_BYTES:
+    data = buffer.getvalue()
+    if len(data) > MAX_BYTES:
         raise FinixError('Compressed snapshot exceeds limit')
-    return buffer.getvalue()
+    # Exercise the reader's complete contract before encryption, publication or
+    # retention: payload sums omit manifest, tar headers and record padding.
+    validate_archive(data)
+    return data
 
 
 def run_age(args, data=None, output=None):
