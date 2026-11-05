@@ -43,10 +43,23 @@ class Profile:
         finally:
             os.close(fd)
 
+    def connector(self, cfg=None):
+        from .connector_drive import ManagedDrive
+        cfg = cfg or self.config()
+        return ManagedDrive(self.home, self.profile_id, cfg.get('connector_account', ''),
+                            cfg.get('connector_alias', ''), cfg.get('connector_folder', ''))
+
     def status(self):
         cfg = self.config()
-        return {'profile_id': self.profile_id, **cfg,
-                'scheduler': 'automatic while native plugin is loaded; optional python -m finix.scheduler when host is offline'}
+        result = {'profile_id': self.profile_id, **cfg,
+                  'scheduler': 'automatic while native plugin is loaded; optional python -m finix.scheduler when host is offline'}
+        if cfg['storage'] == 'connector-drive':
+            from .connector_drive import ConnectorError, ACTIONS
+            try:
+                result['managed_connector'] = self.connector(cfg).status()
+            except ConnectorError as exc:
+                result['managed_connector'] = {'ready': False, 'code': exc.code, 'action': ACTIONS[exc.code]}
+        return result
 
     def recipient(self, profile_id, recipient, expected):
         if profile_id != self.profile_id:
@@ -71,10 +84,14 @@ class Profile:
                 if key == 'interval_hours':
                     cfg['next_run'] = time.time() + value * 3600 if value else 0
             elif key == 'storage':
-                if value not in {'local', 'drive'}:
-                    raise core.FinixError('Storage must be local or drive')
+                if value not in {'local', 'drive', 'connector-drive'}:
+                    raise core.FinixError('Storage must be local, drive or connector-drive')
+            elif key in {'connector_account', 'connector_alias', 'connector_folder'}:
+                import re
+                if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.@-]{1,200}', value):
+                    raise core.FinixError('Expected an explicit managed account ID, alias or folder ID')
             else:
-                raise core.FinixError('Allowed settings: storage, retention, interval_hours')
+                raise core.FinixError('Allowed settings: storage, retention, interval_hours, connector_account, connector_alias, connector_folder')
             cfg[key] = value
             core.atomic_json(self.root / 'settings.json', cfg)
         return self.status()
@@ -96,6 +113,9 @@ class Profile:
                     cfg['folder_id'] = drive.create_folder()
                     core.atomic_json(self.root / 'settings.json', cfg)
                 result['drive'] = drive.upload(Path(result['path']), cfg['folder_id'], cfg['retention'])
+            elif cfg['storage'] == 'connector-drive':
+                result['managed_connector'] = self.connector(cfg).upload(
+                    Path(result['path']), self.root / 'connector-index', cfg['retention'])
             if cfg['retention']:
                 self._prune_local(cfg['retention'])
             cfg['next_run'] = now + cfg['interval_hours'] * 3600 if cfg['interval_hours'] else 0
@@ -143,7 +163,9 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
                     '/api/plugins/finix/keygen.html). Send only the public age1 recipient. '
                     'Use /finix recipient NEW none for initial registration; '
                     '/finix recipient NEW OLD confirm for replacement. '
-                    'Cloud login: hermes auth add finix:google (owner terminal only).')
+                    'Storage choices: local; drive (own OAuth: hermes auth add finix:google in owner terminal); '
+                    'connector-drive (built-in Hermes googledrive: explicitly select connector_account, '
+                    'connector_alias, connector_folder; no automatic login).')
         if args[0] == 'recipient' and len(args) in {3, 4}:
             expected = None if args[2] == 'none' else args[2]
             if expected is not None and args[3:] != ['confirm']:
@@ -155,8 +177,13 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
             return json.dumps(profile.configure(args[1], args[2]))
         if args == ['restore']:
             return 'Restore only on your recovery device: python -m finix restore --archive FILE --identity KEYFILE --target NEW_DIRECTORY. Never send a private key to chat.'
-        return 'Usage: /finix status|setup|recipient NEW none|recipient NEW OLD confirm|backup|configure storage local/drive|configure retention N|configure interval_hours N|restore'
-    except (core.FinixError, ValueError, OSError, RuntimeError):
+        return 'Usage: /finix status|setup|recipient NEW none|recipient NEW OLD confirm|backup|configure storage local/drive/connector-drive|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
+    except core.FinixError as exc:
+        from .connector_drive import ConnectorError
+        if isinstance(exc, ConnectorError):
+            return str(exc)
+        return 'Finix operation failed; check local configuration, public recipient, storage and authorization. No old copies are pruned on upload/readback failure.'
+    except (ValueError, OSError, RuntimeError):
         return 'Finix operation failed; check local configuration, public recipient, storage and authorization. No old copies are pruned on upload/readback failure.'
 
 

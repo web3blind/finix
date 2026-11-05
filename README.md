@@ -228,6 +228,65 @@ No real Google-account smoke has been performed: user client setup/sign-in remai
 a blocker. Controlled local HTTP tests exercise the real SDK request helper with
 only a synthetic grant resolver and redirected test transport, not real OAuth.
 
+## Managed connector admission (not an available Google storage backend)
+
+`connector-drive` is a **discovery-gated experimental path**, not a claim that
+Hermes currently offers a managed googledrive connector. The current public
+website catalogue does not establish that availability; a source-code hint is
+not evidence. Only the authenticated gateway's dynamic `list_connectors` result
+can admit discovery. Local storage remains the default; `drive` above remains
+the separate own-OAuth implementation. This is neither Google Workspace nor an
+optional MCP/plugin-catalog installation.
+
+Explicit owner settings are `storage=connector-drive`, `connector_account`
+(connection ID), `connector_alias`, and `connector_folder`. Use the existing
+`/finix configure KEY VALUE` handler. No default/newest account is selected.
+`/finix status` and the authenticated status route report `managed_connector`
+with `ready`, `code`, and actionable `action` fields. `NO_TOKEN` means there is
+no usable profile-local managed authorization; Finix starts no identity/login.
+`CONNECTOR_UNAVAILABLE` means the actual catalogue does not advertise enabled
+`googledrive`; `NO_SCHEMA` and `UNSUPPORTED_SCHEMA` are hard execution blocks.
+The reviewed production schema/codec registry is deliberately empty: **live
+Google storage is not implemented/admitted until authenticated schema and output
+semantics have been reviewed**. No vendor tool names or input mappings are guessed.
+
+The SDK default auth reader can replace retired guest identities and fall back
+to global auth. Finix does not use it. Its supported header-provider seam delegates
+to the SDK's read-only token probe only with an explicit profile-local managed
+token scope; no bearer is extracted or persisted by the adapter. An auth-store-only
+configuration returns `AUTH_POLICY_UNSUPPORTED` rather than borrowing root auth or
+refreshing/creating an identity. Do not put tokens in chat. Profile home, secret
+scope and multiplex scope are bound together for every adapter operation, including
+scheduler calls. This auth-policy limitation is an additional deployment gate.
+
+The exercised synthetic codec uses the actual `ConnectorClient` wire validation,
+account lookup, search/schemas, `execute(PlannedCall)`, `stage_file`, `put_file` and
+streamed `get_file`. The transfer engine caps ciphertext at the gateway's **20 MiB**,
+checks owner/folder/snapshot/size/SHA-256 by remote metadata and binary readback,
+and only then journals successful objects and permits retention. Retention is
+limited to 1000 journal-owned records in the exact profile/account/alias/folder;
+foreign objects and corrupt readbacks block deletion. URL hosts must be pinned by
+a reviewed codec; presigned transfer refuses redirects and ambient netrc/proxies.
+There are no extra application retries; SDK timeouts/retries are bounded per
+request, not a total wall-clock deadline. Crash leftovers are not swept.
+
+Future admitted managed recovery uses a saved public upload record JSON:
+
+```sh
+python -m finix.connector_drive status --home /ABSOLUTE/HERMES_PROFILE \
+  --profile-id ORIGINAL_ID --account CONNECTION_ID --alias EXACT_ALIAS --folder FOLDER_ID
+python -m finix.connector_drive download --home /ABSOLUTE/HERMES_PROFILE \
+  --profile-id ORIGINAL_ID --account CONNECTION_ID --alias EXACT_ALIAS --folder FOLDER_ID \
+  --object OBJECT_ID --descriptor /safe/public-upload-record.json --output /safe/recovered.age
+python -m finix restore --archive /safe/recovered.age \
+  --identity /safe/recovery.key --target /safe/new-profile
+```
+
+The first commands currently stop at the documented admission gates. Synthetic
+SDK tests exercise download and exclusive mode-0600 output, not live Google.
+Readback verifies stored ciphertext, not decryptability. Keep the private recovery
+key off the server and perform a real restore periodically.
+
 ## Verification and remaining deployment gates
 
 Run Python tests from this repository with the Hermes checkout available on
