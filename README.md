@@ -421,7 +421,14 @@ Test users. Сохраните JSON локально через настоящи
 в нужном owning profile (явный `HERMES_HOME`). Не отправляйте содержимое JSON
 агенту. Мастер требует `google-auth-oauthlib`, `google-auth`,
 `google-api-python-client` в Hermes runtime; ничего сам не устанавливает.
-Новый grant запрашивает Drive scope, не Gmail/Calendar. Токен создаётся сначала
+Workspace helper и зависимости обязательны до начала входа и повторно проверяются
+перед применением; при их исчезновении текущие настройки/токен не меняются.
+Новый grant запрашивает Drive scope, не Gmail/Calendar, с `prompt=consent`.
+Если Google не вернул refresh token, мастер не подтверждает подключение:
+`WORKSPACE_REFRESH_TOKEN_REQUIRED` означает повторить вход с согласием на
+автономный доступ; не переносите refresh token из другого grant. Сохранённый
+candidate проверяется тем же authorized-user loader, что использует Workspace.
+Токен создаётся сначала
 в приватном candidate, только явное применение эксклюзивно добавляет
 `google_token.json`; существующий токен никогда не перезаписывается.
 Legacy `setup.py --auth-url` / `--auth-code CODE` (localhost:1 и code в argv)

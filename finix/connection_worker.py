@@ -147,13 +147,21 @@ def connect_workspace(home, stage):
             payload, ['https://www.googleapis.com/auth/drive'])
         flow.run_local_server(host='127.0.0.1', port=0, open_browser=False,
                               authorization_prompt_message='FINIX_AUTH {url}',
-                              success_message='Finix: можно закрыть окно.', timeout_seconds=300)
+                              success_message='Finix: можно закрыть окно.', timeout_seconds=300,
+                              prompt='consent')
+        # Validate exactly the authorized-user contract the Workspace loader uses.
+        # Never borrow a refresh token from a different, existing grant.
+        from google.oauth2.credentials import Credentials
+        serialized = flow.credentials.to_json()
+        if not flow.credentials.refresh_token:
+            raise ValueError('WORKSPACE_REFRESH_TOKEN_REQUIRED')
+        credentials = Credentials.from_authorized_user_info(json.loads(serialized))
         # Read-only Drive probe before exposing success. No provider data leaves.
         from googleapiclient.discovery import build
-        build('drive', 'v3', credentials=flow.credentials).about().get(fields='user').execute()
+        build('drive', 'v3', credentials=credentials).about().get(fields='user').execute()
         fd = os.open(stage / 'workspace-token.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, 'w') as stream:
-            stream.write(flow.credentials.to_json())
+            stream.write(serialized)
             stream.flush()
             os.fsync(stream.fileno())
     emit(status='verified')
@@ -209,8 +217,12 @@ def main():
             connect_rclone(binary, Path(stage), provider)
         else:
             raise ValueError('provider')
-    except BaseException:
-        emit(status='failed')
+    except BaseException as exc:
+        # Only this closed remediation code crosses; never serialize exceptions.
+        if isinstance(exc, ValueError) and exc.args == ('WORKSPACE_REFRESH_TOKEN_REQUIRED',):
+            emit(status='failed', code='WORKSPACE_REFRESH_TOKEN_REQUIRED')
+        else:
+            emit(status='failed')
         return 1
     return 0
 

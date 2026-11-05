@@ -47,6 +47,24 @@ def safe_url(provider, url):
             and set(query) == {'state'})
 
 
+def workspace_prerequisites(profile, *, oauth=False):
+    from importlib.util import find_spec
+    from .workspace_drive import helper_path
+    helper = helper_path(profile.home)
+    if not helper:
+        raise ConnectionError('WORKSPACE_HELPER_REQUIRED')
+    dependencies = ['google.auth', 'googleapiclient']
+    if oauth:
+        dependencies.append('google_auth_oauthlib')
+    try:
+        ready = all(find_spec(name) is not None for name in dependencies)
+    except (ImportError, ValueError):
+        ready = False
+    if not ready:
+        raise ConnectionError('WORKSPACE_DEPENDENCIES_REQUIRED')
+    return helper
+
+
 class Connections:
     def __init__(self):
         self.lock = threading.RLock()
@@ -129,12 +147,10 @@ class Connections:
                 raise ConnectionError('WORKSPACE_CLIENT_REQUIRED')
         reuse = provider == 'workspace' and (profile.home / 'google_token.json').exists()
         worker_provider = 'workspace-reuse' if reuse else provider
-        if reuse:
-            from .workspace_drive import helper_path
-            helper = helper_path(profile.home)
-            if not helper:
-                raise ConnectionError('WORKSPACE_HELPER_REQUIRED')
-            binary = str(helper)
+        if provider == 'workspace':
+            helper = workspace_prerequisites(profile, oauth=not reuse)
+            if reuse:
+                binary = str(helper)
         ident = secrets.token_hex(16)
         stage = profile.root / 'connections' / ident
         core.private_dir(stage.parent)
@@ -197,6 +213,8 @@ class Connections:
                         s['public'].pop('url', None)
                     elif status == 'failed':
                         s['public'].update(status='failed')
+                        if event.get('code') == 'WORKSPACE_REFRESH_TOKEN_REQUIRED':
+                            s['public']['code'] = 'WORKSPACE_REFRESH_TOKEN_REQUIRED'
                         s['public'].pop('url', None)
                     else:
                         raise ValueError('event')
@@ -222,7 +240,7 @@ class Connections:
             except ProcessLookupError:
                 pass
         p.wait()
-        s['public'] = {k: v for k, v in s['public'].items() if k in {'id', 'provider', 'folder'}}
+        s['public'] = {k: v for k, v in s['public'].items() if k in {'id', 'provider', 'folder', 'code'}}
         s['public']['status'] = status
         shutil.rmtree(s['stage'], ignore_errors=True)
 
@@ -232,6 +250,7 @@ class Connections:
                 raise ConnectionError('SETTINGS_CHANGED')
             cfg = profile.config()
             if s['public']['provider'] == 'workspace':
+                workspace_prerequisites(profile, oauth=not s['reuse'])
                 target = profile.home / 'google_token.json'
                 if not s['reuse'] and target.exists():
                     raise ConnectionError('WORKSPACE_REUSE_EXISTING')
