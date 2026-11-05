@@ -127,8 +127,10 @@ class RcloneTests(unittest.TestCase):
         with self.assertRaises(core.FinixError):
             RcloneStorage(self.home, 'a' * 64, self.state, str(linked), 'cloud', 'root', runner=self.fake)
         self.confdir.chmod(0o755)
-        with self.assertRaises(core.FinixError):
-            self.drive.status()
+        self.assertEqual(self.drive.status()['code'], 'CONFIG_PERMISSIONS')
+        self.confdir.chmod(0o700)
+        self.config.unlink()
+        self.assertEqual(self.drive.status()['code'], 'CONFIG_UNAVAILABLE')
 
     def test_local_readiness_unknown_type_and_minimal_env(self):
         self.assertEqual(self.drive.status()['code'], 'LOCAL_READY')
@@ -239,7 +241,8 @@ class RcloneTests(unittest.TestCase):
             self.fake.corrupt = True
             with self.assertRaises(core.FinixError):
                 profile.backup()
-        self.assertTrue(Path(first['path']).is_file())
+        self.assertIsInstance(first['path'], str)
+        self.assertTrue(Path(str(first['path'])).is_file())
         self.assertEqual(len(list((profile.root / 'copies').glob('*.age'))), 2)
 
     @unittest.skipUnless(os.environ.get('FINIX_RCLONE_BINARY'), 'explicit reviewed rclone binary required')

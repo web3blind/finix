@@ -50,11 +50,14 @@ def config_path(value):
     if not isinstance(value, str) or not Path(value).is_absolute():
         raise core.FinixError('Explicit absolute rclone config path required')
     path = core.checked_path(value)
-    info, parent = path.stat(), path.parent.stat()
+    try:
+        info, parent = path.stat(), path.parent.stat()
+    except OSError:
+        raise RcloneError('CONFIG_UNAVAILABLE') from None
     if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600
             or stat.S_IMODE(parent.st_mode) != 0o700
             or info.st_uid != os.getuid() or parent.st_uid != os.getuid()):
-        raise core.FinixError('Rclone config must be owner-owned 0600 in owner-owned 0700 directory')
+        raise RcloneError('CONFIG_PERMISSIONS')
     return path
 
 
