@@ -1,32 +1,72 @@
-"""Google Drive JSON-only encrypted object protocol via Hermes-managed OAuth.
+"""Standard Drive media files using Hermes-managed OAuth and resumable sessions.
 
-The public host helper accepts JSON, not raw media bodies. Consequently Finix
-stores bounded base64 ciphertext chunks in Drive file descriptions, plus a
-commit descriptor. This is NOT Drive's media upload API. Limit: 1 MiB encrypted.
-No refresh/access tokens are handled by Finix. No automatic login or redirects.
+Only initiation/metadata/media GETs use managed credentials. The provider-issued
+upload URI is a secret capability, used in memory for one raw unauthenticated PUT.
+Never persist it or include it (or provider response text) in diagnostics.
 """
 import argparse
-import base64
 import hashlib
+import http.client
 import json
-from pathlib import Path
 import re
 import time
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
-from .core import FinixError, checked_path
+from .core import MAX_BYTES, FinixError, checked_path
 
 BASE = 'https://www.googleapis.com/drive/v3/files'
-CHUNK = 8192
-MAX_PARTS = 128
-MAX_CIPHER = CHUNK * MAX_PARTS
+UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable'
+MAX_CIPHER = MAX_BYTES + 1024 * 1024  # Same encrypted-input allowance as core.
 ID = re.compile(r'[A-Za-z0-9_-]{1,200}')
+JSON_LIMIT = 1024 * 1024
 
 
 def managed_request(method, url, **kwargs):
     from hermes_cli.plugin_provider_requests import credentialed_provider_request
     return credentialed_provider_request('google', method, url, **kwargs)
+
+
+def session_target(uri):
+    """Accept only the documented Google upload endpoint, never arbitrary URLs."""
+    try:
+        if not isinstance(uri, str) or not 1 <= len(uri) <= 8192 or any(
+                ord(c) <= 32 or ord(c) >= 127 for c in uri):
+            raise ValueError
+        url = urlsplit(uri)
+        query = parse_qs(url.query, keep_blank_values=True, strict_parsing=True)
+        if (url.scheme != 'https' or url.netloc not in {'www.googleapis.com', 'www.googleapis.com:443'}
+                or url.path != '/upload/drive/v3/files' or url.fragment or '#' in uri
+                or set(query) != {'uploadType', 'upload_id'}
+                or query['uploadType'] != ['resumable'] or len(query['upload_id']) != 1
+                or not re.fullmatch(r'[A-Za-z0-9_-]{1,4096}', query['upload_id'][0])):
+            raise ValueError
+        return url.path + '?' + url.query
+    except (ValueError, TypeError):
+        raise FinixError('Unsafe Drive upload session; upload aborted') from None
+
+
+def upload_media(uri, data):
+    target = session_target(uri)
+    # http.client neither redirects nor uses environment proxies/netrc, and has
+    # no HTTPX request logger that might print the secret session query string.
+    connection = http.client.HTTPSConnection('www.googleapis.com', port=443, timeout=120)
+    connection.set_debuglevel(0)
+    try:
+        connection.request('PUT', target, body=data, headers={
+            'Content-Type': 'application/octet-stream', 'Content-Length': str(len(data))})
+        response = connection.getresponse()
+        body = response.read(JSON_LIMIT + 1)
+        if response.status not in {200, 201} or len(body) > JSON_LIMIT:
+            raise ValueError
+        result = json.loads(body)
+        if not isinstance(result, dict):
+            raise ValueError
+        return result
+    except Exception:
+        raise FinixError('Drive media upload failed; local backup preserved') from None
+    finally:
+        connection.close()
 
 
 class Drive:
@@ -37,25 +77,37 @@ class Drive:
         self.request = request or managed_request
         self.sleep = sleep
 
-    def call(self, method, suffix='', payload=None):
+    def response(self, method, url, payload=None, headers=None, limit=JSON_LIMIT, missing_ok=False):
         for attempt in range(3):
             try:
-                response = self.request(method, BASE + suffix, json=payload, timeout=20)
+                response = self.request(method, url, json=payload, headers=headers, timeout=120 if limit > JSON_LIMIT else 20)
             except Exception:
-                # The host can raise transport/auth errors; never echo token/provider
-                # response text through chat, scheduler logs or CLI diagnostics.
                 raise FinixError('Drive request unavailable; check owner-terminal sign-in/network') from None
             if response.status not in {429, 500, 502, 503, 504}:
                 break
-            # Creation is never retried: an ambiguous POST can create duplicates.
+            # No retry of ambiguous creation or upload sessions.
             if method == 'POST' or attempt == 2:
                 break
             self.sleep(0.25 * (2 ** attempt))
+        if missing_ok and response.status == 404:
+            return None
         if not 200 <= response.status < 300:
             raise FinixError(f'Drive request failed ({response.status})')
-        if len(response.body) > 1024 * 1024:
+        if len(response.body) > limit:
             raise FinixError('Drive response exceeds limit')
-        return response.json() if response.body else {}
+        return response
+
+    def call(self, method, suffix='', payload=None, missing_ok=False):
+        response = self.response(method, BASE + suffix, payload, missing_ok=missing_ok)
+        if response is None:
+            return None
+        try:
+            result = response.json() if response.body else {}
+            if not isinstance(result, dict):
+                raise ValueError
+            return result
+        except (ValueError, TypeError):
+            raise FinixError('Invalid Drive JSON response') from None
 
     @staticmethod
     def identifier(value):
@@ -68,29 +120,34 @@ class Drive:
 
     def create(self, name, kind, folder=None, description='', snapshot=''):
         data = {'name': name, 'mimeType': 'application/octet-stream',
-                'description': description, 'appProperties': self.properties(kind, snapshot)}
+                'appProperties': self.properties(kind, snapshot)}
+        if description:
+            data['description'] = description
         if folder:
             data['parents'] = [self.identifier(folder)]
         if kind == 'folder':
             data['mimeType'] = 'application/vnd.google-apps.folder'
-        return self.identifier(self.call('POST', '?fields=id', data)['id'])
+        return self.identifier(self.call('POST', '?fields=id', data).get('id'))
 
     def create_folder(self):
         return self.create('Finix encrypted backups', 'folder')
 
-    def get(self, identifier):
+    def get(self, identifier, missing_ok=False):
         return self.call('GET', '/' + self.identifier(identifier) +
-                         '?fields=id,name,mimeType,parents,appProperties,description,createdTime')
+                         '?fields=id,name,mimeType,parents,appProperties,createdTime', missing_ok=missing_ok)
 
-    def checked(self, identifier, kind, folder=None, snapshot=None):
-        obj = self.get(identifier)
+    def checked(self, identifier, kind, folder=None, snapshot=None, missing_ok=False):
+        obj = self.get(identifier, missing_ok=missing_ok)
+        if obj is None and missing_ok:
+            return None
         props = obj.get('appProperties', {})
-        if (props.get('finix') != '1' or props.get('owner') != self.owner
+        if (obj.get('id') != identifier or props.get('finix') != '1' or props.get('owner') != self.owner
                 or props.get('kind') != kind or (folder and folder not in obj.get('parents', []))
                 or (snapshot is not None and props.get('snapshot') != snapshot)):
             raise FinixError('Drive object ownership mismatch')
-        if kind == 'folder' and obj.get('mimeType') != 'application/vnd.google-apps.folder':
-            raise FinixError('Not a Finix folder')
+        mime = 'application/vnd.google-apps.folder' if kind == 'folder' else 'application/octet-stream'
+        if obj.get('mimeType') != mime:
+            raise FinixError('Invalid Finix Drive file type')
         return obj
 
     def upload(self, path, folder, keep=0):
@@ -101,62 +158,54 @@ class Drive:
         with path.open('rb') as stream:
             data = stream.read(MAX_CIPHER + 1)
         if not data or len(data) > MAX_CIPHER:
-            raise FinixError('Drive JSON protocol supports at most 1 MiB encrypted per snapshot')
+            raise FinixError('Drive ciphertext exceeds core encrypted-input limit')
         snapshot = uuid.uuid4().hex
-        parts = []
-        for start in range(0, len(data), CHUNK):
-            encoded = base64.b64encode(data[start:start + CHUNK]).decode('ascii')
-            parts.append(self.create(f'finix-{snapshot}-part-{len(parts):03}', 'part', folder,
-                                     encoded, snapshot))
-        manifest = {'format': 'finix-drive-1', 'sha256': hashlib.sha256(data).hexdigest(),
-                    'size': len(data), 'parts': parts}
-        description = json.dumps(manifest, separators=(',', ':'))
-        if len(description) > 16000:
-            raise FinixError('Drive descriptor exceeds limit')
-        identifier = self.create(path.name, 'snapshot', folder, description, snapshot)
-        verified = self.download(folder, identifier)
-        if verified != data:
-            raise FinixError('Drive readback mismatch; retention not run')
+        props = self.properties('pending', snapshot)
+        props.update(sha256=hashlib.sha256(data).hexdigest(), size=str(len(data)))
+        metadata = {'name': path.name, 'mimeType': 'application/octet-stream',
+                    'parents': [self.identifier(folder)], 'appProperties': props}
+        initiated = self.response('POST', UPLOAD, metadata, {
+            'X-Upload-Content-Type': 'application/octet-stream', 'X-Upload-Content-Length': str(len(data))})
+        uri = next((v for k, v in initiated.headers.items() if k.lower() == 'location'), None)
+        completed = upload_media(uri, data)
+        identifier = self.identifier(completed.get('id'))
+        obj = self.checked(identifier, 'pending', folder, snapshot)
+        if obj['appProperties'] != props:
+            raise FinixError('Drive uploaded metadata mismatch; retention not run')
+        self.read_media(identifier, self.descriptor(obj))
+        props = dict(props, kind='snapshot')
+        self.call('PATCH', '/' + identifier, {'appProperties': props})
+        committed = self.checked(identifier, 'snapshot', folder, snapshot)
+        if committed['appProperties'] != props:
+            raise FinixError('Drive commit readback mismatch; retention not run')
         if keep:
             self.prune(folder, identifier, keep)
         return {'id': identifier, 'folder_id': folder, 'profile_id': self.owner,
-                'sha256': manifest['sha256'], 'verified': True}
+                'sha256': props['sha256'], 'verified': True}
 
     def descriptor(self, obj):
         try:
-            manifest = json.loads(obj['description'])
-            parts = manifest['parts']
-            if (manifest['format'] != 'finix-drive-1' or not isinstance(parts, list)
-                    or not 1 <= len(parts) <= MAX_PARTS or len(set(parts)) != len(parts)
-                    or type(manifest['size']) is not int or not 0 < manifest['size'] <= MAX_CIPHER
-                    or not re.fullmatch(r'[a-f0-9]{64}', manifest['sha256'])):
+            props = obj['appProperties']
+            size = int(props['size'])
+            if (not 0 < size <= MAX_CIPHER or str(size) != props['size']
+                    or not re.fullmatch(r'[a-f0-9]{64}', props['sha256'])
+                    or not re.fullmatch(r'[a-f0-9]{32}', props['snapshot'])):
                 raise ValueError
-            for part in parts:
-                self.identifier(part)
-            return manifest
+            return {'size': size, 'sha256': props['sha256']}
         except (ValueError, KeyError, TypeError):
             raise FinixError('Invalid Drive descriptor') from None
+
+    def read_media(self, identifier, manifest):
+        data = self.response('GET', BASE + '/' + self.identifier(identifier) + '?alt=media',
+                             limit=MAX_CIPHER).body
+        if len(data) != manifest['size'] or hashlib.sha256(data).hexdigest() != manifest['sha256']:
+            raise FinixError('Drive readback hash mismatch; retention not run')
+        return data
 
     def download(self, folder, identifier):
         self.checked(folder, 'folder')
         obj = self.checked(identifier, 'snapshot', folder)
-        manifest = self.descriptor(obj)
-        data = bytearray()
-        for part in manifest['parts']:
-            chunk = self.checked(part, 'part', folder, obj['appProperties']['snapshot'])
-            try:
-                encoded = chunk['description']
-                if len(encoded) > 11000:
-                    raise ValueError
-                decoded = base64.b64decode(encoded, validate=True)
-            except (ValueError, KeyError, TypeError):
-                raise FinixError('Invalid Drive chunk') from None
-            if not 0 < len(decoded) <= CHUNK:
-                raise FinixError('Drive chunk exceeds limit')
-            data.extend(decoded)
-        if len(data) != manifest['size'] or hashlib.sha256(data).hexdigest() != manifest['sha256']:
-            raise FinixError('Drive readback hash mismatch; retention not run')
-        return bytes(data)
+        return self.read_media(identifier, self.descriptor(obj))
 
     def snapshots(self, folder):
         query = (f"'{self.identifier(folder)}' in parents and trashed = false and "
@@ -170,22 +219,22 @@ class Drive:
             response = self.call('GET', '?' + urlencode(params))
             result.extend(response.get('files', []))
             token = response.get('nextPageToken', '')
-            if not token:
+            if not token and len(result) <= 1000:
                 return result
         raise FinixError('Drive inventory exceeds 1000 objects; retention aborted')
 
     def prune(self, folder, current, keep):
-        # Pin current as retained regardless of Drive ordering/time lag.
+        # Pin current regardless of Drive ordering/time lag; check every deletion
+        # against actual metadata, never trust search results as ownership proof.
         others = [o for o in self.snapshots(folder) if o['id'] != current]
         for record in others[max(0, keep - 1):]:
-            obj = self.checked(record['id'], 'snapshot', folder)
-            manifest = self.descriptor(obj)
-            snapshot = obj['appProperties']['snapshot']
-            # Validate every candidate before deleting even the first chunk.
-            for part in manifest['parts']:
-                self.checked(part, 'part', folder, snapshot)
-            for identifier in [*manifest['parts'], record['id']]:
-                self.call('DELETE', '/' + self.identifier(identifier))
+            obj = self.checked(record['id'], 'snapshot', folder, missing_ok=True)
+            if obj is None:
+                continue
+            self.descriptor(obj)
+            self.call('DELETE', '/' + self.identifier(record['id']), missing_ok=True)
+            if self.get(record['id'], missing_ok=True) is not None:
+                raise FinixError('Drive deletion readback failed; retry retention later')
 
 
 def main():

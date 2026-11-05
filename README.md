@@ -136,7 +136,7 @@ run from the native payload inside that profile's `plugins/`: Hermes restricts
 credentialed requests to code inside an installed plugin. Never run scheduling
 from an unrelated pip package copy and expect access to the plugin grant.
 
-## Google Drive: real adapter with a constrained protocol
+## Google Drive: standard resumable media adapter
 
 Requires a user-owned Google OAuth client project, Drive API enabled, and appropriate
 loopback redirect setup. Provide `FINIX_GOOGLE_CLIENT_ID` and
@@ -157,28 +157,45 @@ original random Finix profile ID and validates that binding on use. It does not
 request broad access to arbitrary Drive folders. Set `/finix configure storage drive`
 after signing in. `folder_id` is persisted immediately after creation.
 
-**SDK limitation:** the current public `credentialed_provider_request` accepts
-JSON only, not raw upload bodies. This adapter therefore implements the explicit
-`finix-drive-1` protocol: base64 ciphertext chunks in bounded Drive file
-`description` fields and a commit descriptor. It is not a standard Drive media
-file or claimed resumable/media upload. **Maximum encrypted snapshot: 1 MiB**,
-8192-byte chunks, at most 128 chunks. This is suitable only for small profiles;
-local backups support the larger core limits. A full-size Drive upload needs up
-to 260 API requests including readback, so check Google quota. Creation is not
-retried after ambiguous errors; GET/DELETE retry at most three times with bounded
-backoff and 20-second request timeout. Requests do not follow redirects. Adapter
-JSON responses are capped after receipt; the host SDK itself buffers HTTP bodies
-before returning, so a transport-level response-memory cap is not provided here.
+The adapter follows Google's [official resumable-upload flow](https://developers.google.com/workspace/drive/api/guides/manage-uploads):
+managed OAuth initiates a JSON metadata POST to `/upload/drive/v3/files?uploadType=resumable`.
+The provider's `Location` is an upload capability: the ciphertext is sent with one
+raw PUT **without an Authorization header**, as in Google's single-request example.
+Finix neither obtains nor reconstructs a bearer token. URI validation permits only
+HTTPS `www.googleapis.com:443`, the exact upload path and the documented
+`uploadType=resumable` plus `upload_id` query; foreign hosts, credentials, fragments,
+extra/duplicate query keys and redirects fail closed. The session URI stays in memory,
+never settings, return values or diagnostics. The raw stdlib HTTP client does not
+use environment proxies/netrc or HTTP request logging. No new runtime dependency.
 
-Readback downloads every chunk, verifies length and whole-ciphertext SHA-256 before
-any retention. This verifies storage, **not decryption**. A new encrypted local
-copy is preserved on cloud failure; no old local/cloud copies are pruned on
-upload/readback failure. Retention only considers tagged committed snapshots in
-the owned folder; validates each candidate's descriptor/parts/parent/owner/snapshot
-before deleting. Inventory is capped at 1000 snapshots. Unrelated objects are not
-deleted. Partial failed uploads may leave orphan chunks; no automatic orphan
-sweeper or repair is claimed. Retention failure is an error even when the new
-backup was already stored.
+Each backup is one standard `application/octet-stream` Drive file, not base64 in
+metadata. Maximum ciphertext is the core encrypted-input allowance: **128 MiB +
+1 MiB age-overhead allowance**. This does not increase the core's plaintext/archive
+limits. The full ciphertext is buffered for upload and managed binary GET readback;
+there is no total-RSS guarantee. Adapter response bounds apply after the managed
+SDK has buffered the body, not at its transport layer. Raw PUT metadata responses
+are bounded while reading. Initiation/metadata requests use a 20-second timeout;
+media PUT/GET use 120 seconds (socket/network inactivity bounds, not a wall-clock
+job deadline). Creation and raw PUT are not retried after ambiguous errors.
+Managed GET/PATCH/DELETE retry transient HTTP errors at most three times with
+bounded backoff. Interrupted sessions are not persisted or resumed across runs;
+a later backup starts a fresh session. A 308 incomplete upload is a failure, not
+successful storage. All requests refuse redirects.
+
+The file starts tagged `pending`. Managed `GET files/id?alt=media` reads binary
+bytes, verifies whole-ciphertext length and SHA-256, then a metadata PATCH marks
+it `snapshot`; exact committed metadata is read back before retention. This
+verifies storage, **not decryption**. A new encrypted local copy is preserved on
+cloud failure; no retention runs after an upload/readback/commit failure. Retention
+only considers committed snapshots in the owned folder, pins the current upload
+regardless of stale ordering, and validates each candidate's ID, MIME type, parent,
+owner, snapshot ID and size/hash descriptor before deletion. Inventory is capped
+at 1000 snapshots. Unrelated objects are not deleted. A missing candidate or 404
+after an owned-file DELETE is safely reconciled; successful deletion is checked
+by metadata readback, so partially completed cleanup can restart. Other retention
+failures remain errors even when the new backup was already stored. Failed uploads
+may leave pending files/sessions; no orphan sweeper is claimed. The former synthetic
+`finix-drive-1` metadata protocol is not supported by this adapter.
 
 To recover cloud ciphertext on a fresh machine: install Hermes plus Finix, sign in
 to the same Google account/client, then from the installed native payload run:
