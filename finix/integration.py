@@ -49,6 +49,10 @@ class Profile:
         return ManagedDrive(self.home, self.profile_id, cfg.get('connector_account', ''),
                             cfg.get('connector_alias', ''), cfg.get('connector_folder', ''))
 
+    def workspace(self):
+        from .workspace_drive import WorkspaceDrive
+        return WorkspaceDrive(self.home, self.profile_id, self.root / 'workspace')
+
     def status(self):
         cfg = self.config()
         result = {'profile_id': self.profile_id, **cfg,
@@ -59,6 +63,8 @@ class Profile:
                 result['managed_connector'] = self.connector(cfg).status()
             except ConnectorError as exc:
                 result['managed_connector'] = {'ready': False, 'code': exc.code, 'action': ACTIONS[exc.code]}
+        if cfg['storage'] == 'workspace':
+            result['workspace'] = self.workspace().status()
         return result
 
     def recipient(self, profile_id, recipient, expected):
@@ -84,8 +90,8 @@ class Profile:
                 if key == 'interval_hours':
                     cfg['next_run'] = time.time() + value * 3600 if value else 0
             elif key == 'storage':
-                if value not in {'local', 'drive', 'connector-drive'}:
-                    raise core.FinixError('Storage must be local, drive or connector-drive')
+                if value not in {'local', 'drive', 'connector-drive', 'workspace'}:
+                    raise core.FinixError('Storage must be local, drive, workspace or connector-drive')
             elif key in {'connector_account', 'connector_alias', 'connector_folder'}:
                 import re
                 if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.@-]{1,200}', value):
@@ -113,6 +119,10 @@ class Profile:
                     cfg['folder_id'] = drive.create_folder()
                     core.atomic_json(self.root / 'settings.json', cfg)
                 result['drive'] = drive.upload(Path(result['path']), cfg['folder_id'], cfg['retention'])
+            elif cfg['storage'] == 'workspace':
+                result['workspace'] = self.workspace().backup_cipher(Path(result['path']), cfg['retention'])
+                # Public recovery record, independent of the original server ledger.
+                core.atomic_json(Path(result['path'] + '.workspace.json'), result['workspace'])
             elif cfg['storage'] == 'connector-drive':
                 result['managed_connector'] = self.connector(cfg).upload(
                     Path(result['path']), self.root / 'connector-index', cfg['retention'])
@@ -165,7 +175,8 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
                     '/finix recipient NEW OLD confirm for replacement. '
                     'Storage choices: local; drive (own OAuth: hermes auth add finix:google in owner terminal); '
                     'connector-drive (built-in Hermes googledrive: explicitly select connector_account, '
-                    'connector_alias, connector_folder; no automatic login).')
+                    'connector_alias, connector_folder; no automatic login); '
+                    'workspace (existing owning-profile Google Workspace authorization; no token copy or login).')
         if args[0] == 'recipient' and len(args) in {3, 4}:
             expected = None if args[2] == 'none' else args[2]
             if expected is not None and args[3:] != ['confirm']:
@@ -177,10 +188,11 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
             return json.dumps(profile.configure(args[1], args[2]))
         if args == ['restore']:
             return 'Restore only on your recovery device: python -m finix restore --archive FILE --identity KEYFILE --target NEW_DIRECTORY. Never send a private key to chat.'
-        return 'Usage: /finix status|setup|recipient NEW none|recipient NEW OLD confirm|backup|configure storage local/drive/connector-drive|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
+        return 'Usage: /finix status|setup|recipient NEW none|recipient NEW OLD confirm|backup|configure storage local/drive/workspace/connector-drive|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
     except core.FinixError as exc:
         from .connector_drive import ConnectorError
-        if isinstance(exc, ConnectorError):
+        from .workspace_drive import WorkspaceError
+        if isinstance(exc, (ConnectorError, WorkspaceError)):
             return str(exc)
         return 'Finix operation failed; check local configuration, public recipient, storage and authorization. No old copies are pruned on upload/readback failure.'
     except (ValueError, OSError, RuntimeError):

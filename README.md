@@ -302,3 +302,89 @@ Browser and Desktop suites/build commands are in `web/` and
 from CDN. Native Desktop OS-picker testing, production plugin enablement,
 real-account OAuth/Drive verification and a production scheduler are separate
 unperformed gates. Nothing has been published or activated in a live profile.
+
+## Google Workspace backend (`workspace`)
+
+This is an additional implemented storage path, separate from `drive` (Finix's
+own OAuth grant) and the currently fail-closed `connector-drive` scaffold. Existing
+local/Drive behavior is unchanged. It reuses the selected Hermes profile's
+existing Google Workspace authorization through `scripts/google_api.py`; Finix
+never reads, extracts or copies the token/client-secret files and never starts
+OAuth, revokes a grant or creates a fallback identity. Existing Workspace setup
+must already include Drive write permissions. Gmail-only grants are insufficient;
+a permission failure asks the owner to review Workspace authorization separately.
+
+```text
+/finix configure storage workspace
+/finix status
+/finix backup
+# Retention remains disabled until explicitly configured:
+/finix configure retention 5
+```
+
+`status.workspace` performs **local checks only**: trusted helper presence,
+Python client dependency availability and profile-local token **file presence**.
+`LOCAL_READY` does not mean valid auth, sufficient scopes, reachable Drive or a
+successful live-account test (`live_google_verified` is always false here).
+No `setup.py --check`, token refresh or API request is made by status/configure.
+The helper is discovered in the selected profile's installed Workspace skill,
+then in the Hermes checkout's bundled skill; it is not accepted from a URL or
+remote settings. The existing Workspace runtime needs `google.auth` and
+`googleapiclient` even if `gws` exists: upload/download use Python media clients.
+Finix's small subprocess entry point imports that helper fresh for each call,
+forces its Python client path, and extends metadata fields with `trashed` for
+retention readback. Credential loading/refresh stays inside the Workspace helper.
+
+The child has an explicit owning `HERMES_HOME` and minimal OS environment (no
+ambient credential variables, `PYTHONPATH`, `HERMES_GWS_BIN` or profile dotenv
+overlay). Each call has a 120-second wall-clock limit, a private process group,
+64 KiB combined stdout/stderr limit and a 129 MiB file-size resource limit.
+Raw provider diagnostics are not returned to chat/logs. Only age ciphertext is
+staged on disk, under a private temporary directory. Large or timed-out transfers
+fail safely; their remote orphan may require manual owner cleanup.
+
+Each backend identity maintains `workspace/workspace.json` outside the source
+profile under its Finix data directory. It records the exact newly-created folder
+ID, owner metadata and verified file IDs, sizes and SHA-256 values. There is no
+filename/prefix-based ownership, search pagination or adoption of old objects.
+Losing the ledger creates a fresh folder namespace and leaves old objects alone.
+Changing folder ownership, file parent/MIME/owner/size or ciphertext blocks
+rotation. At most 1000 records are admitted; retention zero is disabled.
+After uploading, Finix checks fresh metadata and downloads/hashes the full binary
+before journaling it. Only ledger-owned older objects can then be moved to trash
+(reversible, never permanent), with another fresh metadata/binary readback and
+trash-state verification. Each completed prune is journaled so partial failures,
+restarts and already-missing/trash objects do not authorize deletion elsewhere.
+The newest verified copy is protected. Cloud/upload/readback errors preserve local
+ciphertext and prevent local retention; retention errors are still reported.
+
+Every successful profile backup returns `workspace` public recovery metadata and
+saves it next to the local ciphertext as `*.age.workspace.json`. Save that JSON
+on the recovery device along with the private key (the JSON is not a key and
+contains no credentials, but includes file/folder IDs and owner email metadata).
+It is essential when the server/ledger is lost. After arranging existing
+Workspace access on the recovery host, download independently:
+
+```sh
+python -m finix.workspace_drive status --home /ABSOLUTE/HERMES_PROFILE \
+  --profile-id ORIGINAL_PROFILE_ID
+python -m finix.workspace_drive download --home /ABSOLUTE/HERMES_PROFILE \
+  --profile-id ORIGINAL_PROFILE_ID --record /safe/copy.age.workspace.json \
+  --output /safe/recovered.age
+python -m finix restore --archive /safe/recovered.age \
+  --identity /safe/recovery.key --target /safe/new-profile
+```
+
+The recovery command needs no original Finix state and exclusively creates a
+new mode-0600 output; it never overwrites a file. It verifies metadata, expected
+size and SHA-256 before publishing. Recovery uses the explicitly supplied
+original profile ID from the saved record, not a newly initialized server's ID.
+Ciphertext checks are not a substitute for a periodic full restore.
+
+`tests/test_workspace_drive.py` exercises real age backup → synthetic Workspace
+file transport → download → restore, profile-handler wiring, corruption/foreign
+metadata, missing ledger, partial retention/restart, minimal profile environment,
+timeout/output/file-size bounds, no-network readiness, plus the actual installed
+public helper's resumable-upload contract with a fake service. All account data
+in these tests is synthetic. **No real Google account smoke, auth, activation or
+publication was performed.**
