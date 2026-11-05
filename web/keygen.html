@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<title>Finix — локальные ключи / Offline keys</title>
+<style>__STYLE__</style>
+</head>
+<body>
+<main>
+<h1>Finix: ключ восстановления <span lang="en">/ Recovery key</span></h1>
+<p>Работает локально без сети. Приватный ключ не показывается и не отправляется на сервер. <span lang="en">Works offline. The private key is never displayed or uploaded.</span></p>
+<p><strong>Потеря ключа = потеря доступа к резервным копиям. <span lang="en">Losing the key means losing access to backups.</span></strong> Сохраните файл в надёжном месте, отдельно от резервных копий. Файл не защищён паролем. <span lang="en">Store the file safely, separate from backups. The file is not password protected.</span></p>
+<button id="generate" type="button">Создать новый ключ / Generate new key</button>
+<label for="public">Публичный ключ — можно передать Finix <span lang="en">/ Public key — share with Finix</span></label>
+<textarea id="public" rows="3" readonly spellcheck="false" autocomplete="off"></textarea>
+<div class="actions">
+<button id="save" type="button" disabled>Сохранить приватный ключ / Save private key</button>
+<button id="copy" type="button" disabled>Копировать публичный ключ / Copy public key</button>
+</div>
+<label for="import">Проверить сохранение: выберите скачанный файл (до 4096 байт) <span lang="en">/ Verify saving: select the downloaded file (up to 4096 bytes)</span></label>
+<input id="import" type="file" disabled aria-describedby="verified">
+<p id="verified" role="status"></p>
+<p id="status" role="status" aria-live="polite">Создайте ключ. / Generate a key.</p>
+<p>Проверка только сравнивает локально сохранённый ключ с текущим. Здесь нет регистрации или подключения профиля. <span lang="en">Verification only compares the saved key locally with the current key. No profile is registered or connected.</span></p>
+<details><summary>Лицензии библиотек / Library licenses</summary><pre>__LICENSES__</pre></details>
+</main>
+<script>__SCRIPT__</script>
+</body>
+</html>
