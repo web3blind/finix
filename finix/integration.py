@@ -108,12 +108,18 @@ class Profile:
             index = core.load_state(state)
             old = index['backups'][:-keep]
             for record in old:
-                if core.digest_file(output / record['name']) != record['sha256']:
+                try:
+                    actual = core.digest_file(output / record['name'])
+                except FileNotFoundError:
+                    # A previous run may have deleted the file before saving its index.
+                    continue
+                if actual != record['sha256']:
                     raise core.FinixError('Retention candidate changed')
             for record in old:
-                (output / record['name']).unlink()
+                (output / record['name']).unlink(missing_ok=True)
                 index['backups'].remove(record)
-            core.atomic_json(state / 'index.json', index)
+                # Persist progress so one transient delete failure cannot wedge scheduling.
+                core.atomic_json(state / 'index.json', index)
 
 
 def current_profile():
