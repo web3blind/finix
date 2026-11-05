@@ -388,3 +388,141 @@ timeout/output/file-size bounds, no-network readiness, plus the actual installed
 public helper's resumable-upload contract with a fake service. All account data
 in these tests is synthetic. **No real Google account smoke, auth, activation or
 publication was performed.**
+
+## Optional existing rclone connections (`rclone`)
+
+Implemented for configured **Yandex Disk (`yandex`), OneDrive Personal
+(`onedrive`) and Dropbox (`dropbox`)** remotes. This is a subprocess storage
+adapter, not a new authorization wizard. Supply a reviewed rclone executable on
+the plugin host's PATH and an already authorized config. Nothing downloads or
+installs rclone at runtime. Finix does not start OAuth, create an account, read
+token values or copy credentials. Built-in rclone app IDs can be used where the
+provider permits them; a custom OAuth application is not inherently required.
+Headless/localhost authorization is separate owner setup, outside this slice.
+See the official [Yandex](https://rclone.org/yandex/),
+[OneDrive](https://rclone.org/onedrive/), [Dropbox](https://rclone.org/dropbox/)
+and [remote setup](https://rclone.org/remote_setup/) documentation.
+
+Select all three settings explicitly (quotes are supported by the owner-only
+slash parser). The config must be an absolute nonsymlink regular file owned by
+the service user, mode **0600**, in a service-user-owned **0700** directory,
+**outside the backed-up Hermes profile**. Finix inspects filesystem metadata,
+not config contents. Never paste config contents or a password in chat.
+
+```text
+/finix configure rclone_config /OWNER/PRIVATE/rclone/rclone.conf
+/finix configure rclone_remote mydisk
+/finix configure rclone_root Backups/Finix
+/finix configure storage rclone
+/finix status
+/finix backup
+# Optional, disabled by default; deletion semantics are provider-dependent:
+/finix configure retention 5
+```
+
+`status.rclone` invokes only `listremotes --json`, locally; `LOCAL_READY` means
+that the selected file-defined remote has an admitted backend type, **not** that
+its credentials/scopes/account/network work. No cloud listing/probe runs on
+status/configure. OneDrive Personal is the tested target contract; Finix does
+not parse `drive_type` or validate the account tier from local discovery. Select
+the correct existing Personal remote yourself; Business/SharePoint are not
+claimed as verified. Missing binaries/config/selection and unsupported backend
+types fail without login or fallback. Password-encrypted rclone configs are
+currently unsupported for unattended execution: stdin is closed,
+`--ask-password=false`, and inherited `RCLONE_CONFIG_PASS`/password commands are
+not accepted. A future secure unlock integration must be explicit.
+
+The selected config is a **trusted, credential-owning account boundary**, not
+an untrusted input format. Finix binds the owning random profile ID, exact config
+path/private parent device+inode, remote name/type and relative root in its
+private `rclone/rclone.json` ledger. The config file itself may be atomically
+replaced by rclone's normal OAuth refresh. Finix intentionally does not fingerprint
+tokens; changing the account behind the same configured name is not detected by
+local readiness. Keep that config owner-controlled and dedicated to the intended
+account. Changing a ledger-bound selection fails closed; to intentionally start
+a new selection, disable scheduling, preserve the old ledger/recovery records
+and move the old `rclone` state directory aside before the next manual backup.
+Never merge/adopt old objects by filename. A lost ledger starts a new random
+namespace and cannot prune previous copies.
+
+Only native age-header ciphertext, at most **129 MiB**, crosses the storage
+boundary. Upload is fixed-argv `copyto --immutable` to a random UUID object in a
+random namespace; exact-file `lsjson --stat` checks name/type/size, then `cat`
+reads back the actual complete bytes and verifies size/SHA-256 before journaling
+or pruning. SHA-256 is computed by Finix, not inferred from provider hashes.
+Only journal-owned older objects may be deleted with `deletefile`, after another
+fresh metadata and ciphertext check; deletion is read back and progress persisted.
+Missing old objects are reconciled across interrupted retention. There is no
+sync, purge, mount, serve, rcd, recursive cleanup, prefix-based deletion or orphan
+sweeper. **Deletion may be permanent depending on backend/account policy; no
+universal trash/reversibility promise is made.** Remote/root restrictions constrain
+Finix's commands, not the scope of the underlying cloud authorization.
+
+Each process uses an absolute nonsymlink owner/root-owned executable without
+group/world write access, no shell, a minimal environment without ambient cloud
+credentials or `RCLONE_*` overrides, closed stdin, isolated process group,
+120-second wall-clock deadline and bounded stdout/stderr. Ciphertext stdout is
+capped at 129 MiB, other output and stderr at 64 KiB each. Buffers are not a
+total-RSS guarantee. Provider diagnostics are withheld. Upload stages contain
+only mode-0600 ciphertext. Local copies remain on upload/readback/retention
+failure; remote unindexed orphans can remain after interruption. Retention caps
+the private ledger at 1000 objects and protects the latest verified upload.
+
+Save the returned public `rclone` record (also written next to a successful
+profile backup as `*.age.rclone.json`) away from the old server. It contains the
+original profile ID, remote/root/type, random namespace/object name, size and
+SHA-256, **not config path, credentials or recovery key**. On a fresh machine,
+arrange your own existing rclone authorization with the same remote name/root,
+then run independent recovery without an original Finix ledger or Hermes:
+
+```sh
+python -m finix.rclone_storage status --home /SAFE/EXISTING/HOME \
+  --profile-id ORIGINAL_PROFILE_ID --config /PRIVATE/rclone/rclone.conf \
+  --remote mydisk --root Backups/Finix
+python -m finix.rclone_storage download --home /SAFE/EXISTING/HOME \
+  --profile-id ORIGINAL_PROFILE_ID --config /PRIVATE/rclone/rclone.conf \
+  --remote mydisk --root Backups/Finix --record /safe/copy.age.rclone.json \
+  --output /safe/recovered.age
+python -m finix restore --archive /safe/recovered.age \
+  --identity /safe/recovery.key --target /safe/new-profile
+```
+
+Output is exclusively created mode 0600, never overwritten, only after matching
+the saved descriptor. Ciphertext readback does not prove decryptability; perform
+periodic real restores with the owner-held identity.
+
+### Dependency review and local-only verification
+
+Development used the official **rclone v1.75.2**, source tag commit
+`be8d6044eacb843b74d335db0c5fbe09222031fe`, in isolated scratch only. Reviewed
+surface: MIT `COPYING`, listremotes JSON schema (name/type/source, no tokens),
+config/password handling and private config writes, cat/stat/copy/delete command
+semantics and official provider/headless-auth docs. This is **not** a complete
+source/binary security audit. To avoid a large source build, the official pinned
+Linux amd64 ZIP was downloaded directly, checked against official HTTPS
+`SHA256SUMS`, inspected for traversal/symlinks, then only its binary extracted;
+no installer, global install, startup hook or automatic update was used.
+Checksum agreement is not an independently verified release signature.
+
+- Source: `https://github.com/rclone/rclone/tree/v1.75.2`
+- ZIP: `https://downloads.rclone.org/v1.75.2/rclone-v1.75.2-linux-amd64.zip`
+- ZIP SHA-256: `349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702`
+- Extracted executable SHA-256: `ed7ab1f17876bb006c3df3949a3044959671afd9112362dacaa5dd1647735bc1`
+
+rclone is an optional external dependency, not bundled in this package. No
+credentials, binaries or upstream source checkout are committed. To run the
+opt-in real local-only tests with a previously reviewed absolute executable:
+
+```sh
+FINIX_RCLONE_BINARY=/ABSOLUTE/REVIEWED/rclone \
+  python -W error::ResourceWarning -m unittest discover -s tests -p test_rclone_storage.py -v
+```
+
+The smoke uses an isolated synthetic `local` remote and explicitly injected test
+transport (production rejects `local`): real age backup → real rclone copy/stat/cat
+→ verified download → real age restore with byte comparison, plus real retention.
+It also tests real noninteractive encrypted-config failure. Synthetic contracts
+cover command selection, ledger loss/binding, foreign files, corruption,
+interrupted retention, owner handler, recovery CLI overwrite refusal, limits and
+minimal environment. **No real Yandex/OneDrive/Dropbox authorization or account
+operation, production activation or publication has been performed.**
