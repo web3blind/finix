@@ -113,28 +113,41 @@ Save the public `/finix status` record with the backup location/Drive folder and
 original `profile_id`. This orchestration state is intentionally not restored
 with profile files. Its loss disables scheduling and changes the backend binding.
 
-## Explicit script-only scheduling
+## Automatic plugin scheduling
 
 Scheduling invokes no model. `interval_hours=0` disables it; retention `0` disables
-pruning. Values are bounded (hours 0–8760, retention 0–1000). Set schedule using the
-owner command above, then explicitly run a persistent service yourself:
+pruning. Values are bounded (hours 0–8760, retention 0–1000). After the owner sets
+`interval_hours`, the installed native plugin runs a lifecycle-owned worker while
+its Hermes host stays running. No separate service is required. Each plugin load
+captures its canonical profile and binds both backup paths and managed OAuth to
+that profile, independent of later profile switches. Checks run every 60 seconds;
+loading the plugin does not immediately start an overdue backup. Unconfigured
+plugins do not initialize backup state from the worker.
+
+Unload/disable signals cancellation and waits up to one second. No new checks
+start afterward. An already admitted backup drains nonpreemptively: publication
+and retention cannot safely be interrupted. If it is still running after the
+bounded wait, a warning explicitly reports that it is draining. Network timeouts
+are inactivity bounds, not a total job deadline. Source locks fence replacement
+workers and manual backups. Do not assume disabling has killed an active backup.
+
+Durable next-run state survives restarts. One completed backup moves next run
+forward; missed intervals never cause a catch-up flood. Errors produce a generic
+warning and retry no faster than the 60-second poll. Setting interval to zero
+prevents future scheduled backups but does not interrupt an active one.
+
+The standalone scheduler remains available when you want scheduling independent
+of the plugin host (do not normally run both):
 
 ```sh
-# Use the Hermes interpreter and intended profile, from the installed payload.
 cd /ABSOLUTE/PROFILE/plugins/finix
 HERMES_HOME=/ABSOLUTE/PROFILE /PATH/TO/HERMES/PYTHON -m finix.scheduler
 # One due check (safe if schedule is disabled): add --once
 ```
 
-This service must remain running; **it is not automatically attached to gateway
-lifecycle**, and the gateway need not remain up. Configure your service manager
-explicitly if desired. Durable next-run state survives process restarts. No
-catch-up flood: one completed backup moves next run forward. Directory locks
-prevent overlapping service instances/backups; failures retry at most once per
-60-second poll. The process binds its canonical profile at startup. For Drive,
-run from the native payload inside that profile's `plugins/`: Hermes restricts
-credentialed requests to code inside an installed plugin. Never run scheduling
-from an unrelated pip package copy and expect access to the plugin grant.
+Run from the installed native payload inside the intended profile's `plugins/`:
+Hermes restricts credentialed requests to installed plugin code. Uninstalled
+development imports do not start a lifecycle worker or obtain a credential grant.
 
 ## Google Drive: standard resumable media adapter
 
