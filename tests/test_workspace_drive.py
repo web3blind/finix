@@ -204,9 +204,10 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_actual_installed_wrapper_contract_without_auth(self):
         # Actual public installed source, fake service only; no get_credentials.
-        script = helper_path(self.home)
-        if script is None:
-            self.skipTest('installed public helper unavailable')
+        selected = os.environ.get('FINIX_WORKSPACE_SOURCE')
+        script = Path(selected) if selected else helper_path(self.home)
+        if script is None or not script.is_file():
+            self.skipTest('installed public helper unavailable; set FINIX_WORKSPACE_SOURCE to its script path')
         import sys
         with patch.dict(os.environ, {'HERMES_HOME': str(self.home)}), patch.object(sys, 'path', [str(script.parent), *sys.path]):
             spec = importlib.util.spec_from_file_location('finix_contract_only', script)
