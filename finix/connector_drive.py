@@ -153,7 +153,9 @@ class ManagedDrive:
         return {'ready': code == 'READY', 'code': code, 'action': ACTIONS.get(code, 'Reviewed contract admitted.'),
                 'connector': 'googledrive', 'account': self.account, 'alias': self.alias,
                 'schema_count': len(getattr(self, 'schemas', {})), 'live_google_verified': False,
-                'max_cipher_bytes': MAX_CIPHER}
+                'max_cipher_bytes': MAX_CIPHER, 'large_archives_supported': False,
+                'production_codec_available': bool(REVIEWED_CONTRACTS),
+                'limitation': 'Experimental unavailable backend: actual managed gateway cap is 20 MiB; choose workspace, drive or rclone for large archives.'}
 
     def execute(self, operation, payload):
         from tools.connectors.gateway.merge import PlannedCall

@@ -19,6 +19,7 @@ def main(argv=None):
     for option in ('source', 'output', 'state', 'recipient'):
         backup.add_argument('--' + option, required=True)
     backup.add_argument('--keep', type=int, help='Explicit retention in this Finix namespace')
+    backup.add_argument('--sqlite-temp-dir', help='Optional existing owner-only temporary directory outside source; SQLite snapshots may be plaintext')
     restore = commands.add_parser('restore', help='Restore into an absent or empty directory; cron paused')
     for option in ('archive', 'identity', 'target'):
         restore.add_argument('--' + option, required=True)

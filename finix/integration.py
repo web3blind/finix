@@ -73,6 +73,7 @@ class Profile:
         cfg = self.config()
         result = {'profile_id': self.profile_id, **cfg,
                   'scheduler': 'automatic while native plugin is loaded; optional python -m finix.scheduler when host is offline'}
+        result['sqlite_temp'] = core.sqlite_temp_readiness(cfg.get('sqlite_temp_dir'))
         if cfg['storage'] == 'connector-drive':
             from .connector_drive import ConnectorError, ACTIONS
             try:
@@ -114,6 +115,17 @@ class Profile:
             elif key == 'storage':
                 if value not in {'local', 'drive', 'connector-drive', 'workspace', 'rclone'}:
                     raise core.FinixError('Storage must be local, drive, workspace, rclone or connector-drive')
+            elif key == 'sqlite_temp_dir':
+                import stat
+                if not isinstance(value, str) or not Path(value).is_absolute():
+                    raise core.FinixError('SQLite temporary storage requires an absolute directory')
+                path = core.checked_path(value)
+                info = path.stat()
+                if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+                        or stat.S_IMODE(info.st_mode) != 0o700
+                        or path.is_relative_to(self.home) or self.home.is_relative_to(path)):
+                    raise core.FinixError('SQLite temporary storage must be an owner-only directory outside the source profile')
+                value = str(path)
             elif key in {'rclone_config', 'rclone_remote', 'rclone_root'}:
                 from .rclone_storage import config_path, remote_name, relative_root
                 validator = {'rclone_config': config_path, 'rclone_remote': remote_name, 'rclone_root': relative_root}[key]
@@ -126,7 +138,7 @@ class Profile:
                 if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.@-]{1,200}', value):
                     raise core.FinixError('Expected an explicit managed account ID, alias or folder ID')
             else:
-                raise core.FinixError('Allowed settings: storage, retention, interval_hours, connector_account, connector_alias, connector_folder, rclone_config, rclone_remote, rclone_root')
+                raise core.FinixError('Allowed settings: storage, retention, interval_hours, sqlite_temp_dir, connector_account, connector_alias, connector_folder, rclone_config, rclone_remote, rclone_root')
             cfg[key] = value
             core.atomic_json(self.root / 'settings.json', cfg)
         return self.status()
@@ -140,7 +152,8 @@ class Profile:
             if not cfg['recipient']:
                 raise core.FinixError('Register a public recipient first')
             # Do not prune local copies until cloud readback has succeeded.
-            result = core.backup(self.home, self.root / 'copies', self.root / 'index', cfg['recipient'])
+            result = core.backup(self.home, self.root / 'copies', self.root / 'index', cfg['recipient'],
+                                 sqlite_temp_dir=cfg.get('sqlite_temp_dir'))
             if cfg['storage'] == 'drive':
                 from .drive import Drive
                 drive = Drive(self.profile_id)
@@ -216,7 +229,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
                     'Use /finix recipient NEW none for initial registration; '
                     '/finix recipient NEW OLD confirm for replacement. '
                     'Storage choices: local; drive (own OAuth: hermes auth add finix:google in owner terminal); '
-                    'connector-drive (built-in Hermes googledrive: explicitly select connector_account, '
+                    'connector-drive (experimental/unavailable, actual gateway cap 20 MiB; not for large archives: explicitly select connector_account, '
                     'connector_alias, connector_folder; no automatic login); '
                     'workspace (existing owning-profile Google Workspace authorization; no token copy or login); '
                     'rclone (existing Yandex Disk, OneDrive Personal or Dropbox remote; explicit rclone_config absolute path, '
@@ -233,7 +246,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
             return json.dumps(profile.configure(args[1], args[2]))
         if args == ['restore']:
             return 'Restore only on your recovery device: python -m finix restore --archive FILE --identity KEYFILE --target NEW_DIRECTORY. Never send a private key to chat.'
-        return 'Usage: /finix status|setup|recipient NEW none|recipient NEW OLD confirm|backup|configure storage local/drive/workspace/rclone/connector-drive|configure rclone_config ABSOLUTE_PATH|configure rclone_remote NAME|configure rclone_root RELATIVE_FOLDER|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
+        return 'Usage: /finix status|setup|recipient NEW none|recipient NEW OLD confirm|backup|configure storage local/drive/workspace/rclone/connector-drive|configure sqlite_temp_dir ABSOLUTE_PRIVATE_DIRECTORY|configure rclone_config ABSOLUTE_PATH|configure rclone_remote NAME|configure rclone_root RELATIVE_FOLDER|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
     except core.FinixError as exc:
         from .connector_drive import ConnectorError
         from .workspace_drive import WorkspaceError

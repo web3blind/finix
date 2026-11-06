@@ -4,7 +4,7 @@ The owner-selected rclone config is trusted executable configuration. Finix read
 only its filesystem metadata; rclone owns refresh and credentials. The private
 ledger authorizes exact random object paths, never prefix/list-based deletion.
 """
-import hashlib
+
 import json
 import os
 from pathlib import Path
@@ -20,8 +20,9 @@ import time
 import uuid
 
 from . import core
+from . import cloud_files
 
-MAX_CIPHER = 129 * 1024 * 1024
+
 MAX_RECORDS = 1000
 CLOUD_TYPES = {'yandex', 'onedrive', 'dropbox'}
 
@@ -68,13 +69,14 @@ def child_env(home):
 
 
 class RcloneRunner:
-    def __init__(self, home, config, *, binary=None, timeout=120):
+    def __init__(self, home, config, *, binary=None, timeout=120, transfer_timeout=86400):
         self.home, self.config = core.checked_path(home), str(config)
         found = binary if binary else shutil.which('rclone')
         self.binary = str(core.checked_path(found)) if found and Path(found).is_absolute() else None
         self.timeout = timeout
+        self.transfer_timeout = transfer_timeout
 
-    def __call__(self, operation, *args):
+    def __call__(self, operation, *args, output=None, expected_size=None):
         if operation not in {'listremotes', 'copyto', 'cat', 'deletefile', 'lsjson'}:
             raise core.FinixError('Unsupported rclone operation')
         if not self.binary or not Path(self.binary).is_file() or not os.access(self.binary, os.X_OK):
@@ -92,8 +94,14 @@ class RcloneRunner:
                                    stderr=subprocess.PIPE, env=child_env(self.home), start_new_session=True)
         assert process.stdout is not None and process.stderr is not None
         data, total = bytearray(), 0
-        limit = MAX_CIPHER if operation == 'cat' else 65536
-        deadline = time.monotonic() + self.timeout
+        if operation == 'cat' and (output is None or type(expected_size) is not int or expected_size <= 0):
+            process.kill()
+            process.wait()
+            process.stdout.close()
+            process.stderr.close()
+            raise core.FinixError('Rclone cat requires file sink and exact declared size')
+        limit = expected_size if operation == 'cat' else 65536
+        deadline = time.monotonic() + (self.transfer_timeout if operation in {'cat', 'copyto'} else self.timeout)
         try:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ, True)
@@ -111,7 +119,10 @@ class RcloneRunner:
                             total += len(chunk)
                             if total > limit:
                                 raise RcloneError('OUTPUT_LIMIT')
-                            data.extend(chunk)
+                            if operation == 'cat':
+                                output.write(chunk)
+                            else:
+                                data.extend(chunk)
                         else:
                             errors += len(chunk)
                             if errors > 65536:
@@ -119,6 +130,8 @@ class RcloneRunner:
                 process.wait(timeout=max(.01, deadline - time.monotonic()))
             if process.returncode:
                 raise RcloneError('NOT_FOUND' if process.returncode in {3, 4} else 'PROVIDER_ERROR')
+            if operation == 'cat' and total != expected_size:
+                raise RcloneError('SHORT_DOWNLOAD')
             return bytes(data)
         except subprocess.TimeoutExpired:
             raise RcloneError('TIMEOUT') from None
@@ -176,7 +189,7 @@ class RcloneStorage:
                 or not re.fullmatch(r'[a-f0-9]{32}', row.get('namespace', ''))
                 or not re.fullmatch(r'[a-f0-9]{32}\.age', row.get('id', ''))
                 or not re.fullmatch(r'[a-f0-9]{64}', row.get('sha256', ''))
-                or type(row.get('size')) is not int or not 0 < row['size'] <= MAX_CIPHER):
+                or type(row.get('size')) is not int or row['size'] <= 0):
             raise core.FinixError('Invalid rclone recovery/ownership record')
         return row
 
@@ -196,22 +209,12 @@ class RcloneStorage:
         if (not isinstance(metadata, dict) or metadata.get('IsDir') is not False
                 or metadata.get('Size') != record['size'] or metadata.get('Name') != record['id']):
             raise core.FinixError('Rclone object metadata mismatch')
-        data = self.runner('cat', self.object_path(record))
-        if (len(data) != record['size'] or hashlib.sha256(data).hexdigest() != record['sha256']
-                or not data.startswith(b'age-encryption.org/v1\n')):
-            raise core.FinixError('Rclone ciphertext readback mismatch')
-        if output is not None:
-            target = core.checked_path(output)
-            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            try:
-                with os.fdopen(fd, 'wb') as stream:
-                    stream.write(data)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-            except BaseException:
-                target.unlink(missing_ok=True)
-                raise
-        return data
+        with tempfile.TemporaryDirectory(prefix='finix-rclone-read-', dir=os.environ.get('TMPDIR')) as stage:
+            path = Path(stage) / 'cipher.age'
+            with path.open('xb') as stream:
+                os.fchmod(stream.fileno(), 0o600)
+                self.runner('cat', self.object_path(record), output=stream, expected_size=record['size'])
+            return cloud_files.verified(path, record, output, native=True)
 
     def ledger(self):
         path = self.state / 'rclone.json'
@@ -243,24 +246,18 @@ class RcloneStorage:
             raise core.FinixError('Invalid rclone retention')
         core.private_dir(self.state)
         with core.locked(self.state):
-            fd = os.open(core.checked_path(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            try:
-                data = core.read_regular(fd, MAX_CIPHER)
-            finally:
-                os.close(fd)
-            if not data.startswith(b'age-encryption.org/v1\n'):
-                raise core.FinixError('Only native age ciphertext may be uploaded')
+            descriptor = cloud_files.describe(path, native=True)
             journal = self.ledger()
             if len(journal['records']) >= MAX_RECORDS:
                 raise core.FinixError('Rclone ledger full; no upload')
             row = dict(profile_id=self.owner, remote=self.remote, root=self.root, type=journal['binding']['type'],
                        namespace=journal['namespace'], id=uuid.uuid4().hex + '.age',
-                       size=len(data), sha256=hashlib.sha256(data).hexdigest())
+                       **descriptor)
             with tempfile.TemporaryDirectory(prefix='finix-rclone-', dir=os.environ.get('TMPDIR')) as stage:
                 staged = Path(stage) / 'cipher.age'
-                staged.write_bytes(data)
-                staged.chmod(0o600)
+                cloud_files.copy(path, staged, descriptor)
                 self.runner('copyto', str(staged), self.object_path(row), '--immutable')
+                cloud_files.verified(staged, descriptor)
             self.download(row)
             journal['records'].append(row)
             core.atomic_json(self.state / 'rclone.json', journal)

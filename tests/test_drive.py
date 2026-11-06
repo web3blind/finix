@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 import httpx
-from finix.drive import MAX_CIPHER
+from finix.drive import MEDIA_CHUNK
 
 
 class DriveTests(unittest.TestCase):
@@ -78,8 +78,15 @@ class DriveTests(unittest.TestCase):
                     if status in (200, 201):
                         identifier = query['upload_id'][0]
                         outer.objects[identifier] = outer.sessions[identifier]
-                        outer.media[identifier] = raw
-                        body = {'id': outer.final_id or identifier}
+                        outer.media[identifier] = outer.media.get(identifier, b'') + raw
+                        end = len(outer.media[identifier]) - 1
+                        total = int(self.headers['Content-Range'].split('/')[-1])
+                        if end + 1 < total:
+                            status = 308
+                            headers['Range'] = f'bytes=0-{end}'
+                            body = b''
+                        else:
+                            body = {'id': outer.final_id or identifier}
                     elif status in (302, 307, 308):
                         headers['Location'] = 'https://evil.example/session-secret'
                 elif method == 'PATCH':
@@ -107,6 +114,11 @@ class DriveTests(unittest.TestCase):
                     status = 404
                 elif query.get('alt') == ['media']:
                     body = outer.media[identifier]
+                    total = len(body)
+                    start, end = map(int, self.headers['Range'].removeprefix('bytes=').split('-'))
+                    body = body[start:end+1]
+                    status = 206
+                    headers['Content-Range'] = f'bytes {start}-{end}/{total}'
                     if outer.corrupt:
                         body = b'corrupt' if outer.corrupt == 'length' else bytes([body[0] ^ 1]) + body[1:]
                 else:
@@ -168,7 +180,7 @@ class DriveTests(unittest.TestCase):
         self.drive = installed.Drive('a' * 64, sleep=lambda value: None)
         self.folder = self.drive.create_folder()
         self.file = self.root / 'backup.age'
-        self.file.write_bytes(bytes(range(256)) * 8193)  # >1 MiB, not JSON/UTF-8
+        self.file.write_bytes(b'age-encryption.org/v1\n' + bytes(range(256)) * 8193)  # binary transport fixture
 
     def test_http_resumable_media_readback_and_scoped_retention(self):
         first = self.drive.upload(self.file, self.folder)
@@ -176,7 +188,9 @@ class DriveTests(unittest.TestCase):
         self.objects[foreign]['appProperties']['owner'] = 'b' * 64
         second = self.drive.upload(self.file, self.folder, keep=1)
         self.assertTrue(second['verified'])
-        self.assertEqual(self.drive.download(self.folder, second['id']), self.file.read_bytes())
+        output = self.root / 'download.age'
+        self.assertTrue(self.drive.download(self.folder, second['id'], output)['verified'])
+        self.assertEqual(output.read_bytes(), self.file.read_bytes())
         self.assertNotIn(first['id'], self.objects)
         self.assertIn(foreign, self.objects)
         puts = [r for r in self.requests if r[0] == 'PUT']
@@ -199,6 +213,34 @@ class DriveTests(unittest.TestCase):
         self.assertFalse(any(r[0] in ('DELETE', 'PATCH') for r in self.requests[before:]))
         self.assertTrue(any(o['appProperties']['kind'] == 'pending' for o in self.objects.values()))
 
+    def test_http_multi_chunk_upload_and_range_download(self):
+        with self.file.open('wb') as stream:
+            stream.write(b'age-encryption.org/v1\n')
+            stream.truncate(2 * MEDIA_CHUNK + 317)
+        row = self.drive.upload(self.file, self.folder)
+        output = self.root / 'chunks.age'
+        self.drive.download(self.folder, row['id'], output)
+        from finix import cloud_files
+        self.assertEqual(cloud_files.describe(output), cloud_files.describe(self.file))
+        puts = [r for r in self.requests if r[0] == 'PUT']
+        self.assertEqual(len(puts), 3)
+        self.assertTrue(all(len(r[3]) <= MEDIA_CHUNK for r in puts))
+        ranges = [r for r in self.requests if 'alt=media' in r[1]]
+        self.assertEqual(len(ranges), 6)
+        self.assertTrue(all('Range' in r[4] for r in ranges))
+
+    def test_range_header_mismatch_blocks_commit_and_prune(self):
+        original = self.drive.request
+        def wrong_range(*args, **kwargs):
+            response = original(*args, **kwargs)
+            if 'alt=media' in args[1]:
+                return type(response)(response.status, dict(response.headers, **{'content-range': 'bytes 1-2/3'}), response.body)
+            return response
+        self.drive.request = wrong_range
+        with self.assertRaises(self.error_type):
+            self.drive.upload(self.file, self.folder, keep=1)
+        self.assertFalse(any(r[0] in ('PATCH', 'DELETE') for r in self.requests))
+
     def test_commit_failure_never_prunes(self):
         first = self.drive.upload(self.file, self.folder)
         self.patch_status = 403
@@ -214,14 +256,13 @@ class DriveTests(unittest.TestCase):
             self.drive.upload(self.file, self.folder, keep=1)
         self.assertFalse(any(r[0] in ('PATCH', 'DELETE') for r in self.requests))
 
-    def test_cipher_limit_matches_core_age_allowance(self):
-        from finix.core import MAX_BYTES
-        self.assertEqual(MAX_CIPHER, MAX_BYTES + 1024 * 1024)
-        valid = {'appProperties': {'size': str(MAX_CIPHER), 'sha256': 'a' * 64, 'snapshot': 'b' * 32}}
-        self.assertEqual(self.drive.descriptor(valid)['size'], MAX_CIPHER)
-        valid['appProperties']['size'] = str(MAX_CIPHER + 1)
-        with self.assertRaises(self.error_type):
-            self.drive.descriptor(valid)
+    def test_descriptor_has_no_archive_size_cap(self):
+        for size in (129 * 1024 * 1024, 8 * 1024 ** 3, 2 ** 63):
+            valid = {'appProperties': {'size': str(size), 'sha256': 'a' * 64, 'snapshot': 'b' * 32}}
+            self.assertEqual(self.drive.descriptor(valid)['size'], size)
+        for size in ('0', '-1', '01', 'True'):
+            with self.assertRaises(self.error_type):
+                self.drive.descriptor({'appProperties': {'size': size}})
 
     def test_bounded_errors_no_post_retry_and_no_delete(self):
         self.error = 503
@@ -236,10 +277,6 @@ class DriveTests(unittest.TestCase):
         self.assertFalse(any(r[0] == 'DELETE' for r in self.requests))
 
     def test_bounds_ownership_and_invalid_descriptor(self):
-        with self.file.open('wb') as stream:
-            stream.truncate(MAX_CIPHER + 1)
-        with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder)
         self.objects[self.folder]['appProperties']['owner'] = 'other'
         with self.assertRaises(self.error_type):
             self.drive.upload(self.file, self.folder)

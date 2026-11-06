@@ -25,6 +25,29 @@ def main():
             result = module.build_service('drive', 'v3').files().get(
                 fileId=args[0], fields='id,name,mimeType,size,parents,owners(emailAddress),trashed').execute()
             print(json.dumps(result))
+        elif operation == 'download':
+            import os
+            from googleapiclient.http import MediaIoBaseDownload
+            output = args[args.index('--output') + 1]
+            request = module.build_service('drive', 'v3').files().get_media(fileId=args[0])
+            with open(output, 'xb') as stream:
+                os.fchmod(stream.fileno(), 0o600)
+                downloader = MediaIoBaseDownload(stream, request, chunksize=8 * 1024 * 1024)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+            print(json.dumps({'id': args[0], 'status': 'downloaded'}))
+        elif operation == 'upload':
+            from googleapiclient.http import MediaFileUpload
+            media = MediaFileUpload(args[0], mimetype='application/octet-stream',
+                                    chunksize=8 * 1024 * 1024, resumable=True)
+            try:
+                result = module.build_service('drive', 'v3').files().create(
+                    body={'name': args[args.index('--name') + 1], 'parents': [args[args.index('--parent') + 1]]},
+                    media_body=media, fields='id,mimeType').execute()
+            finally:
+                media.stream().close()
+            print(json.dumps(dict(result, status='uploaded')))
         else:
             sys.argv = [script, 'drive', operation, *args]
             module.main()

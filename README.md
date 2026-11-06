@@ -34,11 +34,23 @@ The small, explicit policy is defined once by `ROOT_EXCLUSIONS`, `TREE_EXCLUSION
 
 The default/main profile naturally includes its root `shared/` directory (including shared authorization state). It excludes `profiles/**`. A named profile backs up only its captured home, never its parent or the main profile's `shared/`, even when the gateway was launched from the default profile. An external `HERMES_SHARED_AUTH_DIR` override is **not** an additional source. Restoring a main-profile copy restores `shared/` under the fresh target, not into a live common directory.
 
-Empty directories, original ownership/modes/timestamps and filesystem links are not preserved: included symlinks and special files fail the whole backup rather than being followed or silently lost. Excluded trees are not traversed. Skills and plugins are inert archive bytes, never imported during backup/restore. Every SQLite file is detected by its header at any location/extension and snapshotted through the backup API into RAM, incorporating committed WAL contents; validated raw WAL/SHM/journal companions are omitted only for actual SQLite databases. Unrelated suffix-named files are retained. This is a **selected-profile file backup**, not a server image.
+Empty directories, original ownership/modes/timestamps and filesystem links are not preserved: included symlinks and special files fail the whole backup rather than being followed or silently lost. Excluded trees are not traversed. Skills and plugins are inert archive bytes, never imported during backup/restore. Every SQLite file is detected by its header at any location/extension and snapshotted through the backup API, incorporating committed WAL contents; validated raw WAL/SHM/journal companions are omitted only for actual SQLite databases. Unrelated suffix-named files are retained. This is a **selected-profile file backup**, not a server image.
 
 New archives use `finix-2`, with tar metadata at `manifest.json` and profile payloads under `profile/`; a user's own root `manifest.json` is therefore preserved. Restore still accepts `finix-1` archives with their original frozen allowlist. Arbitrary safe relative paths are admitted only by v2. Older Finix readers cannot restore v2 archives.
 
-The archive includes a manifest with per-file SHA-256 and sizes, then gzip/tar encrypted by the standard `age` executable. Native age recipients and one native age identity are supported, not SSH identities or age plugins. Plaintext archives and SQLite snapshots never go to a temporary disk file. Plaintext file payloads are capped at 128 MiB, as are compressed and expanded archive buffers; tar overhead reduces the practical payload limit slightly. Maximum 10,000 files and 10,000 traversed directories, with at most 32 path components. Manifest JSON is capped at 8 MiB, cron JSON at 4 MiB and the local index at 1 MiB. Memory is bounded by a small number of these buffers plus parsed JSON objects, **not** a 128 MiB total RSS guarantee. Encrypted temporary files are mode 0600 and atomically published only after age succeeds; encrypted contents are checksum-read back before indexing and retention. **These limits are unchanged:** a full profile with large project data may now exceed them. Size/count/depth, unsupported USTAR paths, invalid cron/metadata JSON or included special files fail the complete backup before publication or retention; Finix never silently drops a large/unknown file to fit. Tar overhead is included in reader validation before encryption, so payloads near 128 MiB can fail even when their file-size sum fits.
+The archive includes a manifest with per-file SHA-256 and sizes, then gzip/tar encrypted by the standard `age` executable. Native age recipients and one native age identity are supported, not SSH identities or age plugins. Production backup and recovery stream file/archive/ciphertext payloads; there is no fixed 128 MiB archive or per-file cap. Metadata count/depth/JSON limits remain security controls, not archive-size limits. Provider quotas, free local space and filesystem limits still apply. Unsupported paths, unsafe file types, invalid metadata or readback errors fail rather than silently omit data; failure cannot authorize pruning.
+
+### Large SQLite databases: private temporary snapshots
+
+With the owner's explicit approval, SQLite consistency snapshots may be **plaintext temporary files** on the backup host, as with the existing cron workflow. Snapshot directories are private mode 0700 and files mode 0600; they are cleaned on normal completion, cancellation and handled errors. A process kill, host crash or power loss can leave a temporary plaintext snapshot behind. Disk encryption is recommended but is not a mandatory Finix readiness gate. The final archive is always encrypted by age before publication or cloud upload. No existing production cron job is modified by this setting.
+
+```sh
+python -m finix backup --source /profiles/example \
+  --output /backups/example --state /backup-state/example \
+  --recipient age1... --sqlite-temp-dir /PRIVATE/finix-temp
+```
+
+`--sqlite-temp-dir` is optional; for profile/scheduled backups use `/finix configure sqlite_temp_dir /PRIVATE/finix-temp` to select an existing owner-owned mode-0700 directory outside the source profile. `/finix status` reports `sqlite_temp.ready` and `sqlite_temp.code` using local filesystem checks only, without reading customer SQLite files, inspecting encryption keys or accessing a cloud account. This orchestration setting is outside the profile archive; configure it again on a replacement backup host. Finix does not create encrypted mounts or obtain disk encryption keys. Large databases require enough free temporary disk space; there is no fixed 128 MiB archive/file cap. Cloud transport staging contains only ciphertext.
 
 ## Safety and limitations
 
@@ -175,8 +187,9 @@ after signing in. `folder_id` is persisted immediately after creation.
 
 The adapter follows Google's [official resumable-upload flow](https://developers.google.com/workspace/drive/api/guides/manage-uploads):
 managed OAuth initiates a JSON metadata POST to `/upload/drive/v3/files?uploadType=resumable`.
-The provider's `Location` is an upload capability: the ciphertext is sent with one
-raw PUT **without an Authorization header**, as in Google's single-request example.
+The provider's `Location` is an upload capability: ciphertext is sent in bounded
+8 MiB raw PUT chunks **without an Authorization header**, with exact `Content-Range`
+and contiguous server `Range` acknowledgements. The last chunk must return a final object ID.
 Finix neither obtains nor reconstructs a bearer token. URI validation permits only
 HTTPS `www.googleapis.com:443`, the exact upload path and the documented
 `uploadType=resumable` plus `upload_id` query; foreign hosts, credentials, fragments,
@@ -185,18 +198,7 @@ never settings, return values or diagnostics. The raw stdlib HTTP client does no
 use environment proxies/netrc or HTTP request logging. No new runtime dependency.
 
 Each backup is one standard `application/octet-stream` Drive file, not base64 in
-metadata. Maximum ciphertext is the core encrypted-input allowance: **128 MiB +
-1 MiB age-overhead allowance**. This does not increase the core's plaintext/archive
-limits. The full ciphertext is buffered for upload and managed binary GET readback;
-there is no total-RSS guarantee. Adapter response bounds apply after the managed
-SDK has buffered the body, not at its transport layer. Raw PUT metadata responses
-are bounded while reading. Initiation/metadata requests use a 20-second timeout;
-media PUT/GET use 120 seconds (socket/network inactivity bounds, not a wall-clock
-job deadline). Creation and raw PUT are not retried after ambiguous errors.
-Managed GET/PATCH/DELETE retry transient HTTP errors at most three times with
-bounded backoff. Interrupted sessions are not persisted or resumed across runs;
-a later backup starts a fresh session. A 308 incomplete upload is a failure, not
-successful storage. All requests refuse redirects.
+metadata. Ciphertext is staged in private files and streamed in 8 MiB chunks; there is no Finix whole-archive size cap. Recovery and verification use bounded HTTP Range GET requests and require exact 206 status, Content-Range, byte count and final SHA-256. The owning Hermes JSON-only credential helper buffers each HTTP response before returning it: normal conforming Drive responses are one chunk, but its transport does not expose a pre-buffer body limit for a server that ignores Range. This SDK boundary is not a total-process-RSS guarantee. Raw PUT JSON responses are bounded while reading. Initiation/metadata requests use a 20-second timeout; individual media requests use 120-second inactivity bounds. Creation and ambiguous chunk uploads are not retried. Managed GET/PATCH/DELETE retry transient status codes at most three times. Interrupted sessions are not persisted/resumed across runs; the next backup starts a fresh session. A 308 is accepted only for an intermediate chunk with the exact contiguous Range acknowledgement, never as completed storage. Redirects fail closed.
 
 The file starts tagged `pending`. Managed `GET files/id?alt=media` reads binary
 bytes, verifies whole-ciphertext length and SHA-256, then a metadata PATCH marks
@@ -341,8 +343,11 @@ retention readback. Credential loading/refresh stays inside the Workspace helper
 
 The child has an explicit owning `HERMES_HOME` and minimal OS environment (no
 ambient credential variables, `PYTHONPATH`, `HERMES_GWS_BIN` or profile dotenv
-overlay). Each call has a 120-second wall-clock limit, a private process group,
-64 KiB combined stdout/stderr limit and a 129 MiB file-size resource limit.
+overlay). Control calls have a 120-second wall-clock limit; upload/download have a separate
+configurable runner transfer deadline (default 24 hours), not the short metadata deadline.
+Each call has a private process group and 64 KiB combined stdout/stderr limit.
+Downloads apply an exact descriptor-sized file-size resource limit, not a fixed archive cap.
+Google media clients use explicit 8 MiB upload/download chunks.
 Raw provider diagnostics are not returned to chat/logs. Only age ciphertext is
 staged on disk, under a private temporary directory. Large or timed-out transfers
 fail safely; their remote orphan may require manual owner cleanup.
@@ -585,8 +590,8 @@ and move the old `rclone` state directory aside before the next manual backup.
 Never merge/adopt old objects by filename. A lost ledger starts a new random
 namespace and cannot prune previous copies.
 
-Only native age-header ciphertext, at most **129 MiB**, crosses the storage
-boundary. Upload is fixed-argv `copyto --immutable` to a random UUID object in a
+Only native age-header ciphertext crosses the storage boundary; there is no fixed
+Finix archive-size cap. Upload is fixed-argv `copyto --immutable` to a random UUID object in a
 random namespace; exact-file `lsjson --stat` checks name/type/size, then `cat`
 reads back the actual complete bytes and verifies size/SHA-256 before journaling
 or pruning. SHA-256 is computed by Finix, not inferred from provider hashes.
@@ -601,9 +606,11 @@ Finix's commands, not the scope of the underlying cloud authorization.
 Each process uses an absolute nonsymlink owner/root-owned executable without
 group/world write access, no shell, a minimal environment without ambient cloud
 credentials or `RCLONE_*` overrides, closed stdin, isolated process group,
-120-second wall-clock deadline and bounded stdout/stderr. Ciphertext stdout is
-capped at 129 MiB, other output and stderr at 64 KiB each. Buffers are not a
-total-RSS guarantee. Provider diagnostics are withheld. Upload stages contain
+120-second control deadline and separate configurable runner transfer deadline
+(default 24 hours). `cat` streams stdout directly into a private file, stops before
+writing bytes beyond the exact descriptor size, and rejects short downloads.
+Other output and stderr are capped at 64 KiB each. File hashing/copying uses
+1 MiB blocks; neither upload nor download materializes whole ciphertext in RAM. Provider diagnostics are withheld. Upload stages contain
 only mode-0600 ciphertext. Local copies remain on upload/readback/retention
 failure; remote unindexed orphans can remain after interruption. Retention caps
 the private ledger at 1000 objects and protects the latest verified upload.
@@ -666,3 +673,5 @@ cover command selection, ledger loss/binding, foreign files, corruption,
 interrupted retention, owner handler, recovery CLI overwrite refusal, limits and
 minimal environment. **No real Yandex/OneDrive/Dropbox authorization or account
 operation, production activation or publication has been performed.**
+
+Large transport verification additionally covers a real local-only rclone upload/readback/recovery of 129 MiB + 137 bytes, with Python traced allocations below 12 MiB, exact short/oversend rejection, and multi-chunk own-OAuth HTTP upload/Range GET against a synthetic local server. These are not live-provider quota or account tests. The unavailable experimental managed connector retains its actual 20 MiB gateway limit and is not an unlimited backend.

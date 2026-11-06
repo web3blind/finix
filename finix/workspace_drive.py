@@ -3,7 +3,7 @@
 No credential files are opened by Finix. Local readiness never contacts Google.
 The private ledger, not remote names/listings, is the authority for retention.
 """
-import hashlib
+
 import importlib.util
 import json
 import os
@@ -18,8 +18,9 @@ import time
 import uuid
 
 from . import core
+from . import cloud_files
 
-MAX_CIPHER = 129 * 1024 * 1024
+
 MAX_RECORDS = 1000
 MIME = 'application/octet-stream'
 FOLDER_MIME = 'application/vnd.google-apps.folder'
@@ -62,21 +63,22 @@ def child_env(home):
 
 
 class WorkspaceRunner:
-    def __init__(self, home, *, script=None, timeout=120, max_bytes=MAX_CIPHER):
+    def __init__(self, home, *, script=None, timeout=120, max_bytes=65536, transfer_timeout=86400):
         self.home = core.checked_path(home)
         self.script = core.checked_path(script) if script else helper_path(self.home)
         self.timeout, self.max_bytes = timeout, max_bytes
+        self.transfer_timeout = transfer_timeout
 
-    def __call__(self, operation, *args):
+    def __call__(self, operation, *args, expected_size=None):
         if not self.script:
             raise WorkspaceError('HELPER_MISSING')
         argv = [sys.executable, str(Path(__file__).with_name('workspace_helper.py')),
-                str(self.script), str(self.max_bytes), operation, *map(str, args)]
+                str(self.script), str(expected_size if expected_size is not None else self.max_bytes), operation, *map(str, args)]
         process = subprocess.Popen(argv, env=child_env(self.home), stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, start_new_session=True)
         output = bytearray()
         total = 0
-        deadline = time.monotonic() + self.timeout
+        deadline = time.monotonic() + (self.transfer_timeout if operation in {'download', 'upload'} else self.timeout)
         try:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ, True)
@@ -156,7 +158,7 @@ class WorkspaceDrive:
 
     def descriptor(self, row):
         if (row.get('profile_id') != self.owner or not re.fullmatch(r'[a-f0-9]{64}', row.get('sha256', ''))
-                or type(row.get('size')) is not int or not 0 < row['size'] <= MAX_CIPHER):
+                or type(row.get('size')) is not int or row['size'] <= 0):
             raise core.FinixError('Invalid Workspace recovery record')
         identifier(row.get('id'))
         identifier(row.get('folder_id'))
@@ -177,28 +179,10 @@ class WorkspaceDrive:
         # encrypted-only stage with subprocess RLIMIT_FSIZE and timeout.
         with tempfile.TemporaryDirectory(prefix='finix-workspace-', dir=os.environ.get('TMPDIR')) as stage:
             path = Path(stage) / 'cipher.age'
-            result = self.runner('download', record['id'], '--output', str(path))
+            result = self.runner('download', record['id'], '--output', str(path), expected_size=record['size'])
             if result.get('status') != 'downloaded' or result.get('id') != record['id']:
                 raise core.FinixError('Workspace download response mismatch')
-            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            try:
-                data = core.read_regular(fd, MAX_CIPHER)
-            finally:
-                os.close(fd)
-        if len(data) != record['size'] or hashlib.sha256(data).hexdigest() != record['sha256']:
-            raise core.FinixError('Workspace ciphertext readback mismatch')
-        if output is not None:
-            target = core.checked_path(output)
-            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            try:
-                with os.fdopen(fd, 'wb') as stream:
-                    stream.write(data)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-            except BaseException:
-                target.unlink(missing_ok=True)
-                raise
-        return data
+            return cloud_files.verified(path, record, output)
 
     def ledger(self):
         path = self.state / 'workspace.json'
@@ -233,27 +217,21 @@ class WorkspaceDrive:
             raise core.FinixError('Invalid Workspace retention')
         core.private_dir(self.state)
         with core.locked(self.state):
-            fd = os.open(core.checked_path(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            try:
-                data = core.read_regular(fd, MAX_CIPHER)
-            finally:
-                os.close(fd)
-            if not data.startswith(b'age-encryption.org/v1\n'):
-                raise core.FinixError('Only native age ciphertext may be uploaded')
+            descriptor = cloud_files.describe(path, native=True)
             journal = self.ledger()
             if len(journal['records']) >= MAX_RECORDS:
                 raise core.FinixError('Workspace ledger full; no upload')
             # Stable private staging prevents source replacement during upload.
             with tempfile.TemporaryDirectory(prefix='finix-upload-', dir=os.environ.get('TMPDIR')) as stage:
                 staged = Path(stage) / 'cipher.age'
-                staged.write_bytes(data)
-                staged.chmod(0o600)
+                cloud_files.copy(path, staged, descriptor)
                 result = self.runner('upload', str(staged), '--name', 'finix-' + uuid.uuid4().hex + '.age',
                                      '--parent', journal['folder_id'], '--mime-type', MIME)
+                cloud_files.verified(staged, descriptor)
             if result.get('status') != 'uploaded' or result.get('mimeType') != MIME:
                 raise core.FinixError('Workspace upload response mismatch')
             row = dict(id=identifier(result.get('id')), profile_id=self.owner, folder_id=journal['folder_id'],
-                       owners=journal['owners'], sha256=hashlib.sha256(data).hexdigest(), size=len(data))
+                       owners=journal['owners'], **descriptor)
             if row['id'] in {x['id'] for x in journal['records']}:
                 raise core.FinixError('Workspace returned an existing object ID')
             self.download(row)

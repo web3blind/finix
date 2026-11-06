@@ -23,7 +23,7 @@ class FakeDrive:
         self.objects, self.data, self.calls = {}, {}, []
         self.corrupt, self.bad_parent, self.fail_delete = False, False, None
 
-    def __call__(self, op, *args):
+    def __call__(self, op, *args, **kwargs):
         self.calls.append((op, args))
         if op == 'metadata':
             if args[0] not in self.objects:
@@ -194,9 +194,7 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(main(argv), 0)
         self.assertEqual(output.read_bytes(), self.path.read_bytes())
         self.assertEqual(output.stat().st_mode & 0o777, 0o600)
-        with patch('finix.workspace_drive.MAX_CIPHER', 8):
-            with self.assertRaises(core.FinixError):
-                self.drive.backup_cipher(self.path)
+        self.assertTrue(self.drive.backup_cipher(self.path)['verified'])
         link = self.root / 'link.age'
         link.symlink_to(self.path)
         with self.assertRaises(core.FinixError):

@@ -23,7 +23,7 @@ class MemoryRunner:
         self.fail_delete = None
         self.calls = []
 
-    def __call__(self, op, *args):
+    def __call__(self, op, *args, output=None, expected_size=None):
         self.calls.append((op, args))
         if op == 'listremotes':
             return json.dumps([{'name': 'cloud', 'type': 'yandex', 'source': 'file'}]).encode()
@@ -37,7 +37,9 @@ class MemoryRunner:
         if op == 'cat':
             if args[0] not in self.objects:
                 raise RcloneError('NOT_FOUND')
-            return b'corrupt' if self.corrupt else self.objects[args[0]]
+            data = b'corrupt' if self.corrupt else self.objects[args[0]]
+            output.write(data)
+            return b''
         if op == 'deletefile':
             if args[0] == self.fail_delete:
                 raise RcloneError('PROVIDER_ERROR')
@@ -202,7 +204,7 @@ class RcloneTests(unittest.TestCase):
         with self.assertRaises(core.FinixError):
             profile.configure('rclone_config', str(config))
 
-    def test_changed_selection_metadata_and_oversize_fail_closed(self):
+    def test_changed_selection_metadata_and_non_age_input_fail_closed(self):
         row = self.drive.backup_cipher(self.cipher)
         self.drive.root = 'different'
         with self.assertRaises(core.FinixError):
@@ -220,14 +222,14 @@ class RcloneTests(unittest.TestCase):
     def test_all_admitted_types_and_cloud_failure_preserves_local(self):
         original = self.fake
         for kind in ('yandex', 'onedrive', 'dropbox'):
-            def transport(op, *args):
+            def transport(op, *args, **kwargs):
                 if op == 'listremotes':
                     return json.dumps([{'name': 'cloud', 'type': kind, 'source': 'file'}]).encode()
-                return original(op, *args)
+                return original(op, *args, **kwargs)
             adapter = self.adapter(state=self.root / kind, runner=transport)
             row = adapter.backup_cipher(self.cipher)
             self.assertEqual(row['type'], kind)
-            self.assertEqual(adapter.download(row), self.cipher.read_bytes())
+            self.assertTrue(adapter.download(row)['verified'])
         profile = Profile(self.home)
         identity = self.root / 'test-recovery.key'
         recipient = core.keygen(identity)
@@ -262,14 +264,14 @@ class RcloneTests(unittest.TestCase):
         local.mkdir()
         self.config.write_text('[cloud]\ntype = local\n')
         real = RcloneRunner(self.home, self.config, binary=os.environ['FINIX_RCLONE_BINARY'])
-        def transport(op, *args):
+        def transport(op, *args, **kwargs):
             if op == 'listremotes':
                 actual = json.loads(real(op, *args))
                 self.assertEqual(actual[0]['type'], 'local')
                 return json.dumps([dict(actual[0], type='yandex')]).encode()
             # Absolute local root is confined to this disposable directory.
             args = tuple(a.replace('cloud:backups/Finix', 'cloud:' + str(local)) if isinstance(a, str) else a for a in args)
-            return real(op, *args)
+            return real(op, *args, **kwargs)
         identity = self.root / 'identity.key'
         recipient = core.keygen(identity)
         (self.home / 'config.yaml').write_text('synthetic: local-only\n')
