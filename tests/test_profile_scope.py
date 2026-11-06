@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from finix import core
+from finix import core, streaming
 
 
 class ProfileScopeTests(unittest.TestCase):
@@ -119,14 +119,14 @@ class ProfileScopeTests(unittest.TestCase):
         db.execute('pragma journal_mode=WAL')
         db.execute('create table fixture(value text)')
         db.commit()
-        snapshot = core.sqlite_snapshot
-        def changed_shm(fd, parent, name):
-            data = snapshot(fd, parent, name)
+        snapshot = streaming._sqlite_backup
+        def changed_shm(*args, **kwargs):
+            data = snapshot(*args, **kwargs)
             shm = Path(str(path) + '-shm')
             before = shm.stat()
             os.utime(shm, ns=(before.st_atime_ns, before.st_mtime_ns + 1000000))
             return data
-        with mock.patch.object(core, 'sqlite_snapshot', side_effect=changed_shm):
+        with mock.patch.object(streaming, '_sqlite_backup', side_effect=changed_shm):
             result = self.backup()
         entries = core.validate_archive(core.decrypt(result['path'], self.key))
         self.assertEqual(set(entries), {'unknown/store'})
@@ -187,16 +187,16 @@ class ProfileScopeTests(unittest.TestCase):
             self.assertTrue(Path(old['path']).exists())
             self.assertEqual((self.state / 'index.json').read_bytes(), index)
 
-    def test_unknown_oversize_fails_not_omits_and_preserves_old(self):
+    def test_unknown_file_beyond_old_buffer_cap_is_not_omitted(self):
         self.put('custom')
         old = self.backup()
-        index = (self.state / 'index.json').read_bytes()
         self.put('ai-projects/oversize', b'0' * 32769)
-        with mock.patch.object(core, 'MAX_BYTES', 32768), self.assertRaises(core.FinixError):
-            self.backup()
-        self.assertTrue(Path(old['path']).exists())
-        self.assertEqual((self.state / 'index.json').read_bytes(), index)
-        self.assertEqual(len(list(self.output.iterdir())), 1)
+        with mock.patch.object(core, 'MAX_BYTES', 32768):
+            result = self.backup()
+            target = self.root / 'unbounded-restored'
+            core.restore(result['path'], self.key, target)
+        self.assertFalse(Path(old['path']).exists())  # Successful keep=1 backup replaces old copy.
+        self.assertEqual((target / 'ai-projects/oversize').stat().st_size, 32769)
 
     def test_legacy_restore_remains_scoped_and_new_format_required(self):
         data = self.fixture({'config.yaml': b'fixture'}, 'finix-1')

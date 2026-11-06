@@ -147,35 +147,13 @@ class CoreReviewTests(unittest.TestCase):
                 self.assertEqual(len(list(self.output.iterdir())), 1)
         self.restore(old)
 
-    def assert_tar_overhead_cannot_prune(self, limit):
-        with mock.patch.object(core, 'MAX_BYTES', limit):
-            old = self.backup(keep=1)
-            old_index = (self.state / 'index.json').read_bytes()
-            self.put('config.yaml', b'0' * (limit - 1024))
-            with self.assertRaises(core.FinixError):
-                self.backup(keep=1)
-            self.assertTrue(Path(old['path']).exists())
-            self.assertEqual((self.state / 'index.json').read_bytes(), old_index)
-            self.assertEqual(len(list(self.output.iterdir())), 1)
-            self.restore(old)
-
-    def test_tar_overhead_cannot_prune_at_small_limit(self):
-        self.assert_tar_overhead_cannot_prune(32768)
-
-    @unittest.skipUnless(os.environ.get('FINIX_LARGE_TESTS') == '1', 'opt-in 128 MiB boundary')
-    def test_tar_overhead_cannot_prune_at_actual_limit(self):
-        self.assert_tar_overhead_cannot_prune(core.MAX_BYTES)
-
-    def test_exact_tar_boundary_roundtrip(self):
-        # USTAR's complete minimum record is 10240 bytes, including manifest/padding.
-        with mock.patch.object(core, 'MAX_BYTES', 10240):
-            result = self.backup()
-            target = self.restore(result)
-            self.assertEqual((target / 'config.yaml').read_bytes(), b'model: synthetic\n')
-        with mock.patch.object(core, 'MAX_BYTES', 10239):
-            with self.assertRaises(core.FinixError):
-                self.backup(keep=1)
-        self.assertTrue(Path(result['path']).exists())
+    def test_tar_padding_and_old_buffer_caps_do_not_limit_streaming(self):
+        for limit in (10239, 10240, 32768):
+            with self.subTest(old_buffer_limit=limit), mock.patch.object(core, 'MAX_BYTES', limit):
+                self.put('arbitrary-file', b'0' * (limit + 1))
+                result = self.backup(keep=1)
+                target = self.restore(result, f'unbounded-{limit}')
+                self.assertEqual((target / 'arbitrary-file').stat().st_size, limit + 1)
 
     def test_nested_sqlite_companion_symlink_rejected(self):
         path = self.put('plugin-data/custom/store.sqlite', b'')

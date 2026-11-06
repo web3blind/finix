@@ -20,6 +20,7 @@ import tarfile
 import tempfile
 import uuid
 
+# Compatibility-only buffered helpers; production backup/restore never use this cap.
 MAX_BYTES = 128 * 1024 * 1024
 MAX_FILES = 10000
 # Frozen finix-1 admission scope, never used to select new profile backups.
@@ -189,38 +190,10 @@ def source_file(rootfd, name, expected):
 
 
 def sqlite_snapshot(fd, parent, name):
-    # SQLite opens its own WAL/SHM/journal paths, so validate those too.
-    for suffix in ('-wal', '-shm', '-journal'):
-        try:
-            companion = os.stat(name + suffix, dir_fd=parent, follow_symlinks=False)
-        except FileNotFoundError:
-            continue
-        if not stat.S_ISREG(companion.st_mode):
-            raise FinixError('SQLite companion is a symlink or special file')
-    # Anchored directory preserves WAL lookup. Revalidate inode around connection.
-    path = f'/proc/self/fd/{parent}/{name}'
-    conn = sqlite3.connect(f'file:{quote(path, safe="/")}?mode=ro', uri=True, timeout=2)
-    memory = sqlite3.connect(':memory:')
-    try:
-        if os.stat(path).st_ino != os.fstat(fd).st_ino:
-            raise FinixError('SQLite source replaced')
-        pages = conn.execute('pragma page_count').fetchone()[0]
-        size = conn.execute('pragma page_size').fetchone()[0]
-        if pages * size > MAX_BYTES:
-            raise FinixError('SQLite exceeds snapshot limit')
-        memory.execute(f'pragma max_page_count={MAX_BYTES // size}')
-        deadline = time.monotonic() + 15
-        def progress(status, remaining, total):
-            if total * size > MAX_BYTES or time.monotonic() > deadline:
-                raise FinixError('SQLite snapshot limit exceeded')
-        conn.backup(memory, pages=128, progress=progress, sleep=0.01)
-        data = memory.serialize()
-        if len(data) > MAX_BYTES:
-            raise FinixError('SQLite exceeds snapshot limit')
-        return data
-    finally:
-        conn.close()
-        memory.close()
+    """Compatibility helper for bounded small-DB RAM optimization only."""
+    from .streaming import memory_sqlite_snapshot
+    return memory_sqlite_snapshot(fd, parent, name)
+
 
 
 def normalize_cron(data):
@@ -340,12 +313,39 @@ def keygen(path):
             os.close(fd)
 
 
-def digest_file(path):
+def sha256_file(path, *, cancel=None, progress=None):
+    """Hash any regular file in bounded memory, checking for concurrent mutation."""
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
-        return hashlib.sha256(read_regular(fd, MAX_BYTES + 1024 * 1024)).hexdigest()
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
+            raise FinixError('Checksum input must be a regular file')
+        from .streaming import check_cancel, report
+        digest, count = hashlib.sha256(), 0
+        while True:
+            check_cancel(cancel)
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            count += len(chunk)
+            report(progress, 'checksum', count)
+        if (fingerprint(before) != fingerprint(os.fstat(fd))
+                or fingerprint(before) != fingerprint(os.stat(path, follow_symlinks=False))):
+            raise FinixError('File changed during checksum')
+        return digest.hexdigest()
     finally:
         os.close(fd)
+
+
+def digest_file(path, **kwargs):
+    return sha256_file(path, **kwargs)
+
+
+def sqlite_temp_readiness(path):
+    from .streaming import sqlite_temp_readiness as readiness
+    return readiness(path)
+
 
 
 def atomic_json(path, data):
@@ -381,7 +381,8 @@ def load_state(state):
     return data
 
 
-def backup(source, output, state, recipient, keep=None):
+def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
+           cancel=None, progress=None):
     if not RECIPIENT.fullmatch(recipient):
         raise FinixError('Expected one native age public recipient')
     if keep is not None and (type(keep) is not int or keep < 1):
@@ -390,6 +391,11 @@ def backup(source, output, state, recipient, keep=None):
     if any(a == b or a in b.parents or b in a.parents
            for a, b in [(source, output), (source, state), (output, state)]):
         raise FinixError('Source, output and state must be disjoint directories')
+    from .streaming import _temp_directory
+    sqlite_temp_dir = _temp_directory(sqlite_temp_dir)
+    if any(sqlite_temp_dir == root or root in sqlite_temp_dir.parents
+           for root in (source, output, state)):
+        raise FinixError('SQLite temporary storage must be outside source, output and state')
     private_dir(output)
     private_dir(state)
     with locked(source) as sourcefd, locked(output), locked(state):
@@ -400,20 +406,23 @@ def backup(source, output, state, recipient, keep=None):
                      'output': str(output), 'backups': []}
         if index.get('source') != binding or index.get('output') != str(output):
             raise FinixError('State belongs to a different source or output')
-        archive = make_archive(sourcefd)
+        from .streaming import write_encrypted_snapshot
         name = f"finix-{index['namespace']}-{uuid.uuid4().hex}.age"
         destination = output / name
         fd, temp = tempfile.mkstemp(prefix='.finix-', dir=output)
         try:
             with os.fdopen(fd, 'wb') as stream:
-                run_age(['-r', recipient], archive, stream)
+                write_encrypted_snapshot(sourcefd, recipient, stream, sqlite_temp_dir, cancel, progress)
                 stream.flush()
                 os.fsync(stream.fileno())
-            expected = digest_file(temp)
+            expected = digest_file(temp, cancel=cancel, progress=progress)
             os.link(temp, destination, follow_symlinks=False)
-            if digest_file(destination) != expected:
+            try:
+                if digest_file(destination, cancel=cancel, progress=progress) != expected:
+                    raise FinixError('Encrypted output readback verification failed')
+            except BaseException:
                 destination.unlink()
-                raise FinixError('Encrypted output readback verification failed')
+                raise
         finally:
             Path(temp).unlink(missing_ok=True)
         record = {'name': name, 'sha256': expected,
@@ -548,38 +557,29 @@ def validate_archive(data):
         raise FinixError('Invalid archive') from None
 
 
-def restore(archive, identity, target):
+def restore(archive, identity, target, *, cancel=None, progress=None):
+    from .streaming import decrypted_stream, restore_stream
     target = checked_path(target)
     if target.exists() and (not target.is_dir() or any(target.iterdir())):
         raise FinixError('Restore requires an absent or empty target directory')
-    entries = validate_archive(decrypt(archive, identity))
     if not target.parent.is_dir():
         raise FinixError('Restore target parent must exist')
     stage = Path(tempfile.mkdtemp(prefix='.finix-restore-', dir=target.parent))
     try:
-        for name, data in entries.items():
-            path = stage / name
-            directory = stage
-            for component in PurePosixPath(name).parts[:-1]:
-                directory = directory / component
-                directory.mkdir(mode=0o700, exist_ok=True)
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            with os.fdopen(fd, 'wb') as stream:
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
-        # Linux renameat2 NOREPLACE prevents an absent-target race. Empty existing
-        # targets are locked and removed only after the whole candidate is ready.
+        with decrypted_stream(archive, identity, cancel) as stream:
+            payload, count = restore_stream(stream, stage, cancel, progress)
+        # Wait for age authentication, gzip CRC/EOF and full manifest before publish.
         if target.exists():
             with locked(target):
-                target.rmdir()  # fails rather than removing a newly populated target
-                publish_directory(stage, target)
+                target.rmdir()
+                publish_directory(payload, target)
         else:
-            publish_directory(stage, target)
+            publish_directory(payload, target)
     finally:
         if stage.exists():
             shutil.rmtree(stage)
-    return {'target': str(target), 'files': len(entries), 'cron_disabled': True}
+    return {'target': str(target), 'files': count, 'cron_disabled': True}
+
 
 
 def publish_directory(stage, target):

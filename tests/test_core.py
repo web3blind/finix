@@ -13,7 +13,7 @@ import gzip
 import fcntl
 import sys
 
-from finix import core
+from finix import core, streaming
 
 
 class CoreTests(unittest.TestCase):
@@ -181,10 +181,11 @@ class CoreTests(unittest.TestCase):
         with mock.patch.object(core, 'MAX_FILES', 1):
             with self.assertRaises(core.FinixError):
                 self.backup()
-        with mock.patch.object(core, 'MAX_BYTES', 32):
-            with self.assertRaises(core.FinixError):
-                self.backup()
         self.assertEqual(list(self.store.glob('*.age')), [])
+        # The old buffer helper limit must not constrain production streaming.
+        with mock.patch.object(core, 'MAX_BYTES', 32):
+            result = self.backup()
+            core.restore(result['path'], self.key, self.root / 'unbounded-restore')
 
     def test_cooperative_source_lock(self):
         fd = os.open(self.source, os.O_RDONLY | os.O_DIRECTORY)
@@ -243,8 +244,8 @@ class CoreTests(unittest.TestCase):
     def test_failed_readback_does_not_prune(self):
         first = self.backup()
         original = core.digest_file
-        def mismatched(path):
-            actual = original(path)
+        def mismatched(path, **kwargs):
+            actual = original(path, **kwargs)
             return '0' * 64 if Path(path).suffix == '.age' else actual
         with mock.patch.object(core, 'digest_file', side_effect=mismatched):
             with self.assertRaises(core.FinixError):
@@ -279,7 +280,8 @@ class CoreTests(unittest.TestCase):
 
     def test_age_failure_preserves_previous_backups(self):
         first = self.backup()
-        with mock.patch.object(core, 'run_age', side_effect=core.FinixError('synthetic failure')):
+        with mock.patch.object(streaming, 'write_encrypted_snapshot',
+                               side_effect=core.FinixError('synthetic failure')):
             with self.assertRaises(core.FinixError):
                 self.backup(keep=1)
         self.assertTrue(Path(first['path']).exists())
