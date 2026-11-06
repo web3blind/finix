@@ -192,9 +192,12 @@ class HashReader:
         return data
 
 
-def _add_payload(archive, name, stream, size, records, cancel, progress):
+def _add_payload(archive, name, stream, size, records, cancel, progress, *, raw=False):
     from .core import FinixError
-    info = tarfile.TarInfo('profile/' + name)
+    from . import core
+    if len(records) >= core.MAX_FILES or not core.safe_name(name):
+        raise FinixError('Archive file count or path depth exceeds limit')
+    info = tarfile.TarInfo(name if raw else 'profile/' + name)
     info.mode, info.size = 0o600, size
     reader = HashReader(stream, cancel, progress)
     archive.addfile(info, reader)
@@ -203,43 +206,64 @@ def _add_payload(archive, name, stream, size, records, cancel, progress):
     records[name] = {'size': size, 'sha256': reader.hash.hexdigest()}
 
 
-def write_archive(rootfd, output, sqlite_temp_dir=None, cancel=None, progress=None):
+def write_archive(rootfd, output, sqlite_temp_dir=None, cancel=None, progress=None, *, extra_fds=()):
     from . import core
-    inventory = core.scan(rootfd)
-    records, companions = {}, set()
+    from .extra_sources import guard_tree
+    from functools import partial
+    guards = {fd: partial(guard_tree, root_name=Path(item['path']).name) for item, fd in extra_fds}
+
+    def scan_source(fd):
+        return core.scan(fd, guards.get(fd))
+
+    roots = [('', rootfd), *[('external/' + item['name'] + '/', fd) for item, fd in extra_fds]]
+    inventories = [(prefix, fd, scan_source(fd)) for prefix, fd in roots]
+    records, checks = {}, []
     with gzip.GzipFile(fileobj=output, mode='wb', filename='', mtime=0, compresslevel=1) as zipped:
-        # GNU base-256 headers support files >=8 GiB without a size ceiling.
         with tarfile.open(fileobj=zipped, mode='w|', format=tarfile.GNU_FORMAT) as archive:
-            for name, expected in inventory.items():
-                check_cancel(cancel)
-                if name in companions:
-                    continue
-                with core.source_file(rootfd, name, expected) as (fd, parent, leaf):
-                    if os.pread(fd, 16, 0) == b'SQLite format 3\x00':
-                        companions.update(name + s for s in ('-wal', '-shm', '-journal'))
-                        with sqlite_payload(fd, parent, leaf, sqlite_temp_dir, cancel, progress) as (stream, size):
-                            _add_payload(archive, name, stream, size, records, cancel, progress)
-                    elif name == 'cron/jobs.json':
-                        data = core.normalize_cron(core.read_regular(fd, CRON_BYTES))
-                        if len(data) > CRON_BYTES:
-                            raise core.FinixError('Cron JSON exceeds metadata limit')
-                        _add_payload(archive, name, io.BytesIO(data), len(data), records, cancel, progress)
-                    else:
-                        with os.fdopen(os.dup(fd), 'rb') as stream:
-                            _add_payload(archive, name, stream, expected[3], records, cancel, progress)
-            final = core.scan(rootfd)
-            for name in companions & inventory.keys() & final.keys():
-                if inventory[name][:3] != final[name][:3]:
-                    raise core.FinixError('SQLite companion replaced during snapshot')
-            if ({n: s for n, s in inventory.items() if n not in companions}
-                    != {n: s for n, s in final.items() if n not in companions}):
-                raise core.FinixError('Profile changed during snapshot; retry when quiescent')
-            manifest = json.dumps({'format': 'finix-2', 'files': records}, sort_keys=True).encode()
-            if len(manifest) > MANIFEST_BYTES:
+            for prefix, rootfd, inventory in inventories:
+                companions = set()
+                for name, expected in inventory.items():
+                    check_cancel(cancel)
+                    if name in companions:
+                        continue
+                    with core.source_file(rootfd, name, expected) as (fd, parent, leaf):
+                        if os.pread(fd, 16, 0) == b'SQLite format 3\x00':
+                            companions.update(name + s for s in ('-wal', '-shm', '-journal'))
+                            with sqlite_payload(fd, parent, leaf, sqlite_temp_dir, cancel, progress) as (stream, size):
+                                _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, stream, size, records, cancel, progress, raw=bool(extra_fds))
+                        elif prefix == '' and name == 'cron/jobs.json':
+                            data = core.normalize_cron(core.read_regular(fd, CRON_BYTES))
+                            if len(data) > CRON_BYTES:
+                                raise core.FinixError('Cron JSON exceeds metadata limit')
+                            _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, io.BytesIO(data), len(data), records, cancel, progress, raw=bool(extra_fds))
+                        else:
+                            with os.fdopen(os.dup(fd), 'rb') as stream:
+                                _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, stream, expected[3], records, cancel, progress, raw=bool(extra_fds))
+                final = scan_source(rootfd)
+                for name in companions & inventory.keys() & final.keys():
+                    if inventory[name][:3] != final[name][:3]:
+                        raise core.FinixError('SQLite companion replaced during snapshot')
+                if ({n: s for n, s in inventory.items() if n not in companions}
+                        != {n: s for n, s in final.items() if n not in companions}):
+                    raise core.FinixError('Profile changed during snapshot; retry when quiescent')
+                checks.append((rootfd, inventory, companions))
+            for fd, inventory, companions in checks:
+                final = scan_source(fd)
+                for name in companions & inventory.keys() & final.keys():
+                    if inventory[name][:3] != final[name][:3]:
+                        raise core.FinixError('SQLite companion replaced during snapshot')
+                if ({n: s for n, s in inventory.items() if n not in companions}
+                        != {n: s for n, s in final.items() if n not in companions}):
+                    raise core.FinixError('Source changed during multi-root snapshot')
+            manifest = {'format': 'finix-3' if extra_fds else 'finix-2', 'files': records}
+            if extra_fds:
+                manifest['extra_sources'] = [item for item, fd in extra_fds]
+            encoded = json.dumps(manifest, sort_keys=True).encode()
+            if len(encoded) > MANIFEST_BYTES:
                 raise core.FinixError('Manifest exceeds metadata limit')
             info = tarfile.TarInfo('manifest.json')
-            info.size, info.mode = len(manifest), 0o600
-            archive.addfile(info, io.BytesIO(manifest))
+            info.size, info.mode = len(encoded), 0o600
+            archive.addfile(info, io.BytesIO(encoded))
 
 
 class Pipe:
@@ -307,14 +331,14 @@ def _cleanup(process):
             stream.close()
 
 
-def write_encrypted_snapshot(rootfd, recipient, output, sqlite_temp_dir=None, cancel=None, progress=None):
+def write_encrypted_snapshot(rootfd, recipient, output, sqlite_temp_dir=None, cancel=None, progress=None, *, extra_fds=()):
     from .core import FinixError
     try:
         process = subprocess.Popen(['age', '-r', recipient], stdin=subprocess.PIPE,
                                    stdout=output, stderr=subprocess.DEVNULL)
         try:
             assert process.stdin is not None
-            write_archive(rootfd, Pipe(process.stdin, cancel), sqlite_temp_dir, cancel, progress)
+            write_archive(rootfd, Pipe(process.stdin, cancel), sqlite_temp_dir, cancel, progress, extra_fds=extra_fds)
             process.stdin.close()
             _wait(process, cancel)
         finally:
@@ -471,7 +495,11 @@ def restore_stream(stream, stage, cancel=None, progress=None):
         if not isinstance(manifest, dict):
             raise core.FinixError('Missing archive manifest')
         version = manifest.get('format')
-        if version == 'finix-2':
+        if version == 'finix-3':
+            from .extra_sources import admit_bundle, manifest_aliases
+            aliases = manifest_aliases(manifest)
+            records, admit = entries, lambda name: admit_bundle(name, aliases)
+        elif version == 'finix-2':
             if any(not n.startswith('profile/') for n in entries):
                 raise core.FinixError('Archive scope mismatch')
             records = {n[len('profile/'):]: record for n, record in entries.items()}
@@ -488,8 +516,8 @@ def restore_stream(stream, stage, cancel=None, progress=None):
                 raise core.FinixError('Archive file/directory conflict')
         payload = stage / 'profile' if version == 'finix-2' else stage
         payload.mkdir(mode=0o700, exist_ok=True)
-        _pause_cron(payload)
-        return payload, len(records)
+        _pause_cron(payload / 'profile' if version == 'finix-3' else payload)
+        return payload, len(records), 'bundle' if version == 'finix-3' else 'profile'
     except (ValueError, KeyError, TypeError, AttributeError, RecursionError,
             tarfile.TarError, OSError, EOFError, zlib.error):
         raise core.FinixError('Invalid or incomplete archive; check free restore space') from None

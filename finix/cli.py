@@ -18,6 +18,7 @@ def main(argv=None):
     backup = commands.add_parser('backup', help='Create and verify a local encrypted snapshot')
     for option in ('source', 'output', 'state', 'recipient'):
         backup.add_argument('--' + option, required=True)
+    backup.add_argument('--configured-extras', action='store_true', help='Load extra folders from the owning source config; requires Hermes canonical default-root verification')
     backup.add_argument('--keep', type=int, help='Explicit retention in this Finix namespace')
     backup.add_argument('--sqlite-temp-dir', help='Optional existing owner-only temporary directory outside source; SQLite snapshots may be plaintext')
     restore = commands.add_parser('restore', help='Restore into an absent or empty directory; cron paused')
@@ -35,6 +36,9 @@ def main(argv=None):
         if command == 'keygen':
             result = {'recipient': core.keygen(args['identity'])}
         else:
+            if command == 'backup' and args.get('configured_extras'):
+                from .extra_sources import trusted_root
+                args['default_root'] = trusted_root()
             result = getattr(core, command)(**args)
         print(json.dumps(result, sort_keys=True))
         return 0

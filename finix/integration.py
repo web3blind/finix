@@ -10,8 +10,10 @@ from . import core
 
 
 class Profile:
-    def __init__(self, home):
+    def __init__(self, home, *, default_root=None):
         self.home = core.checked_path(home)
+        from .extra_sources import trusted_root
+        self.default_root = default_root if default_root is not None else trusted_root()
         binding = hashlib.sha256(str(self.home).encode()).hexdigest()
         # Random backend identity prevents same-path profiles on different servers
         # accepting stale recipient POSTs. It is not part of the restored profile.
@@ -73,6 +75,9 @@ class Profile:
         cfg = self.config()
         result = {'profile_id': self.profile_id, **cfg,
                   'scheduler': 'automatic while native plugin is loaded; optional python -m finix.scheduler when host is offline'}
+        from .extra_sources import records, read_config
+        result['extra_sources'] = records(read_config(self.home)[0])
+        result['extra_sources_allowed'] = self.home == self.default_root
         result['sqlite_temp'] = core.sqlite_temp_readiness(cfg.get('sqlite_temp_dir'))
         if cfg['storage'] == 'connector-drive':
             from .connector_drive import ConnectorError, ACTIONS
@@ -143,6 +148,10 @@ class Profile:
             core.atomic_json(self.root / 'settings.json', cfg)
         return self.status()
 
+    def extra_sources(self, action, name=None, path=None):
+        from .extra_sources import edit
+        return edit(self, action, name, path)
+
     def backup(self, scheduled=False):
         with core.locked(self.directories()):
             cfg = self.config()
@@ -153,7 +162,9 @@ class Profile:
                 raise core.FinixError('Register a public recipient first')
             # Do not prune local copies until cloud readback has succeeded.
             result = core.backup(self.home, self.root / 'copies', self.root / 'index', cfg['recipient'],
-                                 sqlite_temp_dir=cfg.get('sqlite_temp_dir'))
+                                 sqlite_temp_dir=cfg.get('sqlite_temp_dir'),
+                                 configured_extras=True, default_root=self.default_root,
+                                 extra_forbidden=(self.root.parent,))
             if cfg['storage'] == 'drive':
                 from .drive import Drive
                 drive = Drive(self.profile_id)
@@ -202,14 +213,14 @@ def current_profile():
     return Profile(get_hermes_home())
 
 
-def command(raw_args, *, owner_id='', owner_platform='', platform='', source=None, connection_commands=None, **kwargs):
+def command(raw_args, *, owner_id='', owner_platform='', platform='', source=None, connection_commands=None, bound_profile=None, **kwargs):
     """Only adapter-attested identities may use chat operations, including status."""
     if (not owner_id or not owner_platform or source is None or platform != owner_platform
             or str(source.user_id) != str(owner_id)):
         return 'Finix denied: configure owner_id and owner_platform locally; trusted owner context required.'
     try:
         args = shlex.split(raw_args)
-        profile = current_profile()
+        profile = bound_profile() if bound_profile else current_profile()
         if not args or args == ['status']:
             return json.dumps(profile.status())
         if args and args[0] == 'connect':
@@ -240,6 +251,16 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
             if expected is not None and args[3:] != ['confirm']:
                 raise core.FinixError('Replacement requires OLD recipient and confirm')
             return json.dumps(profile.recipient(profile.profile_id, args[1], expected))
+        if args[0] == 'extra':
+            if args[1:] == ['list']:
+                return json.dumps(profile.extra_sources('list'))
+            if len(args) == 5 and args[1] == 'add':
+                raise core.FinixError('Quote paths with spaces')
+            if len(args) == 4 and args[1] == 'add':
+                return json.dumps(profile.extra_sources('add', args[2], args[3]))
+            if len(args) == 3 and args[1] == 'remove':
+                return json.dumps(profile.extra_sources('remove', args[2]))
+            return 'Usage: /finix extra list|add NAME ABSOLUTE_PATH|remove NAME'
         if args == ['backup']:
             return json.dumps(profile.backup())
         if args[0] == 'configure' and len(args) == 3:
@@ -265,6 +286,9 @@ def register(ctx):
     from .connect_commands import ConnectCommands
     import asyncio
     home = get_hermes_home().expanduser().resolve()
+    from .extra_sources import trusted_root
+    default_root = trusted_root()
+    bound_profile = lambda: Profile(home, default_root=default_root)
     connection_commands = ConnectCommands()
     ctx.on_unload(connection_commands.close)
 
@@ -273,7 +297,7 @@ def register(ctx):
         try:
             return command(raw_args, owner_id=ctx.get_config('owner_id', ''),
                            owner_platform=ctx.get_config('owner_platform', ''),
-                           connection_commands=connection_commands, **kwargs)
+                           connection_commands=connection_commands, bound_profile=bound_profile, **kwargs)
         finally:
             reset_hermes_home_override(token)
 
@@ -286,6 +310,6 @@ def register(ctx):
     # Uninstalled development imports have no native credential grant or lifecycle
     # ownership. Only an actual payload in this profile may start unattended work.
     if Path(ctx.manifest.path).resolve().is_relative_to(home / 'plugins'):
-        worker = Worker(home)
+        worker = Worker(home, default_root=default_root)
         ctx.on_unload(worker.stop)
         worker.start()

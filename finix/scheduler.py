@@ -21,8 +21,10 @@ class Worker:
     a thread during publication/retention is unsafe. Unload reports a bounded drain
     timeout explicitly; source locks fence a replacement worker meanwhile.
     """
-    def __init__(self, home):
+    def __init__(self, home, *, default_root=None):
         self.home = Path(home).expanduser().resolve()
+        from .extra_sources import trusted_root
+        self.default_root = default_root if default_root is not None else trusted_root()
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self.run, name='finix-scheduler', daemon=True)
 
@@ -44,7 +46,7 @@ class Worker:
         settings = self.home.parent / 'finix-data' / binding / 'settings.json'
         if not settings.exists() or self.stop_event.is_set():
             return
-        profile = Profile(self.home)
+        profile = Profile(self.home, default_root=self.default_root)
         cfg = profile.config()
         if (not cfg['interval_hours'] or cfg['next_run'] > time.time()
                 or self.stop_event.is_set()):

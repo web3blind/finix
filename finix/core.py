@@ -1,5 +1,5 @@
 """Bounded-memory, local-only age snapshots. No Hermes runtime imports."""
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from urllib.parse import quote
 from datetime import datetime, timezone
 import fcntl
@@ -130,13 +130,15 @@ def read_regular(fd, limit=MAX_BYTES):
     return data
 
 
-def scan(rootfd):
+def scan(rootfd, directory_guard=None):
     """Open every included component relative to anchored directory descriptors."""
     result = {}
     directories = 0
 
     def walk(fd, prefix=''):
         nonlocal directories
+        if directory_guard is not None:
+            directory_guard(fd, prefix)
         directories += 1
         if directories > MAX_FILES or (prefix and len(PurePosixPath(prefix).parts) > 32):
             raise FinixError('Source directory count or depth exceeds limit')
@@ -382,7 +384,7 @@ def load_state(state):
 
 
 def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
-           cancel=None, progress=None):
+           cancel=None, progress=None, configured_extras=False, default_root=None, extra_forbidden=()):
     if not RECIPIENT.fullmatch(recipient):
         raise FinixError('Expected one native age public recipient')
     if keep is not None and (type(keep) is not int or keep < 1):
@@ -396,9 +398,17 @@ def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
     if any(sqlite_temp_dir == root or root in sqlite_temp_dir.parents
            for root in (source, output, state)):
         raise FinixError('SQLite temporary storage must be outside source, output and state')
+    from .extra_sources import load
+    extras = load(source, default_root, (output, state, *extra_forbidden)) if configured_extras else []
+    if any(sqlite_temp_dir == Path(item['path']) or Path(item['path']) in sqlite_temp_dir.parents for item in extras):
+        raise FinixError('SQLite temporary storage overlaps an extra source')
     private_dir(output)
     private_dir(state)
-    with locked(source) as sourcefd, locked(output), locked(state):
+    with ExitStack() as stack:
+        roots = {source, output, state, *(Path(item['path']) for item in extras)}
+        descriptors = {path: stack.enter_context(locked(path)) for path in sorted(roots)}
+        sourcefd = descriptors[source]
+        extra_fds = [(item, descriptors[Path(item['path'])]) for item in extras]
         index = load_state(state)
         binding = hashlib.sha256(str(source).encode()).hexdigest()
         if index is None:
@@ -412,10 +422,13 @@ def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
         fd, temp = tempfile.mkstemp(prefix='.finix-', dir=output)
         try:
             with os.fdopen(fd, 'wb') as stream:
-                write_encrypted_snapshot(sourcefd, recipient, stream, sqlite_temp_dir, cancel, progress)
+                write_encrypted_snapshot(sourcefd, recipient, stream, sqlite_temp_dir, cancel, progress, extra_fds=extra_fds)
                 stream.flush()
                 os.fsync(stream.fileno())
             expected = digest_file(temp, cancel=cancel, progress=progress)
+            for root in roots:
+                if fingerprint(os.stat(root, follow_symlinks=False))[:3] != fingerprint(os.fstat(descriptors[root]))[:3]:
+                    raise FinixError('Source or storage directory replaced during backup')
             os.link(temp, destination, follow_symlinks=False)
             try:
                 if digest_file(destination, cancel=cancel, progress=progress) != expected:
@@ -525,7 +538,11 @@ def validate_archive(data):
                 entries[member.name] = extracted.read()
         manifest = json.loads(entries.pop('manifest.json'))
         version = manifest.get('format')
-        if version == 'finix-2':
+        if version == 'finix-3':
+            from .extra_sources import admit_bundle, manifest_aliases
+            aliases = manifest_aliases(manifest)
+            admit = lambda name: admit_bundle(name, aliases)
+        elif version == 'finix-2':
             if any(not n.startswith('profile/') for n in entries):
                 raise FinixError('Archive scope mismatch')
             entries = {n[len('profile/'):]: content for n, content in entries.items()}
@@ -543,15 +560,16 @@ def validate_archive(data):
             if manifest['files'][name] != {'size': len(content), 'sha256': hashlib.sha256(content).hexdigest()}:
                 raise FinixError('Archive checksum mismatch')
         # Fully validate cron before creating any restored paths.
-        if 'cron/jobs.json' in entries:
-            jobs = json.loads(entries['cron/jobs.json'])
+        cron_name = 'profile/cron/jobs.json' if version == 'finix-3' else 'cron/jobs.json'
+        if cron_name in entries:
+            jobs = json.loads(entries[cron_name])
             if not isinstance(jobs, dict) or not isinstance(jobs.get('jobs'), list):
                 raise FinixError('Unsupported cron jobs format')
             for job in jobs['jobs']:
                 if not isinstance(job, dict):
                     raise FinixError('Unsupported cron job')
                 job.update(enabled=False, state='paused', next_run_at=None, paused_at='finix-restore')
-            entries['cron/jobs.json'] = json.dumps(jobs, indent=2).encode()
+            entries[cron_name] = json.dumps(jobs, indent=2).encode()
         return entries
     except (ValueError, KeyError, TypeError, AttributeError, RecursionError, tarfile.TarError, OSError, EOFError):
         raise FinixError('Invalid archive') from None
@@ -567,7 +585,7 @@ def restore(archive, identity, target, *, cancel=None, progress=None):
     stage = Path(tempfile.mkdtemp(prefix='.finix-restore-', dir=target.parent))
     try:
         with decrypted_stream(archive, identity, cancel) as stream:
-            payload, count = restore_stream(stream, stage, cancel, progress)
+            payload, count, layout = restore_stream(stream, stage, cancel, progress)
         # Wait for age authentication, gzip CRC/EOF and full manifest before publish.
         if target.exists():
             with locked(target):
@@ -578,7 +596,8 @@ def restore(archive, identity, target, *, cancel=None, progress=None):
     finally:
         if stage.exists():
             shutil.rmtree(stage)
-    return {'target': str(target), 'files': count, 'cron_disabled': True}
+    return {'target': str(target), 'files': count, 'cron_disabled': True,
+            'layout': layout}
 
 
 

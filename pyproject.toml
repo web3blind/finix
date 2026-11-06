@@ -7,7 +7,7 @@ name = "finix"
 version = "0.1.0"
 description = "Local age-encrypted Hermes profile backup and safe restore"
 requires-python = ">=3.11,<3.15"
-dependencies = []
+dependencies = ["PyYAML>=6.0,<7.0"]
 
 [project.scripts]
 finix = "finix.cli:main"

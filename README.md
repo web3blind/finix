@@ -25,7 +25,7 @@ Use actual public recipients and filenames in place of placeholders. Commands re
 
 ## Included data
 
-All regular files below the explicitly selected `--source` profile are included by default: unknown root files, third-party plugin stores, arbitrary project folders (including `ai-projects/` **inside** the profile), dotfiles, credentials and project `.git/` history. There is no file-extension filter; an owner's `.log` file outside the excluded root `logs/` is included. Configured external paths and sibling projects outside the profile are never followed.
+All regular files below the explicitly selected `--source` profile are included by default: unknown root files, third-party plugin stores, arbitrary project folders (including `ai-projects/` **inside** the profile), dotfiles, credentials and project `.git/` history. There is no file-extension filter; an owner's `.log` file outside the excluded root `logs/` is included. External paths and sibling projects outside the profile are not followed unless explicitly selected as extra folders by the canonical default profile (see below).
 
 The small, explicit policy is defined once by `ROOT_EXCLUSIONS`, `TREE_EXCLUSIONS` and `excluded()` in `finix/core.py` and enforced both during discovery and v2 restore:
 
@@ -51,6 +51,75 @@ python -m finix backup --source /profiles/example \
 ```
 
 `--sqlite-temp-dir` is optional; for profile/scheduled backups use `/finix configure sqlite_temp_dir /PRIVATE/finix-temp` to select an existing owner-owned mode-0700 directory outside the source profile. `/finix status` reports `sqlite_temp.ready` and `sqlite_temp.code` using local filesystem checks only, without reading customer SQLite files, inspecting encryption keys or accessing a cloud account. This orchestration setting is outside the profile archive; configure it again on a replacement backup host. Finix does not create encrypted mounts or obtain disk encryption keys. Large databases require enough free temporary disk space; there is no fixed 128 MiB archive/file cap. Cloud transport staging contains only ciphertext.
+
+## Extra folders (default/main profile only)
+
+Only the canonical **default** Hermes profile can select external server folders.
+A named profile cannot enable this by editing YAML, setting a boolean, or running
+under a gateway launched from default. The owning profile and trusted root are
+captured when the native plugin registers; each manual and scheduled backup
+reloads its own `config.yaml` and revalidates identity and paths.
+
+Owner-only commands (quote paths containing spaces):
+
+```text
+/finix extra add projects "/path/to/projects"
+/finix extra list
+/finix extra remove projects
+```
+
+The sole extra-folder configuration is in the owning profile's `config.yaml`:
+
+```yaml
+plugins:
+  entries:
+    finix:
+      settings:
+        extra_sources:
+          - name: projects
+            path: /path/to/projects
+```
+
+An empty/missing list means profile-only backup. The owner may instruct the agent
+to edit this known section directly; commands preserve unrelated YAML values
+(but not comments/formatting) and atomically replace the file with mode 0600.
+There is no second extra-source list in Finix's external settings store.
+Aliases are lowercase short slugs. Sources must be readable canonical absolute
+real directories, disjoint from each other, the profile, other profile trees,
+system directories, Finix state/output and SQLite temporary snapshot children.
+Links, special files, missing/replaced sources and detected changes fail the
+entire backup before publication/retention. A parent project folder covers future
+subdirectories and `.git` history. The documented root/cache exclusion policy is
+applied independently at each source root; empty directories remain unpreserved.
+Extra-root traversal also refuses recognized nested Hermes profile trees, including
+ones introduced after the source was configured. This check uses anchored directory
+descriptors before exclusions and is repeated during final snapshot validation.
+
+With extra folders the archive is **finix-3**. Independent restore uses the same
+`python -m finix restore` command into ONE new/empty target and publishes atomically:
+
+```text
+NEW_TARGET/profile/             # selected Hermes profile
+NEW_TARGET/external/projects/   # external folder selected with alias projects
+```
+
+The result reports `layout: bundle`. Original absolute paths in encrypted metadata
+are informational only: restore never writes back to them. Review the new bundle,
+then explicitly move/copy the recovered profile and projects where desired; never
+restore over a live profile. Without extras, v2 restore still puts profile files
+directly in the target (`layout: profile`); legacy v1 restore remains supported.
+Older readers cannot read v3. Restored profile cron jobs are paused; external
+project files, including any project cron JSON, remain ordinary unchanged files.
+
+Standalone CLI backups remain Hermes-independent and profile-only by default.
+Pass `--configured-extras` to load the selected source's YAML; this optional mode
+requires Hermes helpers/YAML support and canonical default-root verification,
+otherwise it fails closed. No fake `--is-main` switch exists.
+
+Desktop currently exposes the source context through backend `/status`; use the
+owner commands or explicitly authorized YAML edit to change it. A native editable
+extra-folder form is not included yet. Server paths must not use the device-local
+folder picker (remote gateway and browser disks may differ).
 
 ## Safety and limitations
 
