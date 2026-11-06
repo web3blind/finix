@@ -8,6 +8,7 @@ archives never spool to disk; only the final age ciphertext is persisted.
 from contextlib import contextmanager
 from urllib.parse import quote
 import gzip
+import zlib
 import hashlib
 import io
 import json
@@ -490,5 +491,5 @@ def restore_stream(stream, stage, cancel=None, progress=None):
         _pause_cron(payload)
         return payload, len(records)
     except (ValueError, KeyError, TypeError, AttributeError, RecursionError,
-            tarfile.TarError, OSError, EOFError):
+            tarfile.TarError, OSError, EOFError, zlib.error):
         raise core.FinixError('Invalid or incomplete archive; check free restore space') from None

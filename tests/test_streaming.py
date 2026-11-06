@@ -50,6 +50,25 @@ class StreamingTests(unittest.TestCase):
         path.write_bytes(core.run_age(['-r', self.recipient], raw))
         return path
 
+    def test_invalid_deflate_is_neutral_and_never_published(self):
+        import subprocess
+        import sys
+        raw = bytes.fromhex('1f8b0800000000000003') + b'\x07' + bytes(8)
+        archive = self.fixture(raw)
+        before = {p.name for p in self.root.iterdir()}
+        target = self.root / 'invalid-restored'
+        with self.assertRaises(core.FinixError):
+            core.restore(archive, self.key, target)
+        self.assertFalse(target.exists())
+        self.assertEqual({p.name for p in self.root.iterdir()}, before)
+        result = subprocess.run([sys.executable, '-m', 'finix', 'restore',
+                                 '--archive', str(archive), '--identity', str(self.key),
+                                 '--target', str(target)], capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('Traceback', result.stdout + result.stderr)
+        self.assertFalse(target.exists())
+        self.assertEqual({p.name for p in self.root.iterdir()}, before)
+
     def test_empty_and_long_names_restore(self):
         result = self.backup()
         core.restore(result['path'], self.key, self.root / 'empty')
