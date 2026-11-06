@@ -102,6 +102,8 @@ class Profile:
             raise core.FinixError('Expected one native age public recipient')
         with core.locked(self.directories()):
             cfg = self.config()
+            if cfg['recipient'] is not None and cfg['recipient'] != recipient:
+                raise core.FinixError('Registered public recipient is immutable; replacement is not permitted')
             if cfg['recipient'] != expected:
                 raise core.FinixError('Recipient changed; reload and confirm the current recipient')
             cfg['recipient'] = recipient
@@ -109,6 +111,10 @@ class Profile:
         return self.status()
 
     def configure(self, key, value):
+        if key == 'interval_hours' and int(value) > 0:
+            from .setup_flow import SetupFlow
+            SetupFlow(self).schedule(str(int(value)) + 'h')
+            return self.status()
         with core.locked(self.directories()):
             cfg = self.config()
             if key in {'retention', 'interval_hours'}:
@@ -158,6 +164,12 @@ class Profile:
             now = time.time()
             if scheduled and (not cfg['interval_hours'] or cfg['next_run'] > now):
                 return {'skipped': True}
+            if scheduled:
+                from .setup_flow import SetupFlow
+                if not SetupFlow(self).view()['verified']:
+                    cfg.update(interval_hours=0, next_run=0)
+                    core.atomic_json(self.root / 'settings.json', cfg)
+                    raise core.FinixError('Setup changed; scheduling paused until a successful setup check')
             if not cfg['recipient']:
                 raise core.FinixError('Register a public recipient first')
             # Do not prune local copies until cloud readback has succeeded.
@@ -238,7 +250,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
                     'dist/keygen.html offline (authenticated backend download: '
                     '/api/plugins/finix/keygen.html). Send only the public age1 recipient. '
                     'Use /finix recipient NEW none for initial registration; '
-                    '/finix recipient NEW OLD confirm for replacement. '
+                    'an existing public recipient cannot be replaced. '
                     'Storage choices: local; drive (own OAuth: hermes auth add finix:google in owner terminal); '
                     'connector-drive (experimental/unavailable, actual gateway cap 20 MiB; not for large archives: explicitly select connector_account, '
                     'connector_alias, connector_folder; no automatic login); '
@@ -267,7 +279,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
             return json.dumps(profile.configure(args[1], args[2]))
         if args == ['restore']:
             return 'Restore only on your recovery device: python -m finix restore --archive FILE --identity KEYFILE --target NEW_DIRECTORY. Never send a private key to chat.'
-        return 'Usage: /finix status|setup|recipient NEW none|recipient NEW OLD confirm|backup|configure storage local/drive/workspace/rclone/connector-drive|configure sqlite_temp_dir ABSOLUTE_PRIVATE_DIRECTORY|configure rclone_config ABSOLUTE_PATH|configure rclone_remote NAME|configure rclone_root RELATIVE_FOLDER|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
+        return 'Usage: /finix status|setup|recipient NEW none|backup|configure storage local/drive/workspace/rclone/connector-drive|configure sqlite_temp_dir ABSOLUTE_PRIVATE_DIRECTORY|configure rclone_config ABSOLUTE_PATH|configure rclone_remote NAME|configure rclone_root RELATIVE_FOLDER|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
     except core.FinixError as exc:
         from .connector_drive import ConnectorError
         from .workspace_drive import WorkspaceError
@@ -305,8 +317,29 @@ def register(ctx):
         # Native gateway awaits this; filesystem/process work never blocks its loop.
         return await asyncio.to_thread(run, raw_args, **kwargs)
 
+    def owner():
+        token = set_hermes_home_override(home)
+        try:
+            return ctx.get_config('owner_id', ''), ctx.get_config('owner_platform', '')
+        finally:
+            reset_hermes_home_override(token)
+
     ctx.register_command('finix', handler=handle, description='Owner-only encrypted profile backups',
                          args_hint='[status|setup|connect|backup|configure|recipient|restore]')
+    import warnings
+    if callable(getattr(ctx, 'register_telegram_handler', None)):
+        from .telegram_menu import TelegramMenu
+        menu = TelegramMenu(bound_profile, connection_commands, owner, handle)
+        ctx.register_telegram_handler(menu.factory)
+        ctx.on_unload(menu.close)
+    else:
+        warnings.warn('Finix Telegram menu needs the native register_telegram_handler SDK; update Hermes or use hermes finix.', RuntimeWarning)
+    if callable(getattr(ctx, 'register_cli_command', None)):
+        from .plugin_cli import setup_parser, run as cli_run
+        ctx.register_cli_command('finix', help='Encrypted profile backup setup', setup_fn=setup_parser,
+                                 handler_fn=lambda args: cli_run(args, profile_factory=bound_profile))
+    else:
+        warnings.warn('Finix native CLI needs register_cli_command SDK; update Hermes or use python -m finix.', RuntimeWarning)
     # Uninstalled development imports have no native credential grant or lifecycle
     # ownership. Only an actual payload in this profile may start unattended work.
     if Path(ctx.manifest.path).resolve().is_relative_to(home / 'plugins'):

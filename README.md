@@ -52,6 +52,25 @@ python -m finix backup --source /profiles/example \
 
 `--sqlite-temp-dir` is optional; for profile/scheduled backups use `/finix configure sqlite_temp_dir /PRIVATE/finix-temp` to select an existing owner-owned mode-0700 directory outside the source profile. `/finix status` reports `sqlite_temp.ready` and `sqlite_temp.code` using local filesystem checks only, without reading customer SQLite files, inspecting encryption keys or accessing a cloud account. This orchestration setting is outside the profile archive; configure it again on a replacement backup host. Finix does not create encrypted mounts or obtain disk encryption keys. Large databases require enough free temporary disk space; there is no fixed 128 MiB archive/file cap. Cloud transport staging contains only ciphertext.
 
+## Three-stage setup
+
+In the owner's private Telegram chat, `/finix` opens the native button menu:
+key, cloud authorization, then verification/first backup and period selection.
+The key step sends the offline HTML page as a document when registration is absent;
+only its public recipient may be returned to chat. An existing recipient is locked
+and cannot be replaced through any plugin UI or command. Desktop provides the same
+steps with client-only key generation. A long first backup renews the owner-bound
+menu session before asking for a period.
+
+The native CLI equivalents are `hermes finix` (interactive numbered menu),
+`hermes finix key`, `hermes finix connect`, `hermes finix check`,
+`hermes finix schedule 24h` and `hermes finix status`.
+Periods use positive whole hours/days, for example `24h` or `7d`.
+Scheduling requires a successful current setup check; legacy interval commands
+cannot bypass it, and scheduled runs pause when the verification becomes invalid.
+See [the complete setup workflow](docs/setup-flow.md) for CLI examples and boundaries.
+The standalone `finix` / `python -m finix` recovery CLI remains separate.
+
 ## Extra folders (default/main profile only)
 
 Only the canonical **default** Hermes profile can select external server folders.
@@ -168,25 +187,25 @@ use the standalone CLI or authenticated Desktop instead. Local OS and authentica
 Hermes dashboard/Desktop access are owner boundaries, not shared-group membership.
 
 ```text
-/finix setup
+/finix
 /finix status
 /finix recipient age1PUBLIC none
-/finix recipient age1NEW age1OLD confirm
 /finix configure storage local
 /finix configure retention 5
-/finix configure interval_hours 24
 /finix backup
 /finix restore
 ```
 
-`setup` points to the shipped HTML and authenticated
-`/api/plugins/finix/keygen.html` download, not a Telegram attachment. Open the saved
-HTML on your own device, offline. Never send a private identity to a command or
-model. `restore` only gives independent CLI instructions; chat cannot accept an
-identity. Replacing a chat recipient needs the exact previous public recipient
-and literal `confirm`. Desktop uses authenticated `/status` plus atomic
-`POST /recipient {profile_id,recipient,expected_recipient}`. Its UI separately
-requires replacement confirmation. Extra fields, arbitrary profile paths, stale
+The native Telegram `/finix` and `/finix setup` open the button menu. Missing-key
+setup sends the shipped offline HTML as an attachment. The authenticated
+`/api/plugins/finix/keygen.html` asset is also available to Desktop/dashboard.
+Open the saved HTML on your own device, offline. Never send a private identity to
+a command or model. `restore` only gives independent CLI instructions; chat
+cannot accept an identity. Once registered, the public recipient is immutable.
+Desktop uses authenticated `/status` plus atomic
+`POST /recipient {profile_id,recipient,expected_recipient}` for initial registration;
+replacement attempts are rejected even when the old public recipient is known.
+Extra fields, arbitrary profile paths, stale
 recipient and wrong profile/backend IDs are rejected. The binding is a random
 persistent backend ID outside the backed-up profile, **not** the label `default`
 or a path hash: identical paths on different servers do not share a binding.

@@ -2,7 +2,7 @@ import * as sdk from '@hermes/plugin-sdk';
 import { jsx, jsxs } from 'react/jsx-runtime';
 
 const current = () => ({ profile: sdk.host.state.profile.get(), epoch: sdk.gatewayActivationEpoch?.() });
-export function createCloud(ctx) {
+export function createCloud(ctx, enabled = () => true) {
   const state = sdk.atom({ data: null, provider: 'workspace', folder: 'Finix', consent: false,
     local: false, busy: false, message: 'Загрузите мастер для текущего backend.' });
   let owner = null, disposed = false;
@@ -30,7 +30,7 @@ export function createCloud(ctx) {
     set({ data, message: `Состояние: ${data.session.status}. Настоящий доступ проверяется до применения; резервная копия ещё не загружалась.` });
   });
   const action = (action, extra = {}) => run(async () => {
-    fence(); const s = state.get(); if (!s.data) throw new Error('load');
+    fence(); const s = state.get(); if (!s.data || !enabled()) throw new Error('key required');
     const before = s.data;
     const data = await ctx.rest('/connection', { method: 'POST', body: {
       profile_id: before.profile_id, ticket: before.ticket, action,
@@ -40,7 +40,7 @@ export function createCloud(ctx) {
     fence(); if (data.profile_id !== before.profile_id) throw new Error('binding');
     const readback = await ctx.rest('/connection'); fence();
     if (readback.session.id !== data.session.id) throw new Error('session');
-    set({ data: readback, message: `Состояние: ${readback.session.status}. ${readback.session.status === 'applied' ? 'Хранилище выбрано и прочитано обратно. Загрузка зашифрованной копии — отдельная команда backup.' : 'Нажмите «Обновить подключение» после входа.'}` });
+    set({ data: readback, message: `Состояние: ${readback.session.status}. ${readback.session.status === 'applied' ? 'Хранилище выбрано и прочитано обратно. Перейдите к шагу 3: «Проверить и создать первую копию».' : 'Нажмите «Обновить подключение» после входа.'}` });
   });
   ctx.onDispose(() => { disposed = true; owner = null; state.set({ ...state.get(), data: null }); });
   return { state, set, refresh, action, open: () => run(async () => {
@@ -49,12 +49,13 @@ export function createCloud(ctx) {
   }) };
 }
 
-export function Cloud({ cloud }) {
+export function Cloud({ cloud, enabled = true }) {
   const s = sdk.useValue(cloud.state), a = cloud, session = s.data?.session;
-  const button = (label, onClick, disabled = false) => jsx(sdk.Button, { type: 'button', onClick, disabled: s.busy || disabled, children: label });
+  const button = (label, onClick, disabled = false) => jsx(sdk.Button, { type: 'button', onClick, disabled: s.busy || disabled || !enabled, children: label });
   const active = session && ['working', 'authorize', 'choice', 'verified'].includes(session.status);
   return jsxs('section', { 'aria-label': 'Подключение облака', children: [
-    jsx('h2', { children: 'Подключение облака' }),
+    !enabled && jsx('p', { children: 'Сначала зарегистрируйте публичный ключ на шаге 1.' }),
+    jsx('h2', { children: '2. Облачный сервис и авторизация' }),
     jsx('p', { children: 'Браузер должен достигать loopback backend: на той же машине либо через собственный SSH-туннель. Порты: Google Workspace 53683, остальные 53682. Для удалённого сервера используйте /finix connect в личном чате: режим tunnel даст точную SSH-команду, server-browser — ссылку для браузера на сервере. Публичный callback не нужен и не создаётся.' }),
     button('Обновить подключение', a.refresh),
     jsxs('label', { children: ['Облачный сервис', jsx('select', { value: s.provider, disabled: s.busy || active,
@@ -68,6 +69,8 @@ export function Cloud({ cloud }) {
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.consent, disabled: s.busy || active,
       onChange: e => a.set({ consent: e.currentTarget.checked }) }), 'Подтверждаю подключение выбранного сервиса и возможные широкие права доступа'] }),
     button('Начать подключение', () => a.action('start'), !s.data || !s.local || !s.consent || active),
+    session?.url && jsx('p', { children: 'Ссылка авторизации выбранного сервиса (откройте в доверенном браузере backend или через SSH-туннель):' }),
+    session?.url && jsx('output', { style: { overflowWrap: 'anywhere' }, children: session.url }),
     session?.url && button('Открыть вход в браузере', a.open),
     session?.status === 'choice' && jsx('p', { children: `OneDrive: ${session.question}. Выберите вариант диска/типа в порядке rclone; если нужный вариант неясен, отмените и настройте именованный remote вручную.` }),
     ...(session?.choices ?? []).map(c => button(c.label, () => a.action('answer', { choice: c.id }))),

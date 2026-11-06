@@ -50,8 +50,10 @@ class IntegrationTests(unittest.TestCase):
     def test_actual_backup_schedule_retention(self):
         self.profile.recipient(self.profile.profile_id, self.recipient, None)
         self.assertEqual(self.profile.backup(scheduled=True), {'skipped': True})
-        self.profile.configure('interval_hours', '1')
         self.profile.configure('retention', '1')
+        from finix.setup_flow import SetupFlow
+        SetupFlow(self.profile).check_and_run()
+        self.profile.configure('interval_hours', '1')
         first = self.profile.backup()
         second = self.profile.backup()
         self.assertFalse(Path(first['path']).exists())
@@ -60,6 +62,22 @@ class IntegrationTests(unittest.TestCase):
         target = Path(self.tmp.name) / 'restored'
         core.restore(second['path'], self.key, target)
         self.assertEqual((target / 'config.yaml').read_bytes(), (self.home / 'config.yaml').read_bytes())
+
+    def test_legacy_schedule_cannot_bypass_setup_and_changes_pause_cron(self):
+        from finix.setup_flow import SetupFlow
+        self.profile.recipient(self.profile.profile_id, self.recipient, None)
+        with self.assertRaises(core.FinixError):
+            self.profile.configure('interval_hours', '1')
+        first = SetupFlow(self.profile).check_and_run()['first_backup']
+        self.profile.configure('interval_hours', '1')
+        self.profile.configure('retention', '2')
+        cfg = self.profile.config()
+        cfg['next_run'] = 0
+        core.atomic_json(self.profile.root / 'settings.json', cfg)
+        with self.assertRaises(core.FinixError):
+            self.profile.backup(scheduled=True)
+        self.assertEqual(self.profile.config()['interval_hours'], 0)
+        self.assertTrue(Path(first['path']).exists())
 
     def test_cloud_failure_preserves_old_local_copies(self):
         self.profile.recipient(self.profile.profile_id, self.recipient, None)

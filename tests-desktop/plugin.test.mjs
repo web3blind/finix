@@ -59,6 +59,7 @@ async function harness(options = {}) {
     }
   };
   entry.namespace.default.register(ctx);
+  for (let i = 0; i < 8; i++) await Promise.resolve();
   function expand(node) {
     if (Array.isArray(node)) return node.flatMap(expand);
     if (!node || typeof node !== 'object') return [node];
@@ -92,6 +93,54 @@ async function harness(options = {}) {
     switchProfile() { profile.set('other'); epoch++; }, switchRoute() { epoch++; }, dispose() { disposers.forEach(fn => fn()); } };
 }
 const posts = h => h.calls.filter(([p]) => p === '/recipient');
+function setupControls(h) {
+  const node = h.controls().find(n => n?.props?.setup);
+  const flatten = n => Array.isArray(n) ? n.flatMap(flatten) : n && typeof n === 'object' ? [n, ...flatten(n.props?.children)] : [];
+  return flatten(node.type(node.props));
+}
+const setupButton = (h, label) => setupControls(h).find(n => n.type === 'button' && n.props.children === label);
+
+test('setup checks first, reveals strict period only after verified readback, and schedules explicitly', async () => {
+  const publicKey = (await generateKeyPair()).recipient;
+  let verified = false, interval = 0;
+  const view = () => ({ profile_id: 'bound', recipient_present: true, recipient_locked: true,
+    stage: verified ? 'schedule' : 'check', verified, interval_hours: interval, storage: 'workspace' });
+  const h = await harness({ rest: async (path, opts) => {
+    if (path === '/status') return { profile_id: 'bound', recipient: publicKey };
+    if (path === '/setup/check') { assert.equal(opts.body.profile_id, 'bound'); verified = true; }
+    if (path === '/setup/schedule') { assert.equal(opts.body.period, '7d'); interval = 168; }
+    return view();
+  } });
+  await setupButton(h, 'Обновить состояние настройки').props.onClick();
+  assert.equal(setupButton(h, 'Сохранить и включить'), undefined);
+  await setupButton(h, 'Проверить и создать первую копию').props.onClick();
+  assert.match(h.text(), /Первая зашифрованная копия создана/);
+  const input = setupControls(h).find(n => n.type === 'input');
+  input.props.onChange({ currentTarget: { value: 'weekly' } });
+  assert.equal(setupButton(h, 'Сохранить и включить').props.disabled, true);
+  await setupButton(h, 'Сохранить и включить').props.onClick();
+  assert.equal(h.calls.some(([path]) => path === '/setup/schedule'), false);
+  input.props.onChange({ currentTarget: { value: '7d' } });
+  await setupButton(h, 'Сохранить и включить').props.onClick();
+  assert.match(h.text(), /Расписание включено: каждые 168 ч/);
+});
+
+test('check timeout never enables schedule; scope switches fence retained setup callbacks', async () => {
+  const publicKey = (await generateKeyPair()).recipient;
+  const h = await harness({ rest: async (path) => {
+    if (path === '/status') return { profile_id: 'bound', recipient: publicKey };
+    if (path === '/setup/check') throw new Error('timeout with private provider body');
+    return { profile_id: 'bound', verified: false, stage: 'check', storage: 'workspace', interval_hours: 0 };
+  } });
+  await setupButton(h, 'Обновить состояние настройки').props.onClick();
+  await setupButton(h, 'Проверить и создать первую копию').props.onClick();
+  assert.equal(setupButton(h, 'Сохранить и включить'), undefined);
+  assert.ok(!h.text().includes('private provider body'));
+  const callback = setupButton(h, 'Проверить и создать первую копию').props.onClick;
+  const before = h.calls.length; h.switchRoute(); await callback();
+  assert.equal(h.calls.length, before);
+});
+
 
 test('shipped bundle contributes visible pane, page, navigation and public-only save/verify/register workflow', async () => {
   const h = await harness();
@@ -106,7 +155,7 @@ test('shipped bundle contributes visible pane, page, navigation and public-only 
   assert.equal(posts(h).length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(posts(h)[0][1].body)), { profile_id: 'default', recipient: publicKey, expected_recipient: null });
   assert.match(h.text(), /registered and read back exactly/);
-  assert.equal(h.calls.filter(([p]) => p === '/status').length, 3);
+  assert.equal(h.calls.filter(([p]) => p === '/status').length, 4);
   assert.ok(!JSON.stringify(h.calls).includes('AGE-SECRET-KEY-1'));
   assert.ok(!JSON.stringify(h.controls()).includes('AGE-SECRET-KEY-1'));
 });
@@ -135,13 +184,15 @@ test('wrong, oversized and malformed verification never authorizes registration'
   }
 });
 
-test('replacement requires explicit confirmation and compare-and-set expected old recipient', async () => {
+test('existing public recipient locks generation and registration with no replacement request', async () => {
   const oldRecipient = (await generateKeyPair()).recipient;
-  const h = await harness({ oldRecipient }); await h.ready(); await h.click('Refresh backend status');
+  const h = await harness({ oldRecipient });
+  assert.match(h.text(), /Публичный ключ зарегистрирован. Приватный ключ хранится у вас/);
+  assert.equal(h.controls().find(n => n?.props?.children === 'Generate new key').props.disabled, true);
+  await h.invoke('Generate new key');
   await h.invoke('Register public recipient'); assert.equal(posts(h).length, 0);
-  h.inputs().find(n => n.props.type === 'checkbox').props.onChange({ currentTarget: { checked: true } });
-  await h.click('Register public recipient'); assert.equal(posts(h).length, 1);
-  assert.equal(posts(h)[0][1].body.expected_recipient, oldRecipient);
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.inputs().some(n => n.props.type === 'checkbox'), false);
 });
 
 test('profile and same-profile backend switches fence stale keys including switch-away/back', async () => {
@@ -172,7 +223,7 @@ test('registration readback mismatch never displays success', async () => {
 
 test('status change between display and mutation aborts registration', async () => {
   let reads = 0; const other = (await generateKeyPair()).recipient;
-  const h = await harness({ status: () => ({ profile_id: 'default', recipient: ++reads > 1 ? other : null }) });
+  const h = await harness({ status: () => ({ profile_id: 'default', recipient: ++reads > 2 ? other : null }) });
   await h.ready(); await h.click('Refresh backend status'); await h.click('Register public recipient');
   assert.equal(posts(h).length, 0); assert.match(h.text(), /Registration not confirmed/);
 });
@@ -180,7 +231,7 @@ test('status change between display and mutation aborts registration', async () 
 test('profile switch during status preflight blocks POST and suppresses stale status', async () => {
   let reads = 0;
   const pending = deferred();
-  const h = await harness({ status: () => ++reads === 1 ? { profile_id: 'default', recipient: null } : pending.promise });
+  const h = await harness({ status: () => ++reads <= 2 ? { profile_id: 'default', recipient: null } : pending.promise });
   await h.ready(); await h.click('Refresh backend status');
   const registering = h.click('Register public recipient');
   h.switchRoute(); pending.resolve({ profile_id: 'default', recipient: null });
@@ -215,16 +266,18 @@ test('unload clears key authority and blocks retained callbacks', async () => {
 });
 
 function cloudControls(h) {
-  const node = h.controls().at(-1);
+  const node = h.controls().find(n => n?.props?.cloud);
   return node.type(node.props).props.children;
 }
 const cloudButton = (h, label) => cloudControls(h).find(n => n?.type === 'button' && n.props.children === label);
 const cloudChecks = h => cloudControls(h).filter(n => n?.type === 'label').flatMap(n => n.props.children).filter(n => n?.type === 'input' && n.props.type === 'checkbox');
 
 test('cloud wizard requires local-browser and explicit scope consent, applies only verified sessions, and reads back', async () => {
+  const registeredKey = (await generateKeyPair()).recipient;
   let status = 'idle';
   const view = () => ({ profile_id: 'bound-backend', ticket: 'synthetic-csrf', session: { id: 'synthetic-session', status } });
   const h = await harness({ rest: async (path, opts) => {
+    if (path === '/status') return { profile_id: 'bound-backend', recipient: registeredKey };
     assert.equal(path, '/connection');
     if (opts) {
       assert.equal(opts.body.profile_id, 'bound-backend'); assert.equal(opts.body.ticket, 'synthetic-csrf');
@@ -249,7 +302,8 @@ test('cloud wizard requires local-browser and explicit scope consent, applies on
 });
 
 test('cloud wizard fences backend switches and unload before mutation', async () => {
-  const h = await harness({ rest: async () => ({ profile_id: 'bound', ticket: 'csrf', session: { id: 'session', status: 'verified' } }) });
+  const publicKey = (await generateKeyPair()).recipient;
+  const h = await harness({ rest: async path => path === '/status' ? { profile_id: 'bound', recipient: publicKey } : ({ profile_id: 'bound', ticket: 'csrf', session: { id: 'session', status: 'verified' } }) });
   await cloudButton(h, 'Обновить подключение').props.onClick();
   cloudChecks(h).forEach(c => c.props.onChange({ currentTarget: { checked: true } }));
   const oldApply = cloudButton(h, 'Применить подключение').props.onClick;

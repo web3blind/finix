@@ -2,6 +2,7 @@ import * as sdk from '@hermes/plugin-sdk';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { createKeySession, validateRecipient } from '../../web/keys.mjs';
 import { createCloud, Cloud } from './cloud.mjs';
+import { createSetup, SetupCheck } from './setup.mjs';
 
 // Authority is window-route scoped, not the currently focused chat's profile.
 // Older hosts may generate/save keys, but cannot safely register them.
@@ -47,6 +48,7 @@ function createWorkflow(ctx) {
   }
   const actions = {
     generate: () => run(async () => {
+      if (state.get().backend?.recipient) return;
       key.clear(); owner = scope();
       publish({ recipient: null, saved: false, verified: false, backend: null, replacement: false });
       const recipient = await key.generate();
@@ -79,6 +81,10 @@ function createWorkflow(ctx) {
       publish({ verified: matches, message: matches ? 'Saved key verified locally. Refresh backend status before registering the public recipient.' : 'This file belongs to a different key. Registration is blocked.' });
     }, 'Invalid key file (maximum 4096 bytes), key not saved, or profile/backend changed. Registration is blocked.'),
     refresh: () => run(async () => {
+      if (!owner || !sameScope(owner, scope())) {
+        key.clear(); owner = scope();
+        publish({ recipient: null, saved: false, verified: false, backend: null });
+      }
       const backend = await readStatus();
       publish({ backend, replacement: false, message: 'Backend status loaded for this key’s profile and route. Registration still requires your explicit click.' });
     }, 'Registration unavailable: backend missing, incompatible, or active profile/backend changed. Local key generation and saving do not require a backend.'),
@@ -89,23 +95,24 @@ function createWorkflow(ctx) {
     register: () => run(async () => {
       assertOwner();
       const before = state.get();
+      if (before.backend?.recipient) throw new Error('recipient locked');
       if (!before.saved || !before.verified || !key.verified || !before.backend) throw new Error('not ready');
       const current = await readStatus();
       assertOwner();
       if (current.profile_id !== before.backend.profile_id || current.recipient !== before.backend.recipient) {
         publish({ backend: current, replacement: false }); throw new Error('status changed');
       }
-      if (current.recipient !== null && current.recipient !== key.recipient && !before.replacement) throw new Error('confirm replacement');
+      if (current.recipient !== null) throw new Error('recipient locked');
       // No await between the final scope fence and the route-scoped SDK call.
       assertOwner();
       await ctx.rest('/recipient', { method: 'POST', body: {
-        profile_id: current.profile_id, recipient: key.recipient, expected_recipient: current.recipient
+        profile_id: current.profile_id, recipient: key.recipient, expected_recipient: null
       } });
       assertOwner();
       const after = await readStatus();
       if (after.profile_id !== current.profile_id || after.recipient !== key.recipient) throw new Error('readback mismatch');
       publish({ backend: after, replacement: false, message: 'Public recipient registered and read back exactly. The private recovery key stayed on this device.' });
-    }, 'Registration not confirmed. Check status and profile/backend, verify the saved key, and explicitly confirm any replacement before retrying.'),
+    }, 'Registration not confirmed. Check status and profile/backend, verify the saved key, and an existing registered key cannot be replaced.'),
     copy: () => run(async () => {
       assertOwner();
       if (!key.recipient || !await ctx.os?.writeClipboard(key.recipient)) throw new Error('clipboard unavailable');
@@ -113,8 +120,8 @@ function createWorkflow(ctx) {
     }, 'Copy unavailable or profile/backend changed. Only the public recipient may be copied.'),
     clear: () => {
       if (state.get().busy) return;
-      key.clear(); owner = null;
-      publish({ recipient: null, saved: false, verified: false, backend: null, replacement: false, message: 'Key cleared from plugin memory. Saved files are unchanged.' });
+      key.clear();
+      publish({ recipient: null, saved: false, verified: false, replacement: false, message: 'Key cleared from plugin memory. Saved files and the registered public key are unchanged.' });
     }
   };
   ctx.onDispose(() => { disposed = true; key.clear(); owner = null; });
@@ -126,17 +133,19 @@ function Finix({ workflow }) {
   const profile = sdk.useValue(sdk.host.state.profile);
   const a = workflow.actions;
   const button = (label, onClick, disabled = false) => jsx(sdk.Button, { type: 'button', disabled: s.busy || disabled, onClick, children: label });
-  const replacing = s.backend?.recipient && s.backend.recipient !== s.recipient;
+  const locked = !!s.backend?.recipient;
   return jsxs('section', {
-    'aria-label': 'Finix recovery keys', style: { padding: '16px', overflow: 'auto', height: '100%', color: 'var(--ui-text-primary)' },
+    'aria-label': 'Finix — настройка резервного копирования', style: { padding: '16px', overflow: 'auto', height: '100%', color: 'var(--ui-text-primary)' },
     children: [
       jsx('h1', { children: 'Finix' }),
       jsx('p', { children: `Gateway profile: ${profile}. Keys are generated on this device, including when the backend is remote.` }),
       jsx('p', { children: 'Store the private recovery file outside Hermes in a safe local folder. Never send it in chat. Registration sends only the public recipient. Clearing or generating again discards the in-memory key.' }),
-      button('Generate new key', a.generate),
-      button('Clear key', a.clear, !s.recipient),
+      jsx('h2', { children: '1. Ключ восстановления' }),
+      locked && jsx('p', { role: 'status', children: 'Публичный ключ зарегистрирован. Приватный ключ хранится у вас. Изменение ключа недоступно.' }),
+      button('Generate new key', a.generate, locked),
+      button('Clear key', a.clear, !s.recipient || locked),
       jsx('p', { children: 'Public age recipient' }),
-      jsx('output', { 'aria-label': 'Public age recipient', style: { overflowWrap: 'anywhere', display: 'block' }, children: s.recipient ?? 'No key generated' }),
+      jsx('output', { 'aria-label': 'Public age recipient', style: { overflowWrap: 'anywhere', display: 'block' }, children: s.recipient ?? s.backend?.recipient ?? 'No key generated' }),
       button('Copy public recipient', a.copy, !s.recipient),
       button('Save private key to local folder', a.save, !s.recipient),
       jsxs('label', { children: ['Verify saved recovery file (maximum 4096 bytes)', jsx('input', {
@@ -148,15 +157,12 @@ function Finix({ workflow }) {
         }
       })] }),
       jsx('p', { children: s.verified ? 'Saved key: verified' : 'Saved key: not verified' }),
-      button('Refresh backend status', a.refresh, !s.recipient),
+      button('Refresh backend status', a.refresh),
       jsx('p', { children: s.backend ? `Backend profile: ${s.backend.profile_id}; configured recipient: ${s.backend.recipient ?? 'none'}` : 'Backend registration unavailable until status is loaded.' }),
-      replacing && jsxs('label', { children: [jsx('input', {
-        type: 'checkbox', checked: s.replacement, disabled: s.busy,
-        onChange: event => a.replacement(event.currentTarget.checked)
-      }), 'I explicitly confirm replacing the configured recipient shown above. I have kept the old recovery key for existing backups.'] }),
-      button('Register public recipient', a.register, !s.saved || !s.verified || !s.backend || (replacing && !s.replacement)),
+      button('Register public recipient', a.register, !s.saved || !s.verified || !s.backend || locked),
       jsx('p', { role: 'status', 'aria-live': 'polite', children: s.message }),
-      jsx(Cloud, { cloud: workflow.cloud })
+      jsx(Cloud, { cloud: workflow.cloud, enabled: locked }),
+      jsx(SetupCheck, { setup: workflow.setup, enabled: locked })
     ]
   });
 }
@@ -165,7 +171,9 @@ export default {
   id: 'finix', name: 'Finix',
   register(ctx) {
     const workflow = createWorkflow(ctx);
-    workflow.cloud = createCloud(ctx);
+    workflow.cloud = createCloud(ctx, () => !!workflow.state.get().backend?.recipient);
+    workflow.setup = createSetup(ctx);
+    void workflow.actions.refresh();
     const render = () => jsx(Finix, { workflow });
     ctx.register({ id: 'pane', area: 'panes', title: 'Finix', data: { placement: 'right', width: '380px' }, render });
     ctx.register({ id: 'page', area: sdk.ROUTES_AREA, data: { path: '/finix' }, render });
