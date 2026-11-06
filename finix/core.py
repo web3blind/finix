@@ -1,5 +1,6 @@
 """Bounded-memory, local-only age snapshots. No Hermes runtime imports."""
 from contextlib import contextmanager
+from urllib.parse import quote
 from datetime import datetime, timezone
 import fcntl
 import gzip
@@ -198,7 +199,7 @@ def sqlite_snapshot(fd, parent, name):
             raise FinixError('SQLite companion is a symlink or special file')
     # Anchored directory preserves WAL lookup. Revalidate inode around connection.
     path = f'/proc/self/fd/{parent}/{name}'
-    conn = sqlite3.connect(f'file:{path}?mode=ro', uri=True, timeout=2)
+    conn = sqlite3.connect(f'file:{quote(path, safe="/")}?mode=ro', uri=True, timeout=2)
     memory = sqlite3.connect(':memory:')
     try:
         if os.stat(path).st_ino != os.fstat(fd).st_ino:
