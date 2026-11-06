@@ -127,15 +127,17 @@ class SchedulerLifecycleTests(unittest.TestCase):
                         return lease
                     ctx.on_unload = on_unload
                     register(ctx)
-                    self.assertEqual(len(callbacks), 1)
+                    self.assertEqual(len(callbacks), 2)
                     self.assertTrue(workers[-1].thread.is_alive())
-                    callbacks[0].dispose()
+                    for callback in callbacks:
+                        callback.dispose()
                     self.assertFalse(workers[-1].thread.is_alive())
             self.assertEqual(len(workers), 2)
             token2 = set_hermes_home_override(self.other)
             try:
                 with patch('finix.integration.command', side_effect=lambda *a, **k: get_hermes_home()):
-                    self.assertEqual(manager._plugin_commands['finix']['handler']('status'), self.home)
+                    from hermes_cli.plugins_dispatch import resolve_plugin_command_result
+                    self.assertEqual(resolve_plugin_command_result(manager._plugin_commands['finix']['handler']('status')), self.home)
             finally:
                 reset_hermes_home_override(token2)
         finally:

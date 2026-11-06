@@ -55,7 +55,7 @@ export function Cloud({ cloud }) {
   const active = session && ['working', 'authorize', 'choice', 'verified'].includes(session.status);
   return jsxs('section', { 'aria-label': 'Подключение облака', children: [
     jsx('h2', { children: 'Подключение облака' }),
-    jsx('p', { children: 'Новый вход работает только если браузер и Hermes backend находятся на одной машине. На телефоне с удалённым сервером localhost не работает. Не включайте локальный режим для такого сервера. Публичный callback/мобильный вход пока не реализованы.' }),
+    jsx('p', { children: 'Браузер должен достигать loopback backend: на той же машине либо через собственный SSH-туннель. Порты: Google Workspace 53683, остальные 53682. Для удалённого сервера используйте /finix connect в личном чате: режим tunnel даст точную SSH-команду, server-browser — ссылку для браузера на сервере. Публичный callback не нужен и не создаётся.' }),
     button('Обновить подключение', a.refresh),
     jsxs('label', { children: ['Облачный сервис', jsx('select', { value: s.provider, disabled: s.busy || active,
       onChange: e => a.set({ provider: e.currentTarget.value, consent: false }),
@@ -63,7 +63,7 @@ export function Cloud({ cloud }) {
     jsxs('label', { children: ['Папка rclone (Workspace создаёт свою профильную папку Finix)', jsx('input', { value: s.folder, disabled: s.busy || active || s.provider === 'workspace',
       onChange: e => a.set({ folder: e.currentTarget.value }) })] }),
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.local, disabled: s.busy || active,
-      onChange: e => a.set({ local: e.currentTarget.checked }) }), 'Браузер находится на машине Hermes backend (не удалённый сервер)'] }),
+      onChange: e => a.set({ local: e.currentTarget.checked }) }), 'Браузер на машине backend или собственный SSH-туннель к его loopback уже настроен'] }),
     jsx('p', { children: 'Разрешения могут включать чтение, изменение и удаление файлов всего диска, не только папки Finix. Google использует существующий Workspace аккаунт; первый вход требует Desktop OAuth client JSON владельца (Google Cloud Console) в google_client_secret.json выбранного профиля и google-auth-oauthlib. Используйте локальный setup.py --client-secret FILE; не передавайте содержимое файла в чат. rclone использует встроенные OAuth приложения. Вход не загружает backup.' }),
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.consent, disabled: s.busy || active,
       onChange: e => a.set({ consent: e.currentTarget.checked }) }), 'Подтверждаю подключение выбранного сервиса и возможные широкие права доступа'] }),

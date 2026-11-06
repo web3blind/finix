@@ -308,9 +308,10 @@ unperformed gates. Nothing has been published or activated in a live profile.
 This is an additional implemented storage path, separate from `drive` (Finix's
 own OAuth grant) and the currently fail-closed `connector-drive` scaffold. Existing
 local/Drive behavior is unchanged. It reuses the selected Hermes profile's
-existing Google Workspace authorization through `scripts/google_api.py`; Finix
-never reads, extracts or copies the token/client-secret files and never starts
-OAuth, revokes a grant or creates a fallback identity. Existing Workspace setup
+existing Google Workspace authorization through `scripts/google_api.py`; the
+storage adapter never extracts or copies credentials or starts OAuth. A separate
+explicit owner connection wizard below can create a new credential-owning grant.
+It never revokes a grant or creates a fallback identity. Existing Workspace setup
 must already include Drive write permissions. Gmail-only grants are insufficient;
 a permission failure asks the owner to review Workspace authorization separately.
 
@@ -389,11 +390,49 @@ public helper's resumable-upload contract with a fake service. All account data
 in these tests is synthetic. **No real Google account smoke, auth, activation or
 publication was performed.**
 
-## Пользовательский мастер подключения (локальный backend)
+## Подключение облака: Desktop, CLI и личный чат
 
 Откройте **Finix → Подключение облака** в включённом Desktop-плагине.
-`/finix connect` — owner-only инструкция; команда **не** возвращает ссылки
-авторизации, OAuth-коды, токены или CSRF tickets в чат/модель.
+`/finix connect` показывает команды. В личном чате с настроенным владельцем
+можно запустить тот же credential-owning workflow, без Desktop:
+
+```text
+/finix connect yandex tunnel confirm
+/finix connect status ID
+/finix connect choose ID 0
+/finix connect apply ID
+/finix connect cancel ID
+```
+
+Вместо `yandex`: `workspace`, `onedrive`, `dropbox`; вместо `tunnel`: `local`
+(браузер на машине backend) или `server-browser` (браузер агента/владельца на
+сервере). `confirm` — явное согласие на возможные широкие права диска, включая
+чтение/изменение/удаление. Команда возвращает публичный `id`, состояние и, когда
+готово, **только проверенную ссылку начала авторизации**: Google provider URL
+либо локальный rclone `/auth?state=…`. Она не содержит выданного токена/кода.
+`ID` берите из ответа; `choose` нужен только для предложенного выбора диска
+OneDrive (индексы `id` начинаются с 0). Старт не ожидает окончания входа: выполните
+`status ID` повторно. Только `verified` разрешает отдельный `apply ID`.
+Группы, чужие пользователи/платформы, старые handle и дополнительные поля
+отклоняются. Не отправляйте callback URL, код, пароль, config или token в чат.
+CSRF ticket остаётся приватным в backend, не возвращается chat-командой.
+
+Автономный CLI не требует работающего бота; профиль всегда указывается явно:
+
+```sh
+python -m finix connect yandex --home /ABSOLUTE/HERMES_PROFILE --mode tunnel --confirm
+# Локальный браузер на этой же машине — только по явному флагу:
+python -m finix connect workspace --home /ABSOLUTE/HERMES_PROFILE --mode local --confirm --open-browser
+```
+
+CLI печатает безопасные JSON-состояния, автоматически обновляет статус и остаётся
+одним процессом до завершения/отмены. В stdin разрешены только `status`,
+`choose NUMBER`, `apply`, `cancel` — никаких кодов или URL. Браузер автоматически
+не открывается без `--open-browser`; этот флаг запрещён для `tunnel`, поскольку
+открыл бы браузер не на том устройстве. EOF/выход отменяет неприменённый candidate.
+После `apply` настройки сохраняются, CLI завершается; отдельный процесс не может
+продолжить старую незавершённую сессию. Далее доступны `/finix backup` или
+профильный scheduler; независимый CLI `backup` выше остаётся локальным архиватором.
 
 1. «Обновить подключение» связывает UI с текущим backend/profile.
 2. Выберите **Google Workspace / Яндекс Диск / OneDrive / Dropbox**. Для rclone
@@ -401,7 +440,8 @@ publication was performed.**
    существующий профильный folder workflow. Новое подключение не заменяет
    выбранное хранилище автоматически.
 3. Подтвердите возможные широкие права (чтение/изменение/удаление всего диска)
-   и что браузер действительно находится **на машине backend**.
+   и что браузер достигает loopback backend: на той же машине или через
+   собственный уже настроенный SSH-туннель.
 4. «Начать подключение» → «Обновить подключение» → «Открыть вход в браузере».
    Введите пароль только на сайте провайдера, не в Finix/чате. Вернитесь и
    обновите статус. OneDrive выбирает обычный `onedrive` route, предлагает
@@ -447,22 +487,33 @@ Legacy `setup.py --auth-url` / `--auth-code CODE` (localhost:1 и code в argv)
 через `/api/plugins/finix/connection`; не запускайте standalone public server.
 Read-issued 5-minute UI ticket дополнительно защищает POST от CSRF; profile ID,
 random session ID, SDK activation epoch, single active callback and settings CAS
-отсекают старые профили/сессии. Ссылка существует только в памяти owner UI,
-не localStorage/настройках/общем status. Максимум 5 минут на session; отмена
+отсекают старые профили/сессии. Ссылка не записывается в localStorage/настройки
+или общий status; личный chat может сохранять её в своей истории, поэтому
+не пересылайте её. Максимум 5 минут на session; отмена
 завершает process group и удаляет неприменённый candidate. Перезапуск инвалидирует
 session, child имеет hard timeout. Crash может оставить private candidate:
 автоматического credential sweeper нет; не удаляйте config активного подключения.
 Авторизация у провайдера после отмены может требовать ручного отзыва grant.
 
-**Удалённый сервер / телефон:** новый вход этим мастером **не поддержан**:
-localhost браузера указывает на телефон/ПК, а не сервер. Честное prerequisite —
-локальный backend либо отдельно согласованный authenticated HTTPS callback/
-секрет-безопасный companion/import. Finix не создаёт public tunnel/hosting и не
-предлагает вставить rclone `config_token` или OAuth redirect URL в чат. Проверен
-официальный remote setup: `rclone authorize` возвращает credential-bearing blob,
-для его безопасного возврата ещё нужен отдельный защищённый transport. Существующие
-серверные Workspace/rclone подключения по-прежнему можно использовать через
-описанные адаптеры; это не новый мобильный login.
+**Удалённый сервер / телефон:** режим `tunnel` даёт точную SSH-команду для порта
+текущего провайдера. Выполните её **на устройстве с браузером**, заменив только
+`USER@SERVER` своим адресом:
+
+```sh
+# Яндекс Диск / OneDrive / Dropbox:
+ssh -N -L 127.0.0.1:53682:127.0.0.1:53682 USER@SERVER
+# Google Workspace (фиксированный настоящий loopback callback):
+ssh -N -L 127.0.0.1:53683:127.0.0.1:53683 USER@SERVER
+```
+
+Дождитесь успешного SSH-подключения без ошибки занятого порта, затем откройте
+ссылку из `status ID` в браузере этого устройства. Держите SSH до `verified`.
+На телефоне нужен SSH-клиент с таким же local forward; без него выберите
+`server-browser` и попросите агента открыть безопасную start URL на сервере.
+Пароль/2FA вводятся только на сайте провайдера через защищённый Vault, не моделью
+из чата. Finix не создаёт SSH/публичный туннель, не открывает сетевой listener
+наружу и не требует нового HTTPS callback, helper service или переноса grant.
+Порты заняты — соединение отклоняется, случайный порт не подставляется.
 
 **Проверка:** реальные rclone v1.75.2 pre-auth state transitions и старт/отмена
 loopback callback для трёх backend без обращения к провайдерам; synthetic child

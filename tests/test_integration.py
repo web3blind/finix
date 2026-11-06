@@ -87,7 +87,8 @@ class IntegrationTests(unittest.TestCase):
         module.register(ctx)
         self.assertIn('finix', manager._plugin_commands)
         self.assertEqual(manager._tools if hasattr(manager, '_tools') else {}, {})
-        self.assertIn('denied', manager._plugin_commands['finix']['handler']('status'))
+        from hermes_cli.plugins_dispatch import resolve_plugin_command_result
+        self.assertIn('denied', resolve_plugin_command_result(manager._plugin_commands['finix']['handler']('status')))
 
     def test_actual_dashboard_http_cas(self):
         from fastapi import FastAPI

@@ -189,7 +189,7 @@ def current_profile():
     return Profile(get_hermes_home())
 
 
-def command(raw_args, *, owner_id='', owner_platform='', platform='', source=None, **kwargs):
+def command(raw_args, *, owner_id='', owner_platform='', platform='', source=None, connection_commands=None, **kwargs):
     """Only adapter-attested identities may use chat operations, including status."""
     if (not owner_id or not owner_platform or source is None or platform != owner_platform
             or str(source.user_id) != str(owner_id)):
@@ -200,17 +200,15 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
         if not args or args == ['status']:
             return json.dumps(profile.status())
         if args and args[0] == 'connect':
-            # Authorization URLs and CSRF tickets belong only to authenticated
-            # UI, never chat/model/tool output. Owner attestation above is still
-            # mandatory for these instructions.
-            return ('Откройте Finix в Hermes Desktop → «Подключение облака». '
-                    'Выберите Google Workspace, Яндекс Диск, OneDrive или Dropbox. '
-                    'Для нового входа браузер должен быть на машине backend. '
-                    'На удалённом сервере/телефоне localhost не работает; мастер '
-                    'откажется без подтверждения локального браузера. Не присылайте '
-                    'пароли, коды, токены или config-файлы в чат. Workspace: '
-                    'существующий аккаунт проверяется и используется без нового входа; '
-                    'для первого входа требуется Desktop OAuth client JSON в профиле.')
+            if getattr(source, 'chat_type', '') != 'dm':
+                return 'Finix connect: PRIVATE_CHAT_REQUIRED; подключайте облако только в личном чате владельца.'
+            from .connect_commands import default_commands
+            from .connections import ConnectionError
+            try:
+                return (connection_commands or default_commands).execute(
+                    profile, args[1:], (platform, str(source.user_id)))
+            except ConnectionError as exc:
+                return 'Finix connect: ' + exc.code
         if args == ['setup']:
             return ('Generate and save your private key only on your device: open the shipped '
                     'dist/keygen.html offline (authenticated backend download: '
@@ -223,7 +221,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
                     'workspace (existing owning-profile Google Workspace authorization; no token copy or login); '
                     'rclone (existing Yandex Disk, OneDrive Personal or Dropbox remote; explicit rclone_config absolute path, '
                     'rclone_remote name and rclone_root relative folder; config outside the backed-up profile). '
-                    'New account connection: /finix connect opens instructions for the authenticated Desktop wizard.')
+                    'New account connection: /finix connect shows the owner-only connection commands.')
         if args[0] == 'recipient' and len(args) in {3, 4}:
             expected = None if args[2] == 'none' else args[2]
             if expected is not None and args[3:] != ['confirm']:
@@ -251,15 +249,24 @@ def register(ctx):
     from hermes_constants import (get_hermes_home, set_hermes_home_override,
                                   reset_hermes_home_override)
     from .scheduler import Worker
+    from .connect_commands import ConnectCommands
+    import asyncio
     home = get_hermes_home().expanduser().resolve()
+    connection_commands = ConnectCommands()
+    ctx.on_unload(connection_commands.close)
 
-    def handle(raw_args, **kwargs):
+    def run(raw_args, **kwargs):
         token = set_hermes_home_override(home)
         try:
             return command(raw_args, owner_id=ctx.get_config('owner_id', ''),
-                           owner_platform=ctx.get_config('owner_platform', ''), **kwargs)
+                           owner_platform=ctx.get_config('owner_platform', ''),
+                           connection_commands=connection_commands, **kwargs)
         finally:
             reset_hermes_home_override(token)
+
+    async def handle(raw_args, **kwargs):
+        # Native gateway awaits this; filesystem/process work never blocks its loop.
+        return await asyncio.to_thread(run, raw_args, **kwargs)
 
     ctx.register_command('finix', handler=handle, description='Owner-only encrypted profile backups',
                          args_hint='[status|setup|connect|backup|configure|recipient|restore]')

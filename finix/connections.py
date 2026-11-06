@@ -33,18 +33,29 @@ class ConnectionError(core.FinixError):
 
 
 def safe_url(provider, url):
-    if not isinstance(url, str) or len(url) > 8192:
+    if not isinstance(url, str) or len(url) > 8192 or any(ord(c) < 33 or ord(c) > 126 for c in url):
         return False
-    u = urlsplit(url)
+    try:
+        u = urlsplit(url)
+    except ValueError:
+        return False
     if u.username or u.password or u.fragment:
         return False
-    query = parse_qs(u.query)
+    query = parse_qs(u.query, keep_blank_values=True)
     if any(k in query for k in ('code', 'access_token', 'refresh_token', 'id_token')):
         return False
     if provider == 'workspace':
-        return u.scheme == 'https' and u.netloc == 'accounts.google.com' and u.path in {'/o/oauth2/auth', '/o/oauth2/v2/auth'}
+        allowed = {'response_type', 'client_id', 'redirect_uri', 'scope', 'state', 'access_type',
+                   'prompt', 'code_challenge', 'code_challenge_method', 'include_granted_scopes'}
+        return (u.scheme == 'https' and u.netloc == 'accounts.google.com'
+                and u.path in {'/o/oauth2/auth', '/o/oauth2/v2/auth'}
+                and set(query) <= allowed and all(len(v) == 1 and v[0] for v in query.values())
+                and query.get('response_type') == ['code']
+                and query.get('redirect_uri') == ['http://127.0.0.1:53683/']
+                and bool(query.get('state')) and bool(query.get('client_id')))
     return (u.scheme == 'http' and u.netloc == '127.0.0.1:53682' and u.path == '/auth'
-            and set(query) == {'state'})
+            and set(query) == {'state'} and len(query['state']) == 1
+            and re.fullmatch(r'[A-Za-z0-9_~.%-]{1,512}', query['state'][0]) is not None)
 
 
 def workspace_prerequisites(profile, *, oauth=False):

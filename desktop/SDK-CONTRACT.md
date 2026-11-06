@@ -65,7 +65,8 @@ success or issue its follow-up status request.
 `POST /connection` accepts only closed actions (start/answer/cancel/apply), provider,
 folder, consent, local-browser attestation, profile ID and random session ID.
 No grant/code/token/config fields are admitted. The auth URL/ticket stay only in
-memory, not plugin/browser persistence or chat. Google/rclone credentials stay in
+memory, not plugin/browser persistence. The separate owner-only private-chat command
+may return only a validated authorization-start URL, never a CSRF ticket. Google/rclone credentials stay in
 the credential-owning subprocess. Manual refresh is intentional: no custom poll
 loop or hidden account login. Apply requires a read-only verified session and
 exact settings CAS; the UI reads its result back. SDK profile/activation epoch
@@ -74,7 +75,8 @@ requires a new refresh and new confirmations. Older SDKs fail closed.
 
 The wizard has Russian labels, explicit checkboxes, native select/inputs,
 keyboard-operable buttons and a polite live status region. New login requires
-browser and backend on the same machine; remote/mobile callback infrastructure
+loopback reachability: same-machine browser, server browser or user-managed SSH
+local forwarding (Google 53683, rclone 53682). Public callback infrastructure
 is not provided. Existing Workspace reuse and fresh Google client prerequisites,
 rclone OneDrive choice limits and crash leftovers are documented in README.
 The built-bundle tests cover consent/local-mode gates, verified-only apply,

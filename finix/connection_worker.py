@@ -145,7 +145,7 @@ def connect_workspace(home, stage):
             raise ValueError('client endpoints')
         flow = InstalledAppFlow.from_client_config(
             payload, ['https://www.googleapis.com/auth/drive'])
-        flow.run_local_server(host='127.0.0.1', port=0, open_browser=False,
+        flow.run_local_server(host='127.0.0.1', port=53683, open_browser=False,
                               authorization_prompt_message='FINIX_AUTH {url}',
                               success_message='Finix: можно закрыть окно.', timeout_seconds=300,
                               prompt='consent')

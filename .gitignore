@@ -6,3 +6,25 @@ build/
 dist/*
 !dist/keygen.html
 node_modules/
+
+# Local credentials and runtime output; never source or synthetic test fixtures.
+.env
+.env.*
+google_token.json
+google_client_secret.json
+credentials.json
+token.json
+client_secret*.json
+rclone.conf
+*.key
+*.age
+*.age.*.json
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+/finix-data/
+/backups/
+/logs/

@@ -10,6 +10,9 @@ from . import core
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='finix')
     commands = parser.add_subparsers(dest='command', required=True)
+    from .connect_cli import add_parser
+    from .connections import ConnectionError
+    add_parser(commands)
     keygen = commands.add_parser('keygen', help='Create an owner-only identity; print public recipient only')
     keygen.add_argument('--identity', required=True)
     backup = commands.add_parser('backup', help='Create and verify a local encrypted snapshot')
@@ -25,12 +28,18 @@ def main(argv=None):
     args = vars(parser.parse_args(argv))
     command = args.pop('command')
     try:
+        if command == 'connect':
+            from .connect_cli import interactive
+            return interactive(**args)
         if command == 'keygen':
             result = {'recipient': core.keygen(args['identity'])}
         else:
             result = getattr(core, command)(**args)
         print(json.dumps(result, sort_keys=True))
         return 0
+    except ConnectionError as exc:
+        print('finix connect: ' + exc.code, file=sys.stderr)
+        return 1
     except (core.FinixError, OSError, ValueError, sqlite3.Error, subprocess.SubprocessError):
         # Library errors may contain paths or contents: do not echo untrusted diagnostics.
         print('finix: operation failed; no secret diagnostics emitted', file=sys.stderr)
