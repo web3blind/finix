@@ -55,7 +55,7 @@ class CoreTests(unittest.TestCase):
         target = self.root / 'restore'
         core.restore(result['path'], self.key, target)
         self.assertEqual((target / '.env').read_bytes(), (self.source / '.env').read_bytes())
-        self.assertFalse((target / 'unknown').exists())
+        self.assertEqual((target / 'unknown').read_bytes(), (self.source / 'unknown').read_bytes())
         self.assertFalse((target / 'logs').exists())
         self.assertFalse((target / 'state.db-wal').exists())
         conn = sqlite3.connect(target / 'state.db')

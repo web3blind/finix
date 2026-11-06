@@ -89,8 +89,10 @@ class CoreReviewTests(unittest.TestCase):
                 self.assertNotIn(name + suffix, entries)
         self.assertEqual((target / 'plugin-data/custom/not-sqlite.db-wal').read_bytes(),
                          b'synthetic-fixture')
-        for name in ['plugins/custom/node_modules', 'plugins/custom/.git', 'logs', 'unknown']:
+        for name in ['plugins/custom/node_modules', 'logs']:
             self.assertFalse((target / name).exists())
+        for name in ['plugins/custom/.git/objects/omitted', 'unknown/omitted']:
+            self.assertEqual((target / name).read_bytes(), b'synthetic-fixture')
         self.assertEqual((target / 'plugins/custom/__init__.py').stat().st_mode & 0o777, 0o600)
 
     def test_supported_cron_shapes_survive_retention(self):

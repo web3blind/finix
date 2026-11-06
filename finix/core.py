@@ -21,7 +21,7 @@ import uuid
 
 MAX_BYTES = 128 * 1024 * 1024
 MAX_FILES = 10000
-# Canonical profile-relative user state (never chase configured external paths).
+# Frozen finix-1 admission scope, never used to select new profile backups.
 # Executable plugin/skill bytes are inert archive data; restore never imports them.
 FILE_ROOTS = frozenset({
     'config.yaml', '.env', 'auth.json', 'auth_state.json', 'state.db',
@@ -36,9 +36,12 @@ TREE_ROOTS = frozenset({
 EXACT_FILES = frozenset({
     'cron/jobs.json', 'cron/executions.db', 'gateway/discord_message_recovery.db',
 })
-# Only plugin source dependency/checkouts and Python caches are regenerable here.
-# Do not apply these exclusions to plugin-data or other user-state trees.
-PLUGIN_SOURCE_EXCLUSIONS = frozenset({'node_modules', '.git', '__pycache__'})
+# Frozen v1 scope is retained only for backward-compatible archive admission.
+LEGACY_PLUGIN_EXCLUSIONS = frozenset({'node_modules', '.git', '__pycache__'})
+# Whole-profile policy: exact root trees, plus named regenerable trees anywhere.
+# Never filter file extensions or arbitrary project/.git history.
+ROOT_EXCLUSIONS = frozenset({'cache', 'logs', 'tmp', 'temp', 'backups', 'profiles', 'hermes-agent'})
+TREE_EXCLUSIONS = frozenset({'__pycache__', '.cache', '.pytest_cache', 'node_modules', '.venv', 'venv'})
 RECIPIENT = re.compile(r'age1[023456789acdefghjklmnpqrstuvwxyz]{58}')
 
 
@@ -47,15 +50,29 @@ class FinixError(Exception):
 
 
 def excluded(name):
+    """Single v2 policy shared by traversal and archive admission."""
     parts = PurePosixPath(name).parts
-    return (bool(parts) and parts[0] in {'plugins', 'desktop-plugins'}
-            and any(p in PLUGIN_SOURCE_EXCLUSIONS for p in parts[1:]))
+    return bool(parts) and (parts[0] in ROOT_EXCLUSIONS
+                            or any(p in TREE_EXCLUSIONS for p in parts))
+
+
+def safe_name(name):
+    parts = PurePosixPath(name).parts
+    return (bool(parts) and len(parts) <= 32 and not name.startswith('/')
+            and str(PurePosixPath(name)) == name
+            and all(p not in {'.', '..', ''} for p in parts)
+            and not any(ord(c) < 32 or c == '\\' for c in name))
 
 
 def allowed(name):
+    return safe_name(name) and not excluded(name)
+
+
+def legacy_allowed(name):
     parts = PurePosixPath(name).parts
-    return (bool(parts) and len(parts) <= 32 and not name.startswith('/') and str(PurePosixPath(name)) == name
-            and all(p not in {'.', '..', ''} for p in parts) and not excluded(name)
+    excluded_plugin = (parts and parts[0] in {'plugins', 'desktop-plugins'}
+                       and any(p in LEGACY_PLUGIN_EXCLUSIONS for p in parts[1:]))
+    return (safe_name(name) and not excluded_plugin
             and (name in FILE_ROOTS or name in EXACT_FILES
                  or any(name.startswith(root + '/') for root in TREE_ROOTS)))
 
@@ -123,13 +140,12 @@ def scan(rootfd):
             raise FinixError('Source directory count or depth exceeds limit')
         for name in sorted(os.listdir(fd)):
             relative = f'{prefix}/{name}' if prefix else name
-            descend = (any(relative == root or relative.startswith(root + '/')
-                           or root.startswith(relative + '/') for root in TREE_ROOTS)
-                       or any(path.startswith(relative + '/') for path in EXACT_FILES))
-            if excluded(relative) or not (descend or allowed(relative)):
+            if excluded(relative):
                 continue
+            if not allowed(relative):
+                raise FinixError('Unsupported source path')
             s = os.stat(name, dir_fd=fd, follow_symlinks=False)
-            if stat.S_ISDIR(s.st_mode) and descend:
+            if stat.S_ISDIR(s.st_mode):
                 child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
                 try:
                     if fingerprint(s) != fingerprint(os.fstat(child)):
@@ -249,9 +265,17 @@ def make_archive(rootfd):
         if total > MAX_BYTES or (name == 'cron/jobs.json' and len(data) > 4 * 1024 * 1024):
             raise FinixError('Snapshot or cron JSON exceeds plaintext limit')
         entries[name] = data
-    if inventory != scan(rootfd):
+    # SQLite's own read connection may update/create SHM. Companions were
+    # type-checked before SQLite opened them; the final scan checks types again.
+    # Their bytes/metadata are not the snapshot and must not invalidate its RAM copy.
+    final_inventory = scan(rootfd)
+    for name in companions & inventory.keys() & final_inventory.keys():
+        if inventory[name][:3] != final_inventory[name][:3]:
+            raise FinixError('SQLite companion replaced during snapshot')
+    if ({n: s for n, s in inventory.items() if n not in companions}
+            != {n: s for n, s in final_inventory.items() if n not in companions}):
         raise FinixError('Profile changed during snapshot; retry when quiescent')
-    manifest = {'format': 'finix-1', 'files': {
+    manifest = {'format': 'finix-2', 'files': {
         name: {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
         for name, data in entries.items()}}
     encoded_manifest = json.dumps(manifest, sort_keys=True).encode()
@@ -259,7 +283,10 @@ def make_archive(rootfd):
         raise FinixError('Manifest exceeds metadata limit')
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode='w:gz', format=tarfile.USTAR_FORMAT) as archive:
-        for name, data in [('manifest.json', encoded_manifest), *entries.items()]:
+        # Separate metadata from user files, including a user's own manifest.json.
+        records = [('manifest.json', encoded_manifest)]
+        records.extend(('profile/' + name, data) for name, data in entries.items())
+        for name, data in records:
             info = tarfile.TarInfo(name)
             info.size = len(data)
             info.mode = 0o600
@@ -474,20 +501,34 @@ def validate_archive(data):
         entries = {}
         with tarfile.open(fileobj=io.BytesIO(raw), mode='r:') as archive:
             for member in archive:
+                candidate = member.name.removeprefix('profile/')
                 if (not member.isreg() or member.name in entries or member.pax_headers
-                        or not (member.name == 'manifest.json' or allowed(member.name))
+                        or not (member.name == 'manifest.json' or safe_name(candidate))
                         or len(entries) >= MAX_FILES + 1 or not 0 <= member.size <= MAX_BYTES):
                     raise FinixError('Unsafe or unsupported archive entry')
                 if ((member.name == 'manifest.json' and member.size > 8 * 1024 * 1024)
-                        or (member.name == 'cron/jobs.json' and member.size > 4 * 1024 * 1024)):
+                        or (candidate == 'cron/jobs.json' and member.size > 4 * 1024 * 1024)):
                     raise FinixError('JSON metadata exceeds limit')
                 extracted = archive.extractfile(member)
                 if extracted is None:
                     raise FinixError('Missing regular file payload')
                 entries[member.name] = extracted.read()
         manifest = json.loads(entries.pop('manifest.json'))
-        if manifest.get('format') != 'finix-1' or set(manifest['files']) != set(entries):
-            raise FinixError('Archive manifest mismatch')
+        version = manifest.get('format')
+        if version == 'finix-2':
+            if any(not n.startswith('profile/') for n in entries):
+                raise FinixError('Archive scope mismatch')
+            entries = {n[len('profile/'):]: content for n, content in entries.items()}
+            admit = allowed
+        elif version == 'finix-1':
+            admit = legacy_allowed
+        else:
+            raise FinixError('Unsupported archive format')
+        if set(manifest['files']) != set(entries) or any(not admit(n) for n in entries):
+            raise FinixError('Archive manifest or scope mismatch')
+        for name in entries:
+            if any(str(parent) in entries for parent in PurePosixPath(name).parents):
+                raise FinixError('Archive file/directory conflict')
         for name, content in entries.items():
             if manifest['files'][name] != {'size': len(content), 'sha256': hashlib.sha256(content).hexdigest()}:
                 raise FinixError('Archive checksum mismatch')
