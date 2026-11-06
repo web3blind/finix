@@ -4,6 +4,55 @@ import json
 from pathlib import Path
 import resource
 import sys
+import os
+import re
+
+
+MEDIA_CHUNK = 8 * 1024 * 1024
+READ_CHUNK = 64 * 1024
+
+
+def _download(module, file_id, output, expected_size):
+    """Stream only validated ranges; never let a buffered SDK consume media.
+
+    The existing Workspace module owns credential loading/refresh. Its credential
+    object stays in this private process, including when used by AuthorizedSession.
+    The caller enforces the total transfer deadline and removes failed downloads.
+    """
+    from google.auth.transport.requests import AuthorizedSession
+
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,200}', file_id) or expected_size <= 0:
+        raise ValueError('Invalid download descriptor')
+    url = 'https://www.googleapis.com/drive/v3/files/' + file_id
+    with AuthorizedSession(module.get_credentials()) as session:
+        session.trust_env = False
+        fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'wb') as sink:
+            start = 0
+            while start < expected_size:
+                end = min(start + MEDIA_CHUNK, expected_size) - 1
+                headers = {'Range': f'bytes={start}-{end}', 'Accept-Encoding': 'identity'}
+                with session.get(url, params={'alt': 'media'}, headers=headers,
+                                 stream=True, allow_redirects=False, timeout=(15, 60)) as response:
+                    # Reject ignored ranges/redirects before touching the body,
+                    # even when Content-Length advertises an enormous response.
+                    if (response.status_code != 206
+                            or response.headers.get('Content-Range') != f'bytes {start}-{end}/{expected_size}'
+                            or response.headers.get('Content-Encoding', 'identity').lower() != 'identity'):
+                        raise ValueError('Invalid media range response')
+                    length = end - start + 1
+                    declared = response.headers.get('Content-Length')
+                    if declared is not None and declared != str(length):
+                        raise ValueError('Invalid media range length')
+                    received = 0
+                    for block in response.iter_content(chunk_size=READ_CHUNK):
+                        if len(block) > READ_CHUNK or received + len(block) > length:
+                            raise ValueError('Media range overflow')
+                        sink.write(block)
+                        received += len(block)
+                    if received != length:
+                        raise ValueError('Incomplete media range')
+                start = end + 1
 
 
 def main():
@@ -26,16 +75,8 @@ def main():
                 fileId=args[0], fields='id,name,mimeType,size,parents,owners(emailAddress),trashed').execute()
             print(json.dumps(result))
         elif operation == 'download':
-            import os
-            from googleapiclient.http import MediaIoBaseDownload
             output = args[args.index('--output') + 1]
-            request = module.build_service('drive', 'v3').files().get_media(fileId=args[0])
-            with open(output, 'xb') as stream:
-                os.fchmod(stream.fileno(), 0o600)
-                downloader = MediaIoBaseDownload(stream, request, chunksize=8 * 1024 * 1024)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
+            _download(module, args[0], output, int(limit))
             print(json.dumps({'id': args[0], 'status': 'downloaded'}))
         elif operation == 'upload':
             from googleapiclient.http import MediaFileUpload
