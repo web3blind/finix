@@ -41,8 +41,15 @@ def _inert(config, trusted_finix=False):
     # Intentionally a narrow, explicit configuration domain, not a universal
     # blank-role assertion. Unknown configurations require separate admission.
     known={'gateway','platforms','profile_routes','plugins','hooks','skills',
-           'mcp_servers','secrets','cron','model','display','telemetry'}
+           'mcp_servers','secrets','cron','model','display','telemetry','auth','security'}
     if set(config)-known: return False
+    # Stock credential_sources / pm.install opt-outs only: these disable
+    # borrowing external logins and acquiring executable dependencies.
+    # Do not admit defaults, truthy/coercible values or unrelated policy fields.
+    for block,field in (('auth','adopt_external_logins'),('security','allow_lazy_installs')):
+        if block in config:
+            value=config[block]
+            if type(value) is not dict or set(value)!={field} or value[field] is not False: return False
     # Pinned SDK config_defaults.display: language/compact are presentation only.
     display=config.get('display',{})
     if type(display) is not dict or set(display)-{'language','compact'}: return False
