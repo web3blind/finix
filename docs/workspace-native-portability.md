@@ -1,0 +1,32 @@
+# Native Workspace subprocess portability
+
+Workspace storage supports Linux and native Windows. This does not authorize an account, install dependencies, open a browser, or verify live Drive access. `LOCAL_READY` is a local prerequisite result only; `live_google_verified` remains false.
+
+## Required runtime
+
+- Use an absolute Python interpreter and an owner-controlled Workspace Python helper. The interpreter, Finix wrapper, provider script, and their directory chains are checked and held open for the operation. Relative interpreter names are rejected; no executable is found through the current directory or PATH.
+- Windows requires the existing Finix native backend, local NTFS, and trusted owner/DACL checks. Python distributions with broadly writable executable or installation ACLs are rejected with `UNTRUSTED_HELPER`; use a securely installed interpreter rather than weakening the check. The audited checker also fails closed on ACL entries it cannot classify, including OWNER RIGHTS write grants. This patch does not relax that separate native trust policy.
+- Linux preserves the absolute interpreter invocation name (including a virtualenv's `bin/python` symlink) so `pyvenv.cfg`, `sys.prefix`, and virtualenv packages remain effective. The resolved executable is separately validated and held open; every invocation-directory component and symlink hop/target is owner/mode checked and pinned with Linux `O_PATH` handles. Resolving a venv name is a trust check, not a replacement launch command. Linux retains a new session/process group, `RLIMIT_FSIZE`, and disabled core dumps. Unsupported platforms fail closed. Trusted executable/script files must not be group- or world-writable. Root-owned sticky temporary-directory ancestors are permitted; the actual provider directory and script must remain trusted.
+- Google authentication, Google API client HTTP support, and Requests must already be installed in the interpreter's non-user-site runtime. Finix does not add fake modules or install dependencies to make readiness appear successful.
+
+## Isolation and bounds
+
+Windows starts the helper suspended and assigns the existing kill-on-close Job Object before resuming it. Both pipes use the audited bounded-backpressure Windows event reader, not a socket selector. Linux keeps its selector-based pipe reader and process-group cleanup. Standard input is disconnected on both platforms; neither transport uses a shell or a credential-bearing argument.
+
+The combined stdout/stderr budget is 65,536 bytes. Metadata and transfer operations use their separate wall-clock deadlines. The runner accepts an optional cancellation event or cancellation predicate. Silent children, children that close their pipes before exiting, and descendants are cleaned up on cancellation, timeout, output overflow, invalid responses, or normal exit. Provider diagnostics are never included in public errors.
+
+Child environments are newly constructed allowlists, never overlays of the parent environment. Windows receives the OS/profile/temp variables needed by its runtime. Workspace credential selection remains explicitly bound to `HERMES_HOME`. Credential overrides, Python path injection, dotenv contents, proxy settings, and arbitrary parent secrets are not forwarded. Python runs in isolated mode with bytecode-cache writes disabled. No process-wide environment is changed by the implementation.
+
+`status()` checks dependency specs in that actual isolated child interpreter, with the same provider-directory import path, not through the parent's `find_spec`, user site, or `PYTHONPATH`. The local-only wrapper branch returns before importing the provider script, opening credentials, or calling login/cloud. It uses a five-second deadline, the combined 65,536-byte output budget, and the same Job Object/process-group cleanup and Linux rlimits. Dependency package initializers can execute during spec discovery; trusted same-user package code is not sandboxed, and time/output overruns fail closed rather than reporting ready.
+
+Windows has no POSIX file-size rlimit. The built-in download path instead validates each HTTP byte range before reading its body, rejects redirects and non-identity content encoding, streams bounded chunks, and checks each chunk against the exact declared ciphertext length before writing it. This is a bounded transfer implementation, not a sandbox for arbitrary owner-supplied Python code. Linux additionally retains its kernel file-size limit.
+
+Recovery record input uses Finix's native regular-file opener on both platforms. Existing ciphertext verification, ownership checks, private ledgers, and retention decisions are unchanged.
+
+## Credential-free verification
+
+Run `python -W error::ResourceWarning -m unittest tests.test_workspace_portability -v` using a trusted native interpreter and trusted test scratch directory. On Linux also run `python -W error::ResourceWarning -m unittest tests.test_workspace_drive -v`.
+
+The focused suite covers real native subprocess startup, silent/closed-pipe cancellation and deadlines, descendant cleanup, combined output bounds, fatal startup and malformed/nonzero results, SDK metadata boundaries and public error mapping, download range overflow, local readiness rejection, native recovery input, and synthetic adapter backup/download/retention. Fresh `venv --without-pip` fixtures prove that venv-only dependencies are visible to the helper, Linux helper `sys.prefix` equals the selected venv, parent-only ambient/PYTHONPATH dependencies cannot advertise readiness, and child-only dependencies can. Synthetic dependency packages exist only in disposable test directories/venvs; installed Google packages are not modified. Status tests reject provider imports and exercise the real five-second deadline and output bound. Linux checks also reject a writable intermediate interpreter-symlink directory. Linux-only symlink and rlimit assertions are intentionally skipped on Windows. Provider tests use temporary synthetic scripts and an injected session factory; no real credentials or cloud calls are used. The installed-wrapper contract test in the older suite may skip when the public Workspace helper is not installed.
+
+Trust checks and held descriptors do not sandbox owner-controlled Python or prevent a same-user process from mutating its own installation. Linux process-group cleanup is not containment against deliberately daemonizing trusted code. Windows interpreter trust, suspended launch, and Job Object behavior are unchanged.

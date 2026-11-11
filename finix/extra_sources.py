@@ -1,6 +1,6 @@
 """Explicit owner-selected external directories; YAML is the sole authority."""
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 import tempfile
 
@@ -71,14 +71,12 @@ def read_config(home):
         import yaml
     except ImportError:
         raise core.FinixError('Hermes YAML support required for configured extra folders') from None
-    fd = os.open(core.checked_path(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
-        before = core.fingerprint(os.fstat(fd))
-        data = yaml.safe_load(core.read_regular(fd, 8 * 1024 * 1024))
+        with core.regular_input(core.checked_path(path)) as fd:
+            before = core.fingerprint(os.fstat(fd))
+            data = yaml.safe_load(core.read_regular(fd, 8 * 1024 * 1024))
     except yaml.YAMLError:
         raise core.FinixError('Invalid owning-profile configuration') from None
-    finally:
-        os.close(fd)
     # Existing CLI snapshots can contain arbitrary non-Hermes config data.
     return data if isinstance(data, dict) else {}, before
 
@@ -141,6 +139,9 @@ def edit(profile, action, name=None, path=None):
 
 def guard_tree(fd, relative, *, root_name):
     """Check anchored directories before exclusions can hide a foreign profiles tree."""
+    if os.name == 'nt':
+        from .windows_native import guard_tree as native_guard
+        return native_guard(fd, relative, root_name=root_name)
     names = set(os.listdir(fd))
     if 'profiles' not in names:
         return
@@ -183,7 +184,8 @@ def manifest_aliases(manifest):
     for source in sources:
         if (not isinstance(source, dict) or set(source) != {'name', 'path'}
                 or not valid_alias(source['name']) or source['name'] in aliases
-                or not isinstance(source['path'], str) or not source['path'].startswith('/')):
+                or not isinstance(source['path'], str)
+                or not (source['path'].startswith('/') or PureWindowsPath(source['path']).is_absolute())):
             raise core.FinixError('Invalid bundle source metadata')
         aliases.add(source['name'])
     return aliases

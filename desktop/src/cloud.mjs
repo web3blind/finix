@@ -1,11 +1,48 @@
 import * as sdk from '@hermes/plugin-sdk';
+import {useLocalized} from './i18n.mjs';
 import { jsx, jsxs } from 'react/jsx-runtime';
+import { useEffect } from 'react';
 
+const remedies = Object.freeze({
+  RCLONE_MISSING: 'rclone не найден в локальных инструментах Finix или PATH backend. Восстановите установку инструментов Finix и обновите подключение.',
+  UNTRUSTED_BINARY: 'Инструмент или его каталог не прошёл проверку безопасности. Проверьте установку и права доступа; проверка не отключается.',
+  RCLONE_PROVIDER_FAILED: 'rclone не завершил подключение к сервису. Проверьте сеть и доступность сервиса, затем начните заново.',
+  CONNECTION_TIMEOUT: 'Время подключения истекло. Начните заново.',
+  CONNECTION_UNSUPPORTED: 'Этот шаг авторизации не поддерживается мастером. Настройте именованный remote вручную.',
+  WORKSPACE_REFRESH_TOKEN_REQUIRED: 'Google не выдал refresh token. Повторите подключение с разрешением автономного доступа.',
+  WORKSPACE_CLIENT_REQUIRED: 'Для первого входа Google нужен локальный Desktop OAuth client JSON выбранного профиля.',
+  WORKSPACE_DEPENDENCIES_REQUIRED: 'В backend отсутствуют зависимости Google OAuth.',
+  WORKSPACE_HELPER_REQUIRED: 'В выбранном профиле отсутствует помощник Google Workspace.',
+  CONNECTION_BUSY: 'Другое подключение уже выполняется. Обновите его статус или отмените его.',
+  OWNER_SESSION_CHANGED: 'Профиль или сессия изменились. Обновите подключение.',
+  SETTINGS_CHANGED: 'Настройки изменились. Текущее хранилище сохранено; начните подключение заново.'
+});
+const diagnostic = code => Object.hasOwn(remedies, code) ? `${code}: ${remedies[code]}` : 'Подключение не подтверждено. Обновите статус и проверьте локальные инструменты, сеть и выбранный профиль. Текущее хранилище не заменено. Не присылайте коды или config в чат.';
+const failure = error => {
+  // The SDK may wrap HTTP detail in Error.message. Select only a closed code;
+  // never echo any provider body, exception, callback URL or credential.
+  const values = [error?.code, error?.detail, error?.message];
+  const code = values.filter(v => typeof v === 'string').flatMap(v => v.match(/\b[A-Z][A-Z_]+\b/g) ?? []).find(v => Object.hasOwn(remedies, v));
+  return diagnostic(code);
+};
+const sessionMessage = session => {
+  switch (session.status) {
+    case 'working': return 'Подготовка входа или проверка доступа. Нажмите «Обновить подключение» через несколько секунд: когда ссылка будет готова, появится кнопка «Открыть вход в браузере». Браузер автоматически не открывается. После входа обновите статус ещё раз.';
+    case 'authorize': return 'Ссылка готова. Нажмите «Открыть вход в браузере» и подтвердите доступ на странице сервиса. После завершения входа нажмите «Обновить подключение», затем примените проверенное подключение. Мастер не определяет закрытие вкладки браузера автоматически. Текущее хранилище до применения не меняется.';
+    case 'verified': return 'Доступ проверен. Нажмите «Применить подключение», чтобы выбрать это хранилище.';
+    case 'applied': return 'Хранилище выбрано и прочитано обратно. Перейдите к шагу 3: «Проверить и создать первую копию».';
+    case 'failed': return diagnostic(session.code);
+    case 'expired': return diagnostic('CONNECTION_TIMEOUT');
+    case 'choice': return 'Выберите диск ниже и обновите подключение для следующего шага.';
+    case 'cancelled': return 'Подключение отменено. Текущее хранилище не заменено.';
+    default: return 'Выберите сервис, подтвердите локальный браузер и разрешения, затем нажмите «Начать подключение». Вход сам по себе не загружает копию.';
+  }
+};
 const current = () => ({ profile: sdk.host.state.profile.get(), epoch: sdk.gatewayActivationEpoch?.() });
 export function createCloud(ctx, enabled = () => true) {
-  const state = sdk.atom({ data: null, provider: 'workspace', folder: 'Finix', consent: false,
-    local: false, busy: false, message: 'Загрузите мастер для текущего backend.' });
-  let owner = null, disposed = false;
+  const state = sdk.atom({ data: null, provider: 'workspace', consent: false,
+    local: false, busy: false, loading: false, readiness: '', message: 'Выберите облачный сервис.' });
+  let owner = null, disposed = false, revision = 0;
   const set = patch => { if (!disposed) state.set({ ...state.get(), ...patch }); };
   const fence = () => {
     const now = current();
@@ -17,55 +54,97 @@ export function createCloud(ctx, enabled = () => true) {
     if (state.get().busy || disposed) return;
     set({ busy: true });
     try { await fn(); }
-    catch { set({ message: 'Подключение не подтверждено. Проверьте профиль, локальный браузер, rclone/Google OAuth client и зависимости. Текущее хранилище не заменено; обновите статус. Не присылайте коды или config в чат.' }); }
+    catch (error) { set({ message: failure(error) }); }
     finally { set({ busy: false }); }
   };
-  const refresh = () => run(async () => {
+  const refresh = async () => {
+    if (disposed || (state.get().busy && !state.get().loading)) return;
+    const request = ++revision;
     const now = current();
     if (!owner || owner.profile !== now.profile || owner.epoch !== now.epoch) {
       owner = now; set({ data: null, consent: false, local: false });
     }
-    fence(); const data = await ctx.rest('/connection'); fence();
-    if (typeof data.profile_id !== 'string' || typeof data.ticket !== 'string') throw new Error('contract');
-    set({ data, message: `Состояние: ${data.session.status}. Настоящий доступ проверяется до применения; резервная копия ещё не загружалась.` });
-  });
+    set({ busy: true, loading: true, readiness: '' });
+    // Read the mounted handler through this plugin's authenticated SDK namespace.
+    // Independent of connection state: an older router must not break the wizard.
+    const probe = state.get().provider !== 'workspace' && Number.isSafeInteger(now.epoch) ? (async () => {
+      let readiness;
+      try {
+        const data = await ctx.rest('/readiness');
+        readiness = data?.code_version !== 'canonical-tools-v1' ? 'обработчик требует перезагрузки' :
+          data.tools?.rclone?.available === true && data.tools.rclone.code === 'READY' ? 'rclone: готов' : 'rclone: недоступен';
+      } catch {
+        readiness = 'обработчик требует перезагрузки';
+      }
+      const latest = current();
+      if (request === revision && now.profile === latest.profile && now.epoch === latest.epoch) set({ readiness });
+    })() : Promise.resolve();
+    try {
+      fence(); const data = await ctx.rest('/connection');
+      if (request !== revision) return;
+      fence();
+      if (typeof data.profile_id !== 'string' || typeof data.ticket !== 'string' || !data.session) throw new Error('contract');
+      set({ data, message: sessionMessage(data.session) });
+    } catch (error) {
+      if (request === revision) set({ data: null, message: failure(error) });
+    } finally {
+      if (request === revision) set({ busy: false, loading: false });
+      await probe;
+    }
+  };
   const action = (action, extra = {}) => run(async () => {
     fence(); const s = state.get(); if (!s.data || !enabled()) throw new Error('key required');
+    if (action === 'start' && (!s.local || !s.consent)) throw new Error('consent required');
+    if (action === 'apply' && s.data.session.status !== 'verified') throw new Error('verification required');
     const before = s.data;
     const data = await ctx.rest('/connection', { method: 'POST', body: {
       profile_id: before.profile_id, ticket: before.ticket, action,
-      session_id: before.session.id ?? '', provider: s.provider, folder: s.folder,
+      session_id: before.session.id ?? '', provider: s.provider, folder: 'Finix',
       confirmed: s.consent, local_browser: s.local, ...extra
     } });
     fence(); if (data.profile_id !== before.profile_id) throw new Error('binding');
     const readback = await ctx.rest('/connection'); fence();
-    if (readback.session.id !== data.session.id) throw new Error('session');
-    set({ data: readback, message: `Состояние: ${readback.session.status}. ${readback.session.status === 'applied' ? 'Хранилище выбрано и прочитано обратно. Перейдите к шагу 3: «Проверить и создать первую копию».' : 'Нажмите «Обновить подключение» после входа.'}` });
+    if (readback.profile_id !== before.profile_id || readback.session.id !== data.session.id) throw new Error('session');
+    set({ data: readback, message: sessionMessage(readback.session) });
   });
-  ctx.onDispose(() => { disposed = true; owner = null; state.set({ ...state.get(), data: null }); });
-  return { state, set, refresh, action, open: () => run(async () => {
-    fence(); const url = state.get().data?.session.url;
-    if (!url || !await ctx.os?.openExternal(url)) throw new Error('browser'); fence();
-  }) };
+  ctx.onDispose(() => { disposed = true; revision++; owner = null; state.set({ ...state.get(), data: null, consent: false, local: false }); });
+  return { state, set, refresh, action,
+    isCurrent: () => !disposed && owner !== null && owner.profile === current().profile && owner.epoch === current().epoch,
+    select: provider => {
+      if (state.get().busy && !state.get().loading) return;
+      set({ provider, data: null, consent: false, local: false });
+      return refresh();
+    }, open: () => run(async () => {
+      fence(); const url = state.get().data?.session.url;
+      if (!url || !await ctx.os?.openExternal(url)) throw new Error('browser'); fence();
+    }) };
 }
 
 export function Cloud({ cloud, enabled = true }) {
-  const s = sdk.useValue(cloud.state), a = cloud, session = s.data?.session;
+ const {jsx,jsxs,language}=useLocalized();
+  const value = sdk.useValue(cloud.state), a = cloud;
+  const s = a.isCurrent() ? value : { ...value, data: null, consent: false, local: false, message: 'Выберите сервис. Состояние подключения загружается для текущего профиля.' };
+  const session = s.data?.session;
+  const profile = sdk.useValue(sdk.host.state.profile);
+  const gateway = sdk.useValue(sdk.host.state.gateway);
+  const epoch = sdk.gatewayActivationEpoch?.();
+  // Only public local connection state: no worker, OAuth or browser action.
+  useEffect(() => { if (enabled) void a.refresh(); }, [a, enabled, profile, gateway, epoch]);
   const button = (label, onClick, disabled = false) => jsx(sdk.Button, { type: 'button', onClick, disabled: s.busy || disabled || !enabled, children: label });
   const active = session && ['working', 'authorize', 'choice', 'verified'].includes(session.status);
   return jsxs('section', { 'aria-label': 'Подключение облака', children: [
     !enabled && jsx('p', { children: 'Сначала зарегистрируйте публичный ключ на шаге 1.' }),
     jsx('h2', { children: '2. Облачный сервис и авторизация' }),
-    jsx('p', { children: 'Браузер должен достигать loopback backend: на той же машине либо через собственный SSH-туннель. Порты: Google Workspace 53683, остальные 53682. Для удалённого сервера используйте /finix connect в личном чате: режим tunnel даст точную SSH-команду, server-browser — ссылку для браузера на сервере. Публичный callback не нужен и не создаётся.' }),
+    jsx('p', { children: 'Выберите сервис, отметьте два подтверждения и нажмите «Начать подключение». Новые подключения используют папку Finix. Текущее хранилище не меняется до проверки доступа и явного применения.' }),
+    s.provider !== 'workspace' && a.isCurrent() && s.readiness && jsx('p', { role: 'status', children: s.readiness }),
     button('Обновить подключение', a.refresh),
-    jsxs('label', { children: ['Облачный сервис', jsx('select', { value: s.provider, disabled: s.busy || active,
-      onChange: e => a.set({ provider: e.currentTarget.value, consent: false }),
+    jsxs('label', { children: ['Облачный сервис', jsx('select', { value: s.provider, disabled: (s.busy && !s.loading) || active,
+      onChange: e => a.select(e.currentTarget.value),
       children: Object.entries({ workspace: 'Google Workspace', yandex: 'Яндекс Диск', onedrive: 'OneDrive', dropbox: 'Dropbox' }).map(([value, label]) => jsx('option', { value, children: label }, value)) })] }),
-    jsxs('label', { children: ['Папка rclone (Workspace создаёт свою профильную папку Finix)', jsx('input', { value: s.folder, disabled: s.busy || active || s.provider === 'workspace',
-      onChange: e => a.set({ folder: e.currentTarget.value }) })] }),
+
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.local, disabled: s.busy || active,
       onChange: e => a.set({ local: e.currentTarget.checked }) }), 'Браузер на машине backend или собственный SSH-туннель к его loopback уже настроен'] }),
-    jsx('p', { children: 'Разрешения могут включать чтение, изменение и удаление файлов всего диска, не только папки Finix. Google использует существующий Workspace аккаунт; первый вход требует Desktop OAuth client JSON владельца (Google Cloud Console) в google_client_secret.json выбранного профиля и google-auth-oauthlib. Используйте локальный setup.py --client-secret FILE; не передавайте содержимое файла в чат. rclone использует встроенные OAuth приложения. Вход не загружает backup.' }),
+    jsx('p', { children: 'Разрешения могут включать чтение, изменение и удаление файлов всего диска, не только папки Finix. Вход сам по себе не загружает копию.' }),
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.consent, disabled: s.busy || active,
       onChange: e => a.set({ consent: e.currentTarget.checked }) }), 'Подтверждаю подключение выбранного сервиса и возможные широкие права доступа'] }),
     button('Начать подключение', () => a.action('start'), !s.data || !s.local || !s.consent || active),
@@ -76,6 +155,11 @@ export function Cloud({ cloud, enabled = true }) {
     ...(session?.choices ?? []).map(c => button(c.label, () => a.action('answer', { choice: c.id }))),
     button('Применить подключение', () => a.action('apply'), session?.status !== 'verified'),
     button('Отменить подключение', () => a.action('cancel'), !active),
+    jsxs('details', { children: [
+      jsx('summary', { children: 'Помощь: удалённый backend и первый вход Google' }),
+      jsx('p', { children: 'Браузер должен достигать loopback backend: на той же машине либо через собственный SSH-туннель. Порты: Google Workspace 53683, остальные 53682. Для удалённого сервера используйте /finix connect в личном чате: режим tunnel даст точную SSH-команду, server-browser — ссылку для браузера на сервере. Публичный callback не нужен и не создаётся.' }),
+      jsx('p', { children: 'Google использует существующий Workspace аккаунт; первый вход требует Desktop OAuth client JSON владельца (Google Cloud Console) в google_client_secret.json выбранного профиля и google-auth-oauthlib. Используйте локальный setup.py --client-secret FILE; не передавайте содержимое файла в чат. rclone использует встроенные OAuth приложения.' })
+    ] }),
     jsx('p', { role: 'status', 'aria-live': 'polite', children: s.message })
   ] });
 }

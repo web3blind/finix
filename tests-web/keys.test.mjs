@@ -12,7 +12,7 @@ if (!scratch) throw new Error('TMPDIR is required for isolated secret fixtures')
 
 // Never put secret-bearing values into assertion diagnostics or subprocess errors.
 function age(args, input) {
-  try { return execFileSync('/usr/bin/age', args, { input, stdio: ['pipe', 'pipe', 'pipe'] }); }
+  try { return execFileSync(process.env.FINIX_AGE ?? (process.platform==='win32'?'age':'/usr/bin/age'), args, { input, stdio: ['pipe', 'pipe', 'pipe'] }); }
   catch { throw new Error('age interoperability command failed (details suppressed)'); }
 }
 
@@ -29,7 +29,7 @@ test('generated X25519 key interoperates with /usr/bin/age in both directions', 
     assert.equal(await decrypt.decrypt(encrypted, 'text'), plain);
     const encrypt = new Encrypter(); encrypt.addRecipient(recipient);
     assert.equal(age(['-d', '-i', path], await encrypt.encrypt(plain)).toString(), plain);
-    const derived = execFileSync('/usr/bin/age-keygen', ['-y', path], { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    const derived = execFileSync(process.env.FINIX_AGE_KEYGEN ?? (process.platform==='win32'?'age-keygen':'/usr/bin/age-keygen'), ['-y', path], { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
     assert.equal(derived === recipient, true);
     const wrong = new Decrypter(); wrong.addIdentity((await generateKeyPair()).identity);
     await assert.rejects(() => wrong.decrypt(encrypted));

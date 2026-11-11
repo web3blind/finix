@@ -2,7 +2,6 @@
 import importlib.util
 import json
 from pathlib import Path
-import resource
 import sys
 import os
 import re
@@ -12,19 +11,21 @@ MEDIA_CHUNK = 8 * 1024 * 1024
 READ_CHUNK = 64 * 1024
 
 
-def _download(module, file_id, output, expected_size):
+def _download(module, file_id, output, expected_size, *, session_factory=None):
     """Stream only validated ranges; never let a buffered SDK consume media.
 
     The existing Workspace module owns credential loading/refresh. Its credential
     object stays in this private process, including when used by AuthorizedSession.
     The caller enforces the total transfer deadline and removes failed downloads.
     """
-    from google.auth.transport.requests import AuthorizedSession
+    if session_factory is None:
+        from google.auth.transport.requests import AuthorizedSession
+        session_factory = AuthorizedSession
 
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,200}', file_id) or expected_size <= 0:
         raise ValueError('Invalid download descriptor')
     url = 'https://www.googleapis.com/drive/v3/files/' + file_id
-    with AuthorizedSession(module.get_credentials()) as session:
+    with session_factory(module.get_credentials()) as session:
         session.trust_env = False
         fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, 'wb') as sink:
@@ -57,10 +58,20 @@ def _download(module, file_id, output, expected_size):
 
 def main():
     script, limit, operation, *args = sys.argv[1:]
-    resource.setrlimit(resource.RLIMIT_FSIZE, (int(limit), int(limit)))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    if os.name != 'nt':
+        import resource
+        resource.setrlimit(resource.RLIMIT_FSIZE, (int(limit), int(limit)))
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     # A fresh interpreter binds the wrapper's import-time HERMES_HOME correctly.
     sys.path.insert(0, str(Path(script).parent))
+    if operation == 'local-status':
+        try:
+            ready = all(importlib.util.find_spec(name) is not None for name in
+                        ('google.auth', 'google.auth.transport.requests', 'googleapiclient.http', 'requests'))
+        except (ImportError, ValueError):
+            ready = False
+        print(json.dumps({'dependencies_ready': ready}))
+        return
     spec = importlib.util.spec_from_file_location('finix_workspace_api', script)
     if spec is None or spec.loader is None:
         raise RuntimeError('Workspace helper cannot be loaded')
@@ -70,7 +81,18 @@ def main():
         # Python is required for media even when gws exists. Use that same
         # credential-owning path for metadata/trash; no gws token export/copy.
         module._gws_binary = lambda: None
-        if operation == 'metadata':
+        if operation == 'identity':
+            result = module.build_service('drive', 'v3').about().get(fields='user(permissionId)').execute()
+            print(json.dumps({'account_id': result['user']['permissionId']}))
+        elif operation == 'generate-id':
+            result = module.build_service('drive', 'v3').files().generateIds(count=1, space='drive', type='files').execute()
+            print(json.dumps({'id': result['ids'][0]}))
+        elif operation == 'create-folder' and '--id' in args:
+            result = module.build_service('drive', 'v3').files().create(
+                body={'id': args[args.index('--id') + 1], 'name': args[args.index('--name') + 1],
+                      'mimeType': 'application/vnd.google-apps.folder'}, fields='id').execute()
+            print(json.dumps(dict(result, status='created')))
+        elif operation == 'metadata':
             result = module.build_service('drive', 'v3').files().get(
                 fileId=args[0], fields='id,name,mimeType,size,parents,owners(emailAddress),trashed').execute()
             print(json.dumps(result))
@@ -84,7 +106,8 @@ def main():
                                     chunksize=8 * 1024 * 1024, resumable=True)
             try:
                 result = module.build_service('drive', 'v3').files().create(
-                    body={'name': args[args.index('--name') + 1], 'parents': [args[args.index('--parent') + 1]]},
+                    body={'name': args[args.index('--name') + 1], 'parents': [args[args.index('--parent') + 1]],
+                          **({'id': args[args.index('--id') + 1]} if '--id' in args else {})},
                     media_body=media, fields='id,mimeType').execute()
             finally:
                 media.stream().close()

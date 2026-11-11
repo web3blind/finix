@@ -47,6 +47,8 @@ else: sys.exit(1)
 
 class ConnectionsTests(unittest.TestCase):
     def setUp(self):
+        if os.name == 'nt':
+            self.skipTest('POSIX shebang rclone fixture cannot execute on Windows; real OAuth forbidden')
         self.tmp = tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR'))
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name)
@@ -58,9 +60,22 @@ class ConnectionsTests(unittest.TestCase):
         self.bin.mkdir(mode=0o700)
         (self.bin / 'rclone').write_text(FAKE_RCLONE)
         (self.bin / 'rclone').chmod(0o700)
-        self.env = patch.dict(os.environ, {'PATH': str(self.bin) + ':' + os.environ['PATH']})
+        self.env = patch.dict(os.environ, {'PATH': str(self.bin) + os.pathsep + os.environ['PATH']})
         self.env.start()
         self.addCleanup(self.env.stop)
+        # Fail closed before any worker can receive a real provider binary.
+        original_which = shutil.which
+        def fixture_only_binary(tool, *args, **kwargs):
+            binary = original_which(tool, *args, **kwargs)
+            if tool == 'rclone':
+                self.assertIsNotNone(binary, 'synthetic rclone missing; refusing provider process')
+                self.assertEqual(Path(binary).resolve(), (self.bin / 'rclone').resolve(),
+                                 'real rclone forbidden in synthetic OAuth fixtures')
+            return binary
+        guard = patch('finix.connections.shutil.which', side_effect=fixture_only_binary)
+        guard.start()
+        self.addCleanup(guard.stop)
+        fixture_only_binary('rclone')
         self.addCleanup(self.stop)
         self.view = self.manager.view(self.profile)
 

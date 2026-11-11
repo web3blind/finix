@@ -53,6 +53,9 @@ def _safe_temp_parent(info):
 
 
 def sqlite_temp_readiness(path):
+    if os.name == 'nt':
+        from .windows_native import temp_readiness
+        return temp_readiness(_temp_directory(path))
     from .core import FinixError
     failure = {'ready': False, 'code': 'NEED_SQLITE_TEMP_DIRECTORY', 'message':
         'Set sqlite_temp_dir to an existing writable directory owned by this '
@@ -73,6 +76,11 @@ def sqlite_temp_readiness(path):
 
 @contextmanager
 def sqlite_stage(path, required_bytes):
+    if os.name == 'nt':
+        from .windows_native import sqlite_stage as native_stage
+        with native_stage(_temp_directory(path), required_bytes) as stage:
+            yield stage
+        return
     from .core import FinixError
     readiness = sqlite_temp_readiness(path)
     if not readiness['ready']:
@@ -98,27 +106,68 @@ def sqlite_stage(path, required_bytes):
 
 
 def _connect_source(fd, parent, name):
+    if os.name == 'nt':
+        from .windows_native import connect_source
+        return connect_source(fd, parent, name)
     from .core import FinixError
-    for suffix in ('-wal', '-shm', '-journal'):
-        try:
-            info = os.stat(name + suffix, dir_fd=parent, follow_symlinks=False)
-        except FileNotFoundError:
-            continue
-        if not stat.S_ISREG(info.st_mode):
-            raise FinixError('SQLite companion is a symlink or special file')
-    path = f'/proc/self/fd/{parent}/{name}'
-    before = os.stat(path)
-    pinned = os.fstat(fd)
-    if (before.st_dev, before.st_ino) != (pinned.st_dev, pinned.st_ino):
-        raise FinixError('SQLite source replaced')
-    connection = sqlite3.connect(f'file:{quote(path, safe="/")}?mode=ro', uri=True, timeout=2)
+    pinned_companions = {}
+    def pin_companions():
+        for suffix in ('-wal', '-shm', '-journal'):
+            leaf = name + suffix
+            if leaf in pinned_companions:
+                continue
+            try:
+                companion = os.open(leaf, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+            except FileNotFoundError:
+                continue
+            info = os.fstat(companion)
+            if not stat.S_ISREG(info.st_mode):
+                os.close(companion)
+                raise FinixError('SQLite companion is a symlink or special file')
+            pinned_companions[leaf] = (companion, (info.st_dev, info.st_ino, info.st_mode))
+    def verify_companions():
+        for leaf, (_, identity) in pinned_companions.items():
+            try:
+                info = os.stat(leaf, dir_fd=parent, follow_symlinks=False)
+            except FileNotFoundError:
+                raise FinixError('SQLite companion replaced during snapshot') from None
+            if (info.st_dev, info.st_ino, info.st_mode) != identity:
+                raise FinixError('SQLite companion replaced during snapshot')
+    def release():
+        for companion, _ in pinned_companions.values():
+            os.close(companion)
+        pinned_companions.clear()
+    class PinnedConnection(sqlite3.Connection):
+        def close(self):
+            try:
+                verify_companions()
+            finally:
+                try:
+                    super().close()
+                finally:
+                    release()
+    connection = None
     try:
+        pin_companions()
+        path = f'/proc/self/fd/{parent}/{name}'
+        before = os.stat(path, follow_symlinks=False)
+        pinned = os.fstat(fd)
+        if (before.st_dev, before.st_ino, before.st_mode) != (pinned.st_dev, pinned.st_ino, pinned.st_mode):
+            raise FinixError('SQLite source replaced')
+        connection = sqlite3.connect(f'file:{quote(path, safe="/")}?mode=ro', uri=True,
+                                     timeout=2, factory=PinnedConnection)
+        verify_companions()
         # Pin one read view so concurrent WAL writers cannot restart the backup forever.
         connection.execute('BEGIN')
         connection.execute('SELECT count(*) FROM sqlite_master').fetchone()
+        pin_companions()  # SQLite may have created SHM on opening the read view.
+        verify_companions()
         return connection
     except BaseException:
-        connection.close()
+        if connection is not None:
+            connection.close()
+        else:
+            release()
         raise
 
 
@@ -195,8 +244,8 @@ class HashReader:
 def _add_payload(archive, name, stream, size, records, cancel, progress, *, raw=False):
     from .core import FinixError
     from . import core
-    if len(records) >= core.MAX_FILES or not core.safe_name(name):
-        raise FinixError('Archive file count or path depth exceeds limit')
+    if not core.safe_name(name):
+        raise FinixError('Unsafe archive path or path depth exceeds limit')
     info = tarfile.TarInfo(name if raw else 'profile/' + name)
     info.mode, info.size = 0o600, size
     reader = HashReader(stream, cancel, progress)
@@ -206,8 +255,194 @@ def _add_payload(archive, name, stream, size, records, cancel, progress, *, raw=
     records[name] = {'size': size, 'sha256': reader.hash.hexdigest()}
 
 
+CAPTURE_MEMORY_BYTES = 8 * 1024 * 1024
+CAPTURE_ATTEMPTS = 3
+
+
+@contextmanager
+def captured_source(rootfd, name, expected):
+    """Pin and classify the generation actually captured, never promote by suffix."""
+    from . import core
+    from contextlib import ExitStack
+    with ExitStack() as opened:
+        try:
+            fd, parent, leaf = opened.enter_context(core.source_file(rootfd, name, expected))
+        except FileNotFoundError:
+            if getattr(expected, 'opaque', None) is not None:
+                raise core.FinixError('CUSTODY_CHANGED') from None
+            if getattr(expected, 'sqlite', False):
+                raise core.FinixError('SOURCE_UNAVAILABLE_BEFORE_CAPTURE') from None
+            raise core.SourceCaptureError('LIVE_SOURCE_MISSING') from None
+        if getattr(expected, 'sqlite', False):
+            yield fd, parent, leaf, expected
+        else:
+            current = core.discovered_source(fd, parent, leaf, relative=name)
+            if getattr(current,'opaque',None)!=getattr(expected,'opaque',None):
+                raise core.FinixError('CUSTODY_CHANGED')
+            with core.validated_source(fd, parent, leaf, current):
+                yield fd, parent, leaf, current
+
+
+def capture_identity(fd, parent, leaf):
+    """Path and handle must agree during copy; never follow a replacement link."""
+    from . import core
+    import stat
+    observed = core.fingerprint(os.fstat(fd))
+    if not stat.S_ISREG(observed[2]):
+        raise core.FinixError('SOURCE_UNSAFE_DURING_CAPTURE')
+    if os.name != 'nt':
+        try:
+            current = core.fingerprint(os.stat(leaf, dir_fd=parent, follow_symlinks=False))
+        except FileNotFoundError:
+            raise core.FinixError('SOURCE_REPLACED_DURING_CAPTURE') from None
+        if current[:3] != observed[:3]:
+            raise core.FinixError('SOURCE_REPLACED_DURING_CAPTURE')
+    return observed
+
+
+@contextmanager
+def ordinary_payload(fd, parent, leaf, sqlite_temp_dir=None, cancel=None, *, memory_limit=CAPTURE_MEMORY_BYTES, opaque=None):
+    """Capture once, then hash/archive only the private captured copy.
+
+    Large ordinary files use only the configured owner-private SQLite staging
+    area. No OS-temp plaintext fallback. Retry in-place metadata/content races
+    a bounded number of times; identity/type substitution is never retried.
+    """
+    from . import core
+    from contextlib import ExitStack
+    disk = os.fstat(fd).st_size > memory_limit
+    for attempt in range(CAPTURE_ATTEMPTS):
+        check_cancel(cancel)
+        with ExitStack() as stack:
+            before = capture_identity(fd, parent, leaf)
+            if disk:
+                if sqlite_temp_dir is None:
+                    raise core.FinixError('NEED_SQLITE_TEMP_DIRECTORY')
+                stage = stack.enter_context(sqlite_stage(sqlite_temp_dir, before[3]))
+                path = stage / 'ordinary.snapshot'
+                target = os.open(path, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+                stream = stack.enter_context(os.fdopen(target, 'w+b'))
+            else:
+                stream = stack.enter_context(io.BytesIO())
+            os.lseek(fd, 0, os.SEEK_SET)
+            size = 0
+            raw_digest = hashlib.sha256() if opaque else None
+            header = b''
+            overflow = False
+            remaining = before[3] + 1  # Bound even a writer that appends forever.
+            while remaining:
+                check_cancel(cancel)
+                chunk = os.read(fd, min(CHUNK, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                if not size:
+                    header = chunk[:16]
+                size += len(chunk)
+                if raw_digest is not None: raw_digest.update(chunk)
+                if not disk and size > memory_limit:
+                    disk, overflow = True, True
+                    break
+                stream.write(chunk)
+            after = capture_identity(fd, parent, leaf)
+            if after[:3] != before[:3]:
+                raise core.FinixError('SOURCE_REPLACED_DURING_CAPTURE')
+            if header == b'SQLite format 3\x00' or core.peek(fd, 16) == b'SQLite format 3\x00':
+                raise core.FinixError('SOURCE_CLASSIFICATION_CHANGED_DURING_CAPTURE')
+            if not overflow and before == after and size == before[3]:
+                if opaque is not None and (size!=opaque['size'] or raw_digest.hexdigest()!=opaque['sha256']):
+                    raise core.FinixError('CUSTODY_CHANGED')
+                stream.seek(0)
+                yield stream, size
+                return  # Later source generations cannot invalidate captured bytes.
+    if opaque is not None:
+        raise core.FinixError('CUSTODY_CHANGED')
+    raise core.SourceCaptureError('SOURCE_UNSTABLE_CAPTURE')
+
+
+@contextmanager
+def file_payload(rootfd, name, expected, sqlite_temp_dir=None, cancel=None, progress=None):
+    """Release ordinary source handles as soon as the private copy is complete."""
+    from contextlib import ExitStack
+    with ExitStack() as copies:
+        with captured_source(rootfd, name, expected) as (fd, parent, leaf, captured):
+            if captured.sqlite:
+                with sqlite_payload(fd, parent, leaf, sqlite_temp_dir, cancel, progress) as (stream, size):
+                    yield stream, size, captured
+                return
+            options={'opaque':captured.opaque} if getattr(captured,'opaque',None) is not None else {}
+            stream, size = copies.enter_context(ordinary_payload(fd, parent, leaf, sqlite_temp_dir, cancel, **options))
+        # The copied stream no longer depends on the original source path/fd.
+        yield stream, size, captured
+
+
+def _source_namespace(rootfd):
+    """Resolve the actual retained capture home through the installed SDK.
+
+    This is namespace metadata, never sender/principal authentication. Unknown
+    non-SDK sources remain readable archives but cannot authorize history rekey.
+    """
+    from . import core
+    try:
+        from hermes_constants import profile_name_for_home
+        from hermes_cli.profiles import get_profile_dir, validate_profile_name
+    except ImportError:
+        return None
+    if os.name == 'nt':
+        from .windows_native import canonical_directory
+        home, identity = canonical_directory(rootfd.path)
+        if identity != rootfd.identity():
+            raise core.FinixError('HISTORY_SOURCE_BINDING_REQUIRED')
+    else:
+        home = Path(os.readlink('/proc/self/fd/' + str(rootfd)))
+        info = os.fstat(rootfd)
+        identity = (info.st_dev, info.st_ino)
+    name = profile_name_for_home(home)
+    if name is None:
+        return None
+    try:
+        validate_profile_name(name)  # exact SDK result, never case repair
+        resolved = get_profile_dir(name)
+        if os.name == 'nt':
+            if canonical_directory(resolved)[1] != identity:
+                raise ValueError()
+        else:
+            fd = os.open(resolved, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                info = os.fstat(fd)
+                if (info.st_dev, info.st_ino) != identity:
+                    raise ValueError()
+            finally:
+                os.close(fd)
+    except (ValueError, OSError):
+        raise core.FinixError('HISTORY_SOURCE_BINDING_REQUIRED') from None
+    return name
+
+
+def _profile_stamp(namespace, files):
+    return {'version': 1, 'namespace': namespace,
+            'files_sha256': hashlib.sha256(json.dumps(files, sort_keys=True,
+                separators=(',', ':')).encode()).hexdigest()}
+
+
+def _verified_profile_stamp(manifest):
+    from . import core
+    stamp = manifest.get('source_profile')
+    if stamp is None:
+        return None  # frozen old manifest compatibility; not migration authority
+    if (not isinstance(stamp, dict) or set(stamp) != {'version', 'namespace', 'files_sha256'}
+            or type(stamp['version']) is not int or stamp['version'] != 1
+            or not isinstance(stamp['namespace'], str)
+            or not core.re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', stamp['namespace'])
+            or stamp != _profile_stamp(stamp['namespace'], manifest['files'])):
+        raise core.FinixError('HISTORY_SOURCE_BINDING_REQUIRED')
+    return dict(stamp)
+
+
 def write_archive(rootfd, output, sqlite_temp_dir=None, cancel=None, progress=None, *, extra_fds=()):
     from . import core
+    namespace = _source_namespace(rootfd)
+    from contextlib import ExitStack
     from .extra_sources import guard_tree
     from functools import partial
     guards = {fd: partial(guard_tree, root_name=Path(item['path']).name) for item, fd in extra_fds}
@@ -217,45 +452,66 @@ def write_archive(rootfd, output, sqlite_temp_dir=None, cancel=None, progress=No
 
     roots = [('', rootfd), *[('external/' + item['name'] + '/', fd) for item, fd in extra_fds]]
     inventories = [(prefix, fd, scan_source(fd)) for prefix, fd in roots]
-    records, checks = {}, []
+    records, checks, omitted = {}, [], []
+    completed_bytes = completed_files = 0
+    # Discovery sizes may change during stable per-file capture (notably SQLite
+    # and normalized cron); do not advertise a misleading fixed byte total.
+    def snapshot_progress(event):
+        if progress is None: return
+        if event.get('phase') == 'snapshot':
+            progress({'phase': 'snapshot', 'completed_bytes': completed_bytes + event.get('bytes', 0),
+                      'bytes': completed_bytes + event.get('bytes', 0),
+                      'completed_files': completed_files, 'total_bytes': None,
+                      'total_files': None, 'percent': None})
+        else:
+            progress(event)
+
+    if progress is not None:
+        progress({'phase': 'snapshot', 'bytes': 0, 'completed_bytes': 0, 'completed_files': 0,
+                  'total_bytes': None, 'total_files': None, 'percent': None})
     with gzip.GzipFile(fileobj=output, mode='wb', filename='', mtime=0, compresslevel=1) as zipped:
         with tarfile.open(fileobj=zipped, mode='w|', format=tarfile.GNU_FORMAT) as archive:
             for prefix, rootfd, inventory in inventories:
-                companions = set()
+                companions, databases = set(), set()
                 for name, expected in inventory.items():
                     check_cancel(cancel)
                     if name in companions:
                         continue
-                    with core.source_file(rootfd, name, expected) as (fd, parent, leaf):
-                        if os.pread(fd, 16, 0) == b'SQLite format 3\x00':
+                    with ExitStack() as payload:
+                        try:
+                            stream, size, captured = payload.enter_context(file_payload(
+                                rootfd, name, expected, sqlite_temp_dir, cancel, progress))
+                        except core.SourceCaptureError as exc:
+                            omitted.append({'path': (('profile/' if not prefix else prefix) + name)
+                                            if extra_fds else name, 'code': exc.code})
+                            continue
+                        if captured.sqlite:
+                            inventory[name] = captured
+                            databases.add(name)
                             companions.update(name + s for s in ('-wal', '-shm', '-journal'))
-                            with sqlite_payload(fd, parent, leaf, sqlite_temp_dir, cancel, progress) as (stream, size):
-                                _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, stream, size, records, cancel, progress, raw=bool(extra_fds))
-                        elif prefix == '' and name == 'cron/jobs.json':
-                            data = core.normalize_cron(core.read_regular(fd, CRON_BYTES))
+                        if not captured.sqlite and prefix == '' and name == 'cron/jobs.json':
+                            if size > CRON_BYTES:
+                                raise core.FinixError('Cron JSON exceeds metadata limit')
+                            data = core.normalize_cron(stream.read(CRON_BYTES + 1))
                             if len(data) > CRON_BYTES:
                                 raise core.FinixError('Cron JSON exceeds metadata limit')
-                            _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, io.BytesIO(data), len(data), records, cancel, progress, raw=bool(extra_fds))
+                            size = len(data)
+                            _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, io.BytesIO(data), size, records, cancel, snapshot_progress, raw=bool(extra_fds))
                         else:
-                            with os.fdopen(os.dup(fd), 'rb') as stream:
-                                _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, stream, expected[3], records, cancel, progress, raw=bool(extra_fds))
-                final = scan_source(rootfd)
-                for name in companions & inventory.keys() & final.keys():
-                    if inventory[name][:3] != final[name][:3]:
-                        raise core.FinixError('SQLite companion replaced during snapshot')
-                if ({n: s for n, s in inventory.items() if n not in companions}
-                        != {n: s for n, s in final.items() if n not in companions}):
-                    raise core.FinixError('Profile changed during snapshot; retry when quiescent')
-                checks.append((rootfd, inventory, companions))
-            for fd, inventory, companions in checks:
-                final = scan_source(fd)
-                for name in companions & inventory.keys() & final.keys():
-                    if inventory[name][:3] != final[name][:3]:
-                        raise core.FinixError('SQLite companion replaced during snapshot')
-                if ({n: s for n, s in inventory.items() if n not in companions}
-                        != {n: s for n, s in final.items() if n not in companions}):
-                    raise core.FinixError('Source changed during multi-root snapshot')
-            manifest = {'format': 'finix-3' if extra_fds else 'finix-2', 'files': records}
+                            _add_payload(archive, (('profile/' if not prefix else prefix) + name) if extra_fds else name, stream, size, records, cancel, snapshot_progress, raw=bool(extra_fds))
+                        completed_bytes += size
+                        completed_files += 1
+                        snapshot_progress({'phase': 'snapshot', 'bytes': 0})
+                core.check_inventory(inventory, inventory, companions, databases, rootfd)
+                checks.append((rootfd, inventory, companions, databases))
+            for fd, inventory, companions, databases in checks:
+                core.check_inventory(inventory, inventory, companions, databases, fd)
+            manifest = {'format': 'finix-3' if extra_fds else 'finix-2', 'files': records,
+                        'complete': not omitted, 'omitted': omitted}
+            if namespace is not None:
+                if _source_namespace(rootfd) != namespace:
+                    raise core.FinixError('HISTORY_SOURCE_BINDING_REQUIRED')
+                manifest['source_profile'] = _profile_stamp(namespace, records)
             if extra_fds:
                 manifest['extra_sources'] = [item for item, fd in extra_fds]
             encoded = json.dumps(manifest, sort_keys=True).encode()
@@ -264,12 +520,18 @@ def write_archive(rootfd, output, sqlite_temp_dir=None, cancel=None, progress=No
             info = tarfile.TarInfo('manifest.json')
             info.size, info.mode = len(encoded), 0o600
             archive.addfile(info, io.BytesIO(encoded))
+    return {'complete': not omitted, 'omitted_count': len(omitted)}
 
 
 class Pipe:
     """Cancellable bounded pipe I/O, with no fixed short wall-clock deadline."""
     def __init__(self, stream, cancel):
         self.stream, self.cancel = stream, cancel
+        self.native = None
+        if os.name == 'nt':
+            from .windows_native import Pipe as NativePipe
+            self.native = NativePipe(stream, cancel)
+            return
         os.set_blocking(stream.fileno(), False)
 
     def _ready(self, event):
@@ -281,6 +543,8 @@ class Pipe:
                     return
 
     def write(self, data):
+        if self.native is not None:
+            return self.native.write(data)
         view = memoryview(data)
         count = len(view)
         while view:
@@ -293,6 +557,8 @@ class Pipe:
         return count
 
     def read(self, size=-1):
+        if self.native is not None:
+            return self.native.read(size)
         from .core import FinixError
         if size < 0:
             raise FinixError('Unbounded pipe read rejected')
@@ -323,9 +589,13 @@ def _wait(process, cancel):
 
 
 def _cleanup(process):
-    if process.poll() is None:
-        process.kill()
-    process.wait()
+    if os.name == 'nt':
+        from .windows_native import cleanup
+        cleanup(process)
+    else:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
     for stream in (process.stdin, process.stdout):
         if stream is not None:
             stream.close()
@@ -334,13 +604,21 @@ def _cleanup(process):
 def write_encrypted_snapshot(rootfd, recipient, output, sqlite_temp_dir=None, cancel=None, progress=None, *, extra_fds=()):
     from .core import FinixError
     try:
-        process = subprocess.Popen(['age', '-r', recipient], stdin=subprocess.PIPE,
-                                   stdout=output, stderr=subprocess.DEVNULL)
+        if os.name == 'nt':
+            from .windows_native import popen
+        else:
+            popen = subprocess.Popen
+        try:
+            process = popen(['age', '-r', recipient], stdin=subprocess.PIPE,
+                                       stdout=output, stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            raise FinixError('DEPENDENCY_UNAVAILABLE') from None
         try:
             assert process.stdin is not None
-            write_archive(rootfd, Pipe(process.stdin, cancel), sqlite_temp_dir, cancel, progress, extra_fds=extra_fds)
+            outcome = write_archive(rootfd, Pipe(process.stdin, cancel), sqlite_temp_dir, cancel, progress, extra_fds=extra_fds)
             process.stdin.close()
             _wait(process, cancel)
+            return outcome
         finally:
             _cleanup(process)
     except OSError:
@@ -349,6 +627,11 @@ def write_encrypted_snapshot(rootfd, recipient, output, sqlite_temp_dir=None, ca
 
 @contextmanager
 def decrypted_stream(path, identity, cancel=None):
+    if os.name == 'nt':
+        from .windows_native import decrypted_stream as native_decrypt
+        with native_decrypt(path, identity, cancel) as stream:
+            yield stream
+        return
     from . import core
     path, identity = core.checked_path(path), core.checked_path(identity)
     cipherfd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -361,13 +644,17 @@ def decrypted_stream(path, identity, cancel=None):
             data = core.read_regular(key, 65536)
         finally:
             os.close(key)
-        lines = [line.strip() for line in data.decode('ascii').splitlines()
+        try:
+            text = data.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            raise core.FinixError('INVALID_IDENTITY') from None
+        lines = [line.strip() for line in text.splitlines()
                  if line.strip() and not line.lstrip().startswith('#')]
         if (len(lines) != 1 or not core.re.fullmatch(
                 r'AGE-SECRET-KEY-1[023456789ACDEFGHJKLMNPQRSTUVWXYZ]{58}', lines[0])):
             raise core.FinixError('Only one native age identity is supported; no plugins')
         keyfd = os.memfd_create('finix-identity', os.MFD_CLOEXEC)
-        os.write(keyfd, data)
+        os.write(keyfd, (lines[0] + '\n').encode('ascii'))
         os.lseek(keyfd, 0, os.SEEK_SET)
         process = subprocess.Popen(['age', '-d', '-i', f'/proc/self/fd/{keyfd}'],
             stdin=cipherfd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, pass_fds=(keyfd,))
@@ -429,6 +716,9 @@ def _headers(stream, cancel):
 
 
 def _restore_file(stage, name, stream, size, cancel, progress):
+    if os.name == 'nt':
+        from .windows_native import restore_file
+        return restore_file(stage, name, stream, size, cancel, progress)
     directory = stage
     for component in PurePosixPath(name).parts[:-1]:
         directory = directory / component
@@ -474,12 +764,23 @@ def _pause_cron(stage):
 def restore_stream(stream, stage, cancel=None, progress=None):
     from . import core
     entries, manifest, names = {}, None, set()
+    native_names = {}
     try:
         with gzip.GzipFile(fileobj=stream, mode='rb') as zipped:
             for info in _headers(zipped, cancel):
                 name = info.name
+                if os.name == 'nt':
+                    from .windows_native import admit_name
+                    admit_name(name)
+                    parts = name.split('/')
+                    for index in range(1, len(parts) + 1):
+                        prefix = '/'.join(parts[:index])
+                        key = prefix.upper()
+                        if key in native_names and native_names[key] != prefix:
+                            raise core.FinixError('Windows archive path alias collision')
+                        native_names[key] = prefix
                 candidate = name.removeprefix('profile/')
-                if (name in names or len(names) >= core.MAX_FILES + 1
+                if (name in names
                         or not (name == 'manifest.json' or core.safe_name(candidate))):
                     raise core.FinixError('Unsafe or duplicate archive entry')
                 names.add(name)
@@ -511,13 +812,35 @@ def restore_stream(stream, stage, cancel=None, progress=None):
         if (not isinstance(manifest.get('files'), dict) or manifest['files'] != records
                 or any(not admit(n) for n in records)):
             raise core.FinixError('Archive manifest, checksum or scope mismatch')
+        completion = core.validate_completion(manifest, admit)
+        stamp = _verified_profile_stamp(manifest)
+        if stamp is not None:
+            completion['source_profile'] = stamp
+            history_key = 'profile/state.db' if version == 'finix-3' else 'state.db'
+            completion['history_payload'] = records.get(history_key)
         for name in records:
             if any(str(parent) in records for parent in PurePosixPath(name).parents):
                 raise core.FinixError('Archive file/directory conflict')
         payload = stage / 'profile' if version == 'finix-2' else stage
         payload.mkdir(mode=0o700, exist_ok=True)
         _pause_cron(payload / 'profile' if version == 'finix-3' else payload)
-        return payload, len(records), 'bundle' if version == 'finix-3' else 'profile'
+        if not completion['complete']:
+            # A fresh report name cannot overwrite any archived file/directory.
+            import uuid
+            while True:
+                report_name = 'finix-omissions-' + uuid.uuid4().hex + '.json'
+                try:
+                    with core.regular_output(payload / report_name) as fd:
+                        data = json.dumps({'format': version, **completion, 'omitted': manifest['omitted']}, indent=2).encode()
+                        with os.fdopen(os.dup(fd), 'wb') as report_file:
+                            report_file.write(data)
+                            report_file.flush()
+                            os.fsync(report_file.fileno())
+                    break
+                except FileExistsError:
+                    continue
+            completion['omission_report'] = report_name
+        return payload, len(records), 'bundle' if version == 'finix-3' else 'profile', completion
     except (ValueError, KeyError, TypeError, AttributeError, RecursionError,
             tarfile.TarError, OSError, EOFError, zlib.error):
         raise core.FinixError('Invalid or incomplete archive; check free restore space') from None

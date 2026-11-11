@@ -28,3 +28,7 @@ rclone.conf
 /finix-data/
 /backups/
 /logs/
+/.linux-test-bin/
+/.linux-test-temp/
+/release-work/
+/release-output/

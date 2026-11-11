@@ -11,7 +11,10 @@ from finix import core
 
 class SQLiteUriPathTests(unittest.TestCase):
     def test_reserved_names_roundtrip_without_source_creation(self):
-        for component in ('store?prod', 'store#prod', 'store%23prod', 'store%3Fprod'):
+        # '?' cannot be a native Windows filesystem name; encoded '?' still
+        # exercises URI escaping there. Windows invalid-name tests cover rejection.
+        components = ('store#prod', 'store%23prod', 'store%3Fprod') if os.name=='nt' else ('store?prod', 'store#prod', 'store%23prod', 'store%3Fprod')
+        for component in components:
             for in_directory in (False, True):
                 with self.subTest(component=component, in_directory=in_directory):
                     with tempfile.TemporaryDirectory() as directory:
@@ -28,11 +31,8 @@ class SQLiteUriPathTests(unittest.TestCase):
                             db.execute('insert into fixture values (?)', ('committed WAL marker',))
                             db.commit()
                             before = {p.relative_to(source) for p in source.rglob('*')}
-                            descriptor = os.open(source, os.O_RDONLY | os.O_DIRECTORY)
-                            try:
+                            with core.locked(source) as descriptor:
                                 archive = core.make_archive(descriptor)
-                            finally:
-                                os.close(descriptor)
                             self.assertEqual({p.relative_to(source) for p in source.rglob('*')}, before)
                             entries = core.validate_archive(archive)
                             restored = root / 'snapshot.sqlite'
@@ -42,7 +42,8 @@ class SQLiteUriPathTests(unittest.TestCase):
                                                  [('committed WAL marker',)])
                             key = root / 'recovery.key'
                             recipient = core.keygen(key)
-                            result = core.backup(source, root / 'copies', root / 'state', recipient)
+                            result = core.backup(source, root / 'copies', root / 'state', recipient,
+                                sqlite_temp_dir=core.private_dir(source/'cache/finix/sqlite-temp'))
                             core.restore(result['path'], key, root / 'restored')
                             with closing(sqlite3.connect(root / 'restored' / relative)) as connection:
                                 self.assertEqual(connection.execute('select value from fixture').fetchall(),

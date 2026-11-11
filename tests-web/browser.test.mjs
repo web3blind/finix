@@ -5,13 +5,14 @@ import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { generateKeyPair } from '../web/keys.mjs';
 import { Decrypter } from 'age-encryption';
 
 const htmlURL = new URL('../dist/keygen.html', import.meta.url).href;
-const launch = () => chromium.launch({ executablePath: '/usr/bin/chromium', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-background-networking'] });
+const launch = () => chromium.launch({ executablePath: process.env.FINIX_BROWSER ?? '/usr/bin/chromium', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-background-networking'] });
 const age = (args, input) => {
-  try { return execFileSync('/usr/bin/age', args, { input, stdio: ['pipe', 'pipe', 'pipe'] }); }
+  try { return execFileSync(process.env.FINIX_AGE ?? (process.platform==='win32'?'age':'/usr/bin/age'), args, { input, stdio: ['pipe', 'pipe', 'pipe'] }); }
   catch { throw new Error('age browser interoperability failed (details suppressed)'); }
 };
 
@@ -45,7 +46,7 @@ test('standalone Chromium UI: save, copy, import, reset, no secret DOM/storage/l
     const saved = await readFile(keyPath, 'utf8');
     const secret = saved.split('\n').find(line => line.startsWith('AGE-SECRET-KEY-'));
     assert.equal(typeof secret === 'string', true);
-    const derived = execFileSync('/usr/bin/age-keygen', ['-y', keyPath], { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    const derived = execFileSync(process.env.FINIX_AGE_KEYGEN ?? (process.platform==='win32'?'age-keygen':'/usr/bin/age-keygen'), ['-y', keyPath], { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
     assert.equal(derived === recipient, true);
     // A fixture encrypted by the actual age executable decrypts with the UI-generated key in Node.
     const fixture = age(['-r', recipient], 'browser generated key -> age -> Node');
@@ -106,7 +107,7 @@ test('real Chromium crypto decrypts age CLI fixture, creates ciphertext age CLI 
         async decrypt(bytes) { const d = new Decrypter(); d.addIdentity(pair.identity); return d.decrypt(new Uint8Array(bytes), 'text'); },
         async encrypt(text) { const e = new Encrypter(); e.addRecipient(pair.recipient); return Array.from(await e.encrypt(text)); },
         download() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([pair.identity+'\\n'])); a.download='key.txt'; a.click(); }
-      };`, resolveDir: new URL('../', import.meta.url).pathname
+      };`, resolveDir: fileURLToPath(new URL('../', import.meta.url))
     }, bundle: true, write: false, platform: 'browser', format: 'iife' });
     const context = await browser.newContext({ acceptDownloads: true }); const page = await context.newPage();
     await page.goto(htmlURL);

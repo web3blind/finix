@@ -2,6 +2,7 @@
   "name": "finix-offline-keygen",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build:web": "node scripts/build-web.mjs",

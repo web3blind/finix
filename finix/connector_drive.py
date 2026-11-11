@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 from urllib.parse import urlsplit
 
-from . import core
+from . import core, cloud_files
 
 MAX_CIPHER = 20 * 1024 * 1024  # gateway wire.CONNECTOR_FILE_MAX_BYTES
 MAX_RECORDS = 1000
@@ -211,29 +211,23 @@ class ManagedDrive:
             self.metadata(identifier, descriptor)
             return self.read_media(identifier, descriptor)
 
-    def upload(self, path, state, keep=0):
+    def upload(self, path, state, keep=0, *, completion=None):
         import uuid
         if type(keep) is not int or not 0 <= keep <= MAX_RECORDS:
             raise core.FinixError('Invalid managed retention')
         path, state = core.checked_path(path), core.private_dir(state)
         with self.session(), core.locked(state):
             self.discover()  # no reading ciphertext/staging on unsupported contract
-            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            try:
+            with core.regular_input(path) as fd:
                 data = core.read_regular(fd, MAX_CIPHER)
-            finally:
-                os.close(fd)
             if not data.startswith(b'age-encryption.org/v1\n'):
                 raise core.FinixError('Only native age ciphertext may be uploaded')
             binding = {'owner': self.owner, 'account': self.account, 'alias': self.alias, 'folder': self.folder}
             journal_path = state / 'connector.json'
             journal = dict(binding, records=[])
             if journal_path.exists():
-                fd = os.open(journal_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                try:
+                with core.regular_input(journal_path) as fd:
                     journal = json.loads(core.read_regular(fd, 1024 * 1024))
-                finally:
-                    os.close(fd)
                 if any(journal.get(k) != v for k, v in binding.items()):
                     raise core.FinixError('Managed ledger belongs to a different account/profile/folder')
             if not isinstance(journal.get('records'), list) or len(journal['records']) >= MAX_RECORDS:
@@ -248,11 +242,12 @@ class ManagedDrive:
             identifier = obj['id']
             self.metadata(identifier, descriptor)
             self.read_media(identifier, descriptor)
-            record = dict(descriptor, id=identifier)
+            record = dict(descriptor, id=identifier,
+                          completion=cloud_files.completion_record(descriptor, completion))
             journal['records'].append(record)
             core.atomic_json(journal_path, journal)
             if keep:
-                for old in list(journal['records'][:-keep]):
+                for old in cloud_files.retention_candidates(journal['records'], keep):
                     previous = self.checked_descriptor(old)
                     obj = self.execute('metadata', {'id': old['id']})
                     if obj is not None:

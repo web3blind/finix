@@ -12,9 +12,11 @@ import importlib
 from pathlib import Path
 import sys
 import threading
+import sqlite3
 
 _setup_lock = threading.Lock()
 _setup_running = set()
+_setup_errors = {}
 
 _package = __name__ + '_finix'
 _spec = importlib.util.spec_from_file_location(
@@ -25,13 +27,52 @@ sys.modules[_package] = _module
 _spec.loader.exec_module(_module)
 current_profile = importlib.import_module(_package + '.integration').current_profile
 FinixError = importlib.import_module(_package + '.core').FinixError
+setup_error_code = importlib.import_module(_package + '.setup_errors').setup_error_code
 connections = importlib.import_module(_package + '.connections').connections
+_backup_jobs = importlib.import_module(_package + '.backup_jobs').BackupJobs()
 
 
 def setup_flow(profile):
     return importlib.import_module(_package + '.setup_flow').SetupFlow(profile)
 
 router = APIRouter()
+# Shares the host's existing authentication and authoritative profile context.
+_recovery_api = importlib.import_module(_package + '.recovery_api')
+_recovery_router = _recovery_api.create_router(lambda: current_profile())
+router.include_router(_recovery_router)
+
+# Bind the same private package used by Connections, not a fresh global import.
+# The marker describes loaded code, never current on-disk bytes.
+if sys.platform == 'win32':
+    _tools = importlib.import_module(_package + '.windows_native')
+    _tool_code_version = _tools.TOOL_DISCOVERY_VERSION
+else:
+    _tools = None
+    _tool_code_version = 'canonical-tools-v1'
+
+
+@router.get('/readiness')
+def readiness(response: Response):
+    """Public-safe diagnostics under the host's existing auth/profile gate.
+
+    Presence/trust only: no profile config, credentials, spawning or network.
+    Never return paths, environment values or exception messages.
+    """
+    import shutil
+    response.headers['Cache-Control'] = 'no-store'
+    tools = {}
+    for name in ('age', 'age-keygen', 'rclone'):
+        try:
+            available = bool(_tools.find_tool(name) if _tools else shutil.which(name))
+            code = 'READY' if available else 'TOOL_MISSING'
+        except FileNotFoundError:
+            available, code = False, 'TOOL_MISSING'
+        except OSError:
+            available, code = False, 'UNTRUSTED_BINARY'
+        except (ValueError, RuntimeError):
+            available, code = False, 'TOOL_CHECK_FAILED'
+        tools[name] = {'available': available, 'code': code}
+    return {'platform': sys.platform, 'code_version': _tool_code_version, 'tools': tools}
 
 
 class Recipient(BaseModel):
@@ -46,6 +87,25 @@ def keygen_html():
     return FileResponse(Path(__file__).parents[1] / 'dist' / 'keygen.html',
                         media_type='text/html', filename='finix-keygen.html',
                         headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+@router.get('/ui-language')
+def ui_language(response: Response):
+    """Closed, request-profile-scoped display preference; never return config.
+
+    The installed host's read-only loader resolves the authenticated ContextVar
+    home and keys its cache by that home. Do not cache this field process-wide.
+    """
+    response.headers['Cache-Control'] = 'no-store'
+    language = None
+    try:
+        from hermes_cli.config import load_config_readonly
+        config = load_config_readonly()
+        display = config.get('display') if isinstance(config, dict) else None
+        language = display.get('language') if isinstance(display, dict) else None
+    except Exception:
+        pass  # Closed default; never echo config values, paths or exceptions.
+    return {'ui_language': 'en' if isinstance(language, str) and language in ('en', 'en-US', 'en-GB') else 'ru'}
 
 
 @router.get('/status')
@@ -103,6 +163,37 @@ class SetupSchedule(SetupAction):
     period: str
 
 
+class BackupStart(SetupAction):
+    request_id: str
+
+
+@router.get('/backup/jobs/current')
+def backup_current(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        return _backup_jobs.current(current_profile())
+    except (FinixError, OSError, ValueError, RuntimeError):
+        raise HTTPException(status_code=409, detail='BACKUP_STATUS_UNAVAILABLE') from None
+
+
+@router.post('/backup/jobs', status_code=202)
+def backup_start(body: BackupStart, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        profile = current_profile()
+        if profile.profile_id != body.profile_id:
+            raise HTTPException(status_code=409, detail='PROFILE_CHANGED')
+        if profile.config().get('storage') == 'local':
+            raise HTTPException(status_code=409, detail='CLOUD_SELECTION_REQUIRED')
+        return _backup_jobs.start(profile, body.profile_id, body.request_id)
+    except FinixError as exc:
+        safe = {'PROFILE_CHANGED', 'INVALID_REQUEST_ID', 'JOB_BUSY', 'JOB_CAPACITY', 'JOB_HISTORY_FULL'}
+        code = str(exc) if str(exc) in safe else 'BACKUP_START_FAILED'
+        raise HTTPException(status_code=409, detail=code) from None
+    except (OSError, ValueError, RuntimeError):
+        raise HTTPException(status_code=409, detail='BACKUP_START_FAILED') from None
+
+
 @router.get('/setup')
 def setup_view(response: Response):
     response.headers['Cache-Control'] = 'no-store'
@@ -111,6 +202,7 @@ def setup_view(response: Response):
         result = setup_flow(profile).view()
         with _setup_lock:
             result['check_running'] = profile.profile_id in _setup_running
+            result['last_error_code'] = _setup_errors.get(profile.profile_id)
         return result
     except (FinixError, OSError, ValueError, RuntimeError):
         raise HTTPException(status_code=409, detail='SETUP_STATUS_FAILED') from None
@@ -134,10 +226,14 @@ def setup_check(body: SetupAction, response: Response):
         if body.profile_id in _setup_running:
             raise HTTPException(status_code=409, detail='SETUP_CHECK_RUNNING')
         _setup_running.add(body.profile_id)
+        _setup_errors.pop(body.profile_id, None)
     try:
         return flow.check_and_run()
-    except (FinixError, OSError, ValueError, RuntimeError):
-        raise HTTPException(status_code=409, detail='SETUP_CHECK_FAILED') from None
+    except (FinixError, OSError, ValueError, RuntimeError, sqlite3.Error) as exc:
+        code = setup_error_code(exc)
+        with _setup_lock:
+            _setup_errors[body.profile_id] = code
+        raise HTTPException(status_code=409, detail=code) from None
     finally:
         with _setup_lock:
             _setup_running.discard(body.profile_id)

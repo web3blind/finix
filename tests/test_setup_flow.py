@@ -181,7 +181,9 @@ class SetupFlowTests(unittest.TestCase):
         from unittest.mock import Mock
         drive = Mock()
         drive.create_folder.return_value = 'synthetic-folder'
-        def upload(path, folder, keep):
+        def upload(path, folder, keep, *, completion):
+            self.assertEqual(completion['sha256'], core.digest_file(path))
+            self.assertIs(completion['complete'], True)
             self.assertEqual(folder, 'synthetic-folder')
             self.assertTrue(Path(path).is_file())
             self.assertGreater(Path(path).stat().st_size, 0)
@@ -193,16 +195,22 @@ class SetupFlowTests(unittest.TestCase):
         self.assertTrue(result['proof']['cloud_readback'])
         drive.upload.assert_called_once()
 
-    def test_credential_metadata_reconnect_invalidates_binding(self):
+    def test_refresh_is_stable_explicit_connection_change_invalidates_binding(self):
         self.register_key()
-        credential = self.base / 'rclone.conf'
-        credential.write_text('synthetic, not a credential')
-        credential.chmod(0o600)
-        for key, value in (('rclone_config', str(credential)), ('rclone_remote', 'test'), ('rclone_root', 'finix')):
-            self.profile.configure(key, value)
-        self.profile.configure('storage', 'rclone')
+        credential = core.private_dir(self.base / 'credentials') / 'rclone.conf'
+        with core.regular_output(credential) as fd:
+            os.write(fd, b'synthetic, not a credential')
+        # This test exercises metadata binding, not provider discovery. Seed the
+        # synthetic settings directly: configure(storage) calls status/rclone.
+        cfg = self.profile.config()
+        cfg.update(storage='rclone', rclone_config=str(credential),
+                   rclone_remote='test', rclone_root='finix')
+        core.atomic_json(self.profile.root / 'settings.json', cfg)
         before = self.flow._binding()
         credential.write_text('different synthetic connection')
+        self.assertEqual(before, self.flow._binding())
+        cfg['rclone_remote'] = 'explicit-different-connection'
+        core.atomic_json(self.profile.root / 'settings.json', cfg)
         self.assertNotEqual(before, self.flow._binding())
 
 

@@ -1,0 +1,75 @@
+{
+  "synthetic_fixture": true,
+  "provenance": "Captured from real ASGI/age/SQLite/installed-host test; NOT live user data",
+  "capabilities": {
+    "code_version": "recovery-v1",
+    "profile_id": "b3ed8ab1c3cdab16f7aa6ec8ec08c8c8fd3057b8989702782c5cb2a824f2fb35",
+    "local_only": true,
+    "local_request": true,
+    "destination_policy": "same_volume_only",
+    "same_volume_only": true,
+    "destination_action": "Choose an empty folder on the same volume as the local profile.",
+    "max_key_bytes": 16384,
+    "source_limits": {
+      "drive": "committed_journal_required_no_cloud_scans"
+    },
+    "supported_sources": [
+      "local",
+      "rclone",
+      "workspace",
+      "drive",
+      "connector-drive"
+    ]
+  },
+  "catalog": {
+    "profile_id": "b3ed8ab1c3cdab16f7aa6ec8ec08c8c8fd3057b8989702782c5cb2a824f2fb35",
+    "items": [
+      {
+        "id": "c1f3741553fe49d0f627812763df0ab595ab1104b37c1c9f0c3e9acc4d9184d4",
+        "size": 1124,
+        "sha256": "9c9c87922c2097fa2c65db22e5a3b849f76e9ce61f0ae5f9f1e2907f1347f9fb",
+        "complete": true,
+        "label": "Encrypted backup",
+        "source": "local",
+        "omitted_count": 0
+      }
+    ]
+  },
+  "prepare": {
+    "id": "31ba9ef62c934a1197ac0355b434c619",
+    "profile_id": "b3ed8ab1c3cdab16f7aa6ec8ec08c8c8fd3057b8989702782c5cb2a824f2fb35",
+    "state": "awaiting_key",
+    "status": "awaiting_key",
+    "phase": "awaiting_key",
+    "progress": 0,
+    "bytes": 0,
+    "error": null,
+    "code": null,
+    "complete": null,
+    "omitted_count": null,
+    "can_import": false,
+    "extras_policy": "separate_manual_import_only"
+  },
+  "status": {
+    "status": "succeeded",
+    "state": "succeeded",
+    "phase": "complete",
+    "bytes": 8192,
+    "progress": 100,
+    "error": null,
+    "code": null,
+    "complete": true,
+    "omitted_count": 0,
+    "can_import": true,
+    "extras_policy": "separate_manual_import_only",
+    "id": "31ba9ef62c934a1197ac0355b434c619",
+    "profile_id": "b3ed8ab1c3cdab16f7aa6ec8ec08c8c8fd3057b8989702782c5cb2a824f2fb35"
+  },
+  "imported": {
+    "name": "restored",
+    "can_activate": true,
+    "complete": true,
+    "omitted_count": 0,
+    "parked": true
+  }
+}

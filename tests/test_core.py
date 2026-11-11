@@ -173,15 +173,20 @@ class CoreTests(unittest.TestCase):
                 core.restore(archive, self.key, target)
             self.assertFalse(target.exists())
 
-    def test_expansion_and_file_limits(self):
+    def test_expansion_and_source_depth_limits(self):
         compressed = gzip.compress(b' ' * 32768)
         with mock.patch.object(core, 'MAX_BYTES', 4096):
             with self.assertRaises(core.FinixError):
                 core.validate_archive(compressed)
-        with mock.patch.object(core, 'MAX_FILES', 1):
-            with self.assertRaises(core.FinixError):
-                self.backup()
+        nested = self.source
+        for _ in range(33):
+            nested = nested / 'd'
+            nested.mkdir()
+        with self.assertRaisesRegex(core.FinixError, 'Unsupported source path|depth'):
+            self.backup()
         self.assertEqual(list(self.store.glob('*.age')), [])
+        # Remove the deepest component to restore a permitted source depth.
+        nested.rmdir()
         # The old buffer helper limit must not constrain production streaming.
         with mock.patch.object(core, 'MAX_BYTES', 32):
             result = self.backup()
@@ -196,20 +201,17 @@ class CoreTests(unittest.TestCase):
         finally:
             os.close(fd)
 
-    def test_source_file_race_rejected(self):
-        original = core.read_regular
-        changed = False
-        def racing(fd, limit=core.MAX_BYTES):
-            nonlocal changed
-            data = original(fd, limit)
-            if not changed:
-                changed = True
-                (self.source / 'config.yaml').write_text('changed while backing up')
-            return data
-        with mock.patch.object(core, 'read_regular', side_effect=racing):
-            with self.assertRaises(core.FinixError):
-                self.backup()
-        self.assertEqual(list(self.store.glob('*.age')), [])
+    def test_source_changes_after_completed_capture_preserve_captured_generation(self):
+        original = streaming._add_payload
+        def racing(*args, **kwargs):
+            result = original(*args, **kwargs)
+            if args[1] == 'config.yaml':
+                (self.source / 'config.yaml').write_text('changed after capture')
+            return result
+        with mock.patch.object(streaming, '_add_payload', side_effect=racing):
+            result = self.backup()
+        files = core.validate_archive(core.decrypt(Path(result['path']), self.key))
+        self.assertEqual(files['config.yaml'], b'model: synthetic\n')
 
     def test_fifo_and_sqlite_companion_symlink_rejected(self):
         fifo = self.source / 'memories/fifo'

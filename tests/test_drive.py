@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 import httpx
 from finix.drive import MEDIA_CHUNK
+from finix import core
 
 
 class DriveTests(unittest.TestCase):
@@ -182,11 +183,15 @@ class DriveTests(unittest.TestCase):
         self.file = self.root / 'backup.age'
         self.file.write_bytes(b'age-encryption.org/v1\n' + bytes(range(256)) * 8193)  # binary transport fixture
 
+    def completion(self):
+        # Synthetic transport fixtures explicitly attest their known provenance.
+        return dict(sha256=core.digest_file(self.file), complete=True, omitted_count=0)
+
     def test_http_resumable_media_readback_and_scoped_retention(self):
-        first = self.drive.upload(self.file, self.folder)
+        first = self.drive.upload(self.file, self.folder, completion=self.completion())
         foreign = self.drive.create('foreign', 'pending', self.folder)
         self.objects[foreign]['appProperties']['owner'] = 'b' * 64
-        second = self.drive.upload(self.file, self.folder, keep=1)
+        second = self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertTrue(second['verified'])
         output = self.root / 'download.age'
         self.assertTrue(self.drive.download(self.folder, second['id'], output)['verified'])
@@ -204,11 +209,11 @@ class DriveTests(unittest.TestCase):
         self.assertNotIn('description', self.objects[second['id']])
 
     def test_corrupt_readback_never_commits_or_prunes(self):
-        first = self.drive.upload(self.file, self.folder)
+        first = self.drive.upload(self.file, self.folder, completion=self.completion())
         self.corrupt = True
         before = len(self.requests)
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder, keep=1)
+            self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertIn(first['id'], self.objects)
         self.assertFalse(any(r[0] in ('DELETE', 'PATCH') for r in self.requests[before:]))
         self.assertTrue(any(o['appProperties']['kind'] == 'pending' for o in self.objects.values()))
@@ -217,7 +222,7 @@ class DriveTests(unittest.TestCase):
         with self.file.open('wb') as stream:
             stream.write(b'age-encryption.org/v1\n')
             stream.truncate(2 * MEDIA_CHUNK + 317)
-        row = self.drive.upload(self.file, self.folder)
+        row = self.drive.upload(self.file, self.folder, completion=self.completion())
         output = self.root / 'chunks.age'
         self.drive.download(self.folder, row['id'], output)
         from finix import cloud_files
@@ -238,22 +243,22 @@ class DriveTests(unittest.TestCase):
             return response
         self.drive.request = wrong_range
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder, keep=1)
+            self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertFalse(any(r[0] in ('PATCH', 'DELETE') for r in self.requests))
 
     def test_commit_failure_never_prunes(self):
-        first = self.drive.upload(self.file, self.folder)
+        first = self.drive.upload(self.file, self.folder, completion=self.completion())
         self.patch_status = 403
         before = len(self.requests)
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder, keep=1)
+            self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertIn(first['id'], self.objects)
         self.assertFalse(any(r[0] == 'DELETE' for r in self.requests[before:]))
 
     def test_short_media_readback_is_rejected(self):
         self.corrupt = 'length'
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder, keep=1)
+            self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertFalse(any(r[0] in ('PATCH', 'DELETE') for r in self.requests))
 
     def test_descriptor_has_no_archive_size_cap(self):
@@ -279,7 +284,7 @@ class DriveTests(unittest.TestCase):
     def test_bounds_ownership_and_invalid_descriptor(self):
         self.objects[self.folder]['appProperties']['owner'] = 'other'
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder)
+            self.drive.upload(self.file, self.folder, completion=self.completion())
         with self.assertRaises(self.error_type):
             self.drive.descriptor({'appProperties': {'size': 'not-an-int'}})
 
@@ -299,17 +304,17 @@ class DriveTests(unittest.TestCase):
                 self.location = uri
                 before = len(self.requests)
                 with self.assertRaises(self.error_type) as caught:
-                    self.drive.upload(self.file, self.folder, keep=1)
+                    self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
                 self.assertNotIn('session-secret', str(caught.exception))
                 self.assertFalse(any(r[0] in ('PUT', 'PATCH', 'DELETE') for r in self.requests[before:]))
 
     def test_put_failures_and_redirects_do_not_commit_prune_or_follow(self):
-        first = self.drive.upload(self.file, self.folder)
+        first = self.drive.upload(self.file, self.folder, completion=self.completion())
         for status in (302, 307, 308, 403, 503):
             self.put_status = status
             before = len(self.requests)
             with self.assertRaises(self.error_type) as caught:
-                self.drive.upload(self.file, self.folder, keep=1)
+                self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
             self.assertNotIn('upload_id', str(caught.exception))
             requests = self.requests[before:]
             self.assertEqual(sum(r[0] == 'PUT' for r in requests), 1)
@@ -319,7 +324,7 @@ class DriveTests(unittest.TestCase):
     def test_wrong_completed_id_is_rejected_before_readback_or_prune(self):
         self.final_id = self.folder
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder, keep=1)
+            self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertFalse(any(r[0] in ('PATCH', 'DELETE') or 'alt=media' in r[1] for r in self.requests))
 
     def test_hostile_listing_cannot_delete_foreign_file(self):
@@ -327,33 +332,33 @@ class DriveTests(unittest.TestCase):
         self.objects[foreign]['appProperties']['owner'] = 'b' * 64
         self.hostile_listing = True
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder, keep=1)
+            self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertIn(foreign, self.objects)
         self.assertFalse(any(r[0] == 'DELETE' for r in self.requests))
 
     def test_current_snapshot_pinned_despite_stale_order(self):
-        first = self.drive.upload(self.file, self.folder)
+        first = self.drive.upload(self.file, self.folder, completion=self.completion())
         self.objects[first['id']]['createdTime'] = '9999999999'
-        second = self.drive.upload(self.file, self.folder, keep=1)
+        second = self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertNotIn(first['id'], self.objects)
         self.assertIn(second['id'], self.objects)
 
     def test_partial_retention_restarts_with_stale_deleted_entry(self):
-        first = self.drive.upload(self.file, self.folder)
-        second = self.drive.upload(self.file, self.folder)
+        first = self.drive.upload(self.file, self.folder, completion=self.completion())
+        second = self.drive.upload(self.file, self.folder, completion=self.completion())
         self.delete_error_after = 1
         with self.assertRaises(self.error_type):
-            self.drive.upload(self.file, self.folder, keep=1)
+            self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         removed = next(identifier for identifier in (first['id'], second['id']) if identifier not in self.objects)
         self.stale_entries = [{'id': removed, 'createdTime': '0'}]
         self.delete_error_after = None
-        current = self.drive.upload(self.file, self.folder, keep=1)
+        current = self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertEqual(set(self.objects), {self.folder, current['id']})
 
     def test_delete_404_after_owned_metadata_is_reconciled(self):
-        first = self.drive.upload(self.file, self.folder)
+        first = self.drive.upload(self.file, self.folder, completion=self.completion())
         self.delete_missing = True
-        second = self.drive.upload(self.file, self.folder, keep=1)
+        second = self.drive.upload(self.file, self.folder, completion=self.completion(), keep=1)
         self.assertNotIn(first['id'], self.objects)
         self.assertIn(second['id'], self.objects)
 

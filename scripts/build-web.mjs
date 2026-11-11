@@ -1,10 +1,11 @@
 import { build } from 'esbuild';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 const result = await build({
-  entryPoints: [new URL('web/app.mjs', root).pathname], bundle: true,
+  entryPoints: [fileURLToPath(new URL('web/app.mjs', root))], bundle: true,
   write: false, format: 'iife', platform: 'browser', target: 'es2022',
   minify: true, legalComments: 'inline', metafile: true
 });

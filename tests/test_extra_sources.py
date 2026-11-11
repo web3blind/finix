@@ -166,7 +166,7 @@ class ExtraSourcesTests(unittest.TestCase):
                 core.restore(cipher, self.key, target)
             self.assertFalse(target.exists())
 
-    def test_cross_root_mutation_fails_before_publication(self):
+    def test_change_after_profile_capture_does_not_invalidate_captured_generation(self):
         self.profile.extra_sources('add', 'one', str(self.one))
         (self.one / 'valuable').write_bytes(b'initial')
         old = self.profile.backup()
@@ -176,10 +176,11 @@ class ExtraSourcesTests(unittest.TestCase):
             if args[1].startswith('external/'):
                 (self.home / 'new-after-profile-snapshot').write_bytes(b'changed')
             return result
-        with patch.object(streaming, '_add_payload', side_effect=mutate), self.assertRaises(core.FinixError):
-            self.profile.backup()
+        with patch.object(streaming, '_add_payload', side_effect=mutate):
+            result = self.profile.backup()
+        self.assertTrue(result['complete'])
         self.assertTrue(Path(old['path']).exists())
-        self.assertEqual(len(list((self.profile.root / 'copies').glob('*.age'))), 1)
+        self.assertEqual(len(list((self.profile.root / 'copies').glob('*.age'))), 2)
 
     def test_real_sdk_captures_default_before_context_handoff_and_denies_foreign_owner(self):
         import asyncio

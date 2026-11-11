@@ -1,5 +1,7 @@
 name: finix
 version: 0.1.0
+# Native installs lack pyproject.toml; PM reads this supported dependency surface.
+python_dependencies: ["PyYAML>=6.0,<7.0"]
 description: Owner-controlled age-encrypted profile backups
 provides_tools: []
 provides_hooks: []

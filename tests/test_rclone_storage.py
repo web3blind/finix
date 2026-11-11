@@ -23,7 +23,7 @@ class MemoryRunner:
         self.fail_delete = None
         self.calls = []
 
-    def __call__(self, op, *args, output=None, expected_size=None):
+    def __call__(self, op, *args, output=None, expected_size=None, progress=None, cancel=None):
         self.calls.append((op, args))
         if op == 'listremotes':
             return json.dumps([{'name': 'cloud', 'type': 'yandex', 'source': 'file'}]).encode()
@@ -66,14 +66,18 @@ class RcloneTests(unittest.TestCase):
         self.cipher = self.root / 'input.age'
         self.cipher.write_bytes(b'age-encryption.org/v1\nsynthetic-only')
 
+    def completion(self):
+        # Synthetic transport fixtures explicitly attest their known provenance.
+        return dict(sha256=core.digest_file(self.cipher), complete=True, omitted_count=0)
+
     def adapter(self, owner='a' * 64, state=None, runner=None):
         return RcloneStorage(self.home, owner, state or self.state, str(self.config), 'cloud', 'backups/Finix', runner=runner or self.fake)
 
     def test_roundtrip_retention_recovery_and_ledger_loss(self):
         foreign = 'cloud:backups/Finix/foreign.age'
         self.fake.objects[foreign] = b'foreign'
-        first = self.drive.backup_cipher(self.cipher)
-        last = self.adapter().backup_cipher(self.cipher, keep=1)
+        first = self.drive.backup_cipher(self.cipher, completion=self.completion())
+        last = self.adapter().backup_cipher(self.cipher, completion=self.completion(), keep=1)
         self.assertNotIn(self.drive.object_path(first), self.fake.objects)
         self.assertIn(foreign, self.fake.objects)
         output = self.root / 'recovered.age'
@@ -83,38 +87,38 @@ class RcloneTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             self.drive.download(last, output)
         (self.state / 'rclone.json').unlink()
-        new = self.drive.backup_cipher(self.cipher, keep=1)
+        new = self.drive.backup_cipher(self.cipher, completion=self.completion(), keep=1)
         self.assertNotEqual(new['namespace'], last['namespace'])
         self.assertIn(self.drive.object_path(last), self.fake.objects)
 
     def test_corruption_plaintext_foreign_profile_config_and_no_prune(self):
-        first = self.drive.backup_cipher(self.cipher)
+        first = self.drive.backup_cipher(self.cipher, completion=self.completion())
         self.fake.corrupt = True
         with self.assertRaises(core.FinixError):
-            self.drive.backup_cipher(self.cipher, keep=1)
+            self.drive.backup_cipher(self.cipher, completion=self.completion(), keep=1)
         self.assertIn(self.drive.object_path(first), self.fake.objects)
         self.assertEqual(len(json.loads((self.state / 'rclone.json').read_text())['records']), 1)
         self.fake.corrupt = False
         with self.assertRaises(core.FinixError):
-            self.adapter(owner='b' * 64).backup_cipher(self.cipher)
+            self.adapter(owner='b' * 64).backup_cipher(self.cipher, completion=self.completion())
         calls = len(self.fake.calls)
         self.cipher.write_bytes(b'plaintext')
         with self.assertRaises(core.FinixError):
-            self.drive.backup_cipher(self.cipher)
+            self.drive.backup_cipher(self.cipher, completion=self.completion())
         self.assertEqual(len(self.fake.calls), calls)
         self.config.chmod(0o644)
         with self.assertRaises(core.FinixError):
             self.drive.download(first)
 
     def test_interrupted_retention_reconciles_already_missing(self):
-        rows = [self.drive.backup_cipher(self.cipher) for _ in range(3)]
+        rows = [self.drive.backup_cipher(self.cipher, completion=self.completion()) for _ in range(3)]
         self.fake.fail_delete = self.drive.object_path(rows[1])
         with self.assertRaises(RcloneError):
-            self.drive.backup_cipher(self.cipher, keep=1)
+            self.drive.backup_cipher(self.cipher, completion=self.completion(), keep=1)
         self.assertNotIn(self.drive.object_path(rows[0]), self.fake.objects)
         self.fake.objects.pop(self.drive.object_path(rows[1]))
         self.fake.fail_delete = None
-        self.drive.backup_cipher(self.cipher, keep=1)
+        self.drive.backup_cipher(self.cipher, completion=self.completion(), keep=1)
         self.assertEqual(len(json.loads((self.state / 'rclone.json').read_text())['records']), 1)
 
     def test_validation_no_inline_remote_flags_traversal_or_symlink(self):
@@ -172,13 +176,13 @@ class RcloneTests(unittest.TestCase):
         with patch.object(Profile, 'rclone', return_value=self.drive):
             self.assertEqual(profile.configure('storage', 'rclone')['rclone']['code'], 'LOCAL_READY')
         self.assertEqual(profile.config()['storage'], 'rclone')
-        row = self.drive.backup_cipher(self.cipher)
+        row = self.drive.backup_cipher(self.cipher, completion=self.completion())
         serialized = json.dumps(row)
         self.assertNotIn(str(self.config), serialized)
         self.assertNotIn('token', serialized)
 
     def test_recovery_cli_exclusive_output_and_exact_handler_owner(self):
-        row = self.drive.backup_cipher(self.cipher)
+        row = self.drive.backup_cipher(self.cipher, completion=self.completion())
         record = self.root / 'record.json'
         record.write_text(json.dumps(row))
         output = self.root / 'cli.age'
@@ -205,10 +209,10 @@ class RcloneTests(unittest.TestCase):
             profile.configure('rclone_config', str(config))
 
     def test_changed_selection_metadata_and_non_age_input_fail_closed(self):
-        row = self.drive.backup_cipher(self.cipher)
+        row = self.drive.backup_cipher(self.cipher, completion=self.completion())
         self.drive.root = 'different'
         with self.assertRaises(core.FinixError):
-            self.drive.backup_cipher(self.cipher, keep=1)
+            self.drive.backup_cipher(self.cipher, completion=self.completion(), keep=1)
         self.drive.root = 'backups/Finix'
         self.fake.objects[self.drive.object_path(row)] += b'changed'
         with self.assertRaises(core.FinixError):
@@ -217,7 +221,7 @@ class RcloneTests(unittest.TestCase):
         with self.cipher.open('wb') as stream:
             stream.truncate(129 * 1024 * 1024 + 1)
         with self.assertRaises(core.FinixError):
-            self.drive.backup_cipher(self.cipher)
+            self.drive.backup_cipher(self.cipher, completion=self.completion())
 
     def test_all_admitted_types_and_cloud_failure_preserves_local(self):
         original = self.fake
@@ -227,7 +231,7 @@ class RcloneTests(unittest.TestCase):
                     return json.dumps([{'name': 'cloud', 'type': kind, 'source': 'file'}]).encode()
                 return original(op, *args, **kwargs)
             adapter = self.adapter(state=self.root / kind, runner=transport)
-            row = adapter.backup_cipher(self.cipher)
+            row = adapter.backup_cipher(self.cipher, completion=self.completion())
             self.assertEqual(row['type'], kind)
             self.assertTrue(adapter.download(row)['verified'])
         profile = Profile(self.home)

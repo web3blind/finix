@@ -146,13 +146,23 @@ class Connections:
         if any(s['public']['status'] in {'working', 'authorize', 'choice', 'verified'}
                for s in self.sessions.values()):
             raise ConnectionError('CONNECTION_BUSY')
-        binary = shutil.which('rclone') or ''
+        binary = ''
         if provider != 'workspace':
-            if not binary:
-                raise ConnectionError('RCLONE_MISSING')
-            info = Path(binary).stat()
-            if info.st_uid not in {0, os.getuid()} or info.st_mode & 0o022:
-                raise ConnectionError('UNTRUSTED_BINARY')
+            if os.name == 'nt':
+                from .windows_native import find_tool
+                try:
+                    binary = find_tool('rclone')
+                except FileNotFoundError:
+                    raise ConnectionError('RCLONE_MISSING') from None
+                except OSError:
+                    raise ConnectionError('UNTRUSTED_BINARY') from None
+            else:
+                binary = shutil.which('rclone') or ''
+                if not binary:
+                    raise ConnectionError('RCLONE_MISSING')
+                info = Path(binary).stat()
+                if info.st_uid not in {0, os.getuid()} or info.st_mode & 0o022:
+                    raise ConnectionError('UNTRUSTED_BINARY')
         else:
             if not (profile.home / 'google_token.json').exists() and not (profile.home / 'google_client_secret.json').is_file():
                 raise ConnectionError('WORKSPACE_CLIENT_REQUIRED')
@@ -166,10 +176,19 @@ class Connections:
         stage = profile.root / 'connections' / ident
         core.private_dir(stage.parent)
         core.private_dir(stage)
-        p = subprocess.Popen([sys.executable, str(Path(__file__).with_name('connection_worker.py')),
-                              worker_provider, str(profile.home), str(stage), binary],
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                             env=child_env(profile.home), start_new_session=True)
+        if os.name == 'nt':
+            from .windows_native import popen
+        else:
+            popen = subprocess.Popen
+        from .workspace_drive import trusted_runtime, WorkspaceError
+        worker = Path(__file__).absolute().with_name('connection_worker.py')
+        try:
+            with trusted_runtime(Path(binary) if reuse else worker, entry=worker) as (prefix, wrapper):
+                p = popen([*prefix, wrapper, worker_provider, str(profile.home), str(stage), binary],
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          env=child_env(profile.home), start_new_session=True)
+        except WorkspaceError:
+            raise ConnectionError('UNTRUSTED_BINARY') from None
         s = {'public': {'id': ident, 'provider': provider, 'status': 'working', 'folder': folder,
                         'expires_in': TTL}, 'stage': stage, 'process': p,
              'deadline': time.monotonic() + TTL, 'before': profile.config(), 'reuse': reuse}
@@ -224,8 +243,11 @@ class Connections:
                         s['public'].pop('url', None)
                     elif status == 'failed':
                         s['public'].update(status='failed')
-                        if event.get('code') == 'WORKSPACE_REFRESH_TOKEN_REQUIRED':
-                            s['public']['code'] = 'WORKSPACE_REFRESH_TOKEN_REQUIRED'
+                        allowed = {'WORKSPACE_REFRESH_TOKEN_REQUIRED', 'UNTRUSTED_BINARY',
+                                   'RCLONE_PROVIDER_FAILED', 'CONNECTION_UNSUPPORTED',
+                                   'CONNECTION_TIMEOUT', 'CONNECTION_FAILED'}
+                        code = event.get('code')
+                        s['public']['code'] = code if isinstance(code, str) and code in allowed else 'CONNECTION_FAILED'
                         s['public'].pop('url', None)
                     else:
                         raise ValueError('event')
@@ -240,12 +262,18 @@ class Connections:
             with self.lock:
                 self._stop(s, 'failed')
         finally:
+            if os.name == 'nt':
+                from .windows_native import cleanup
+                cleanup(p)
             p.stdout.close()
             p.stdin.close()
 
     def _stop(self, s, status):
         p = s['process']
-        if p.poll() is None:
+        if os.name == 'nt':
+            from .windows_native import cleanup
+            cleanup(p)
+        elif p.poll() is None:
             try:
                 os.killpg(p.pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -256,10 +284,23 @@ class Connections:
         shutil.rmtree(s['stage'], ignore_errors=True)
 
     def _apply(self, profile, s):
-        with core.locked(profile.root):
+        from .backup_jobs import BackupJobs, state_lease, file_lease
+        from .setup_flow import SetupFlow
+        jobs = BackupJobs()
+        root, state_path, worker = jobs._paths(profile)
+        # Same lock order as Start; reserve the worker lease across settings CAS.
+        # Even an admitted worker not yet holding the operation lock blocks Apply.
+        with state_lease(root / 'state.lock'), file_lease(worker), core.locked(profile.root):
             if profile.config() != s['before']:
                 raise ConnectionError('SETTINGS_CHANGED')
             cfg = profile.config()
+            before_binding = SetupFlow(profile)._binding(cfg)
+            job = jobs._read(profile, state_path)['job']
+            owned = bool(job and (job['state'] == 'interrupted'
+                                  or job['state'] == 'failed' and job.get('capture')))
+            if owned and job.get('binding') != before_binding:
+                if not jobs._transition(profile, job, before_binding):
+                    raise ConnectionError('SETTINGS_CHANGED')
             if s['public']['provider'] == 'workspace':
                 workspace_prerequisites(profile, oauth=not s['reuse'])
                 target = profile.home / 'google_token.json'
@@ -274,6 +315,31 @@ class Connections:
                 path = config_path(str(s['stage'] / 'rclone.conf'))
                 cfg.update(storage='rclone', rclone_config=str(path), rclone_remote='finix',
                            rclone_root=s['public']['folder'], rclone_connection=s['public']['id'])
+            if job:
+                # Checkpoint and old setup receipt are durable before the settings
+                # switch. Old provider pending/ledger/ciphertext stay in place.
+                jobs._archive(root, job)
+                if job.get('capture') and job['state'] != 'succeeded':
+                    capture = job['capture']
+                    name = capture['archive']
+                    if not isinstance(name, str) or Path(name).name != name or '\\' in name or name in {'.', '..'}:
+                        raise ConnectionError('SETTINGS_CHANGED')
+                    pins = core.private_dir(root / 'retained-captures')
+                    core.atomic_json(pins / (name + '.json'), {
+                        'job_id': job['id'], 'binding': job['binding'],
+                        'archive': name, 'sha256': capture['sha256']})
+                evidence = {'settings': s['before']}
+                try:
+                    with core.regular_input(profile.root / 'setup-verification.json') as fd:
+                        evidence['setup_receipt'] = json.loads(core.read_regular(fd, 16384))
+                except FileNotFoundError:
+                    pass
+                evidence_path = jobs._receipt_path(root, job['id'], 'history-bindings')
+                if not evidence_path.exists():
+                    core.atomic_json(evidence_path, evidence)
+                core.atomic_json(profile.root / 'connection-transition.json', {
+                    'version': 1, 'profile_id': profile.profile_id, 'job_id': job['id'],
+                    'from_binding': job['binding'], 'to_binding': SetupFlow(profile)._binding(cfg)})
             core.atomic_json(profile.root / 'settings.json', cfg)
             if profile.config() != cfg:
                 raise ConnectionError('READBACK_FAILED')

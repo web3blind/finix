@@ -169,15 +169,18 @@ class Drive:
             raise FinixError('Invalid Finix Drive file type')
         return obj
 
-    def upload(self, path, folder, keep=0):
+    def upload(self, path, folder, keep=0, *, completion=None):
         if type(keep) is not int or not 0 <= keep <= 1000:
             raise FinixError('Invalid retention')
         self.checked(folder, 'folder')
         path = checked_path(path)
         descriptor = cloud_files.describe(path, native=True)
+        provenance = cloud_files.completion_record(descriptor, completion)
         snapshot = uuid.uuid4().hex
         props = self.properties('pending', snapshot)
         props.update(sha256=descriptor['sha256'], size=str(descriptor['size']))
+        if provenance is not None:
+            props['completion'] = json.dumps([provenance[key] for key in ('sha256', 'complete', 'omitted_count')], separators=(',', ':'))
         metadata = {'name': path.name, 'mimeType': 'application/octet-stream',
                     'parents': [self.identifier(folder)], 'appProperties': props}
         initiated = self.response('POST', UPLOAD, metadata, {
@@ -252,15 +255,36 @@ class Drive:
                 return result
         raise FinixError('Drive inventory exceeds 1000 objects; retention aborted')
 
+    def completion(self, obj):
+        descriptor = self.descriptor(obj)
+        try:
+            value = json.loads(obj['appProperties'].get('completion', 'null'))
+            if isinstance(value, list):
+                if len(value) != 3:
+                    return None
+                value = dict(zip(('sha256', 'complete', 'omitted_count'), value))
+            descriptor['completion'] = value
+        except (ValueError, TypeError):
+            return None
+        return cloud_files.known_completion(descriptor)
+
     def prune(self, folder, current, keep):
         # Pin current regardless of Drive ordering/time lag; check every deletion
         # against actual metadata, never trust search results as ownership proof.
+        if type(keep) is not int or not 1 <= keep <= 1000:
+            raise FinixError('Invalid retention')
+        successor = self.checked(current, 'snapshot', folder)
+        completion = self.completion(successor)
+        if not completion or not completion['complete']:
+            return
         others = [o for o in self.snapshots(folder) if o['id'] != current]
         for record in others[max(0, keep - 1):]:
             obj = self.checked(record['id'], 'snapshot', folder, missing_ok=True)
             if obj is None:
                 continue
             self.descriptor(obj)
+            if self.completion(obj) is None:
+                continue
             self.call('DELETE', '/' + self.identifier(record['id']), missing_ok=True)
             if self.get(record['id'], missing_ok=True) is not None:
                 raise FinixError('Drive deletion readback failed; retry retention later')

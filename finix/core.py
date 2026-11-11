@@ -2,7 +2,6 @@
 from contextlib import contextmanager, ExitStack
 from urllib.parse import quote
 from datetime import datetime, timezone
-import fcntl
 import gzip
 import hashlib
 import io
@@ -22,7 +21,6 @@ import uuid
 
 # Compatibility-only buffered helpers; production backup/restore never use this cap.
 MAX_BYTES = 128 * 1024 * 1024
-MAX_FILES = 10000
 # Frozen finix-1 admission scope, never used to select new profile backups.
 # Executable plugin/skill bytes are inert archive data; restore never imports them.
 FILE_ROOTS = frozenset({
@@ -44,6 +42,20 @@ LEGACY_PLUGIN_EXCLUSIONS = frozenset({'node_modules', '.git', '__pycache__'})
 # Never filter file extensions or arbitrary project/.git history.
 ROOT_EXCLUSIONS = frozenset({'cache', 'logs', 'tmp', 'temp', 'backups', 'profiles', 'hermes-agent'})
 TREE_EXCLUSIONS = frozenset({'__pycache__', '.cache', '.pytest_cache', 'node_modules', '.venv', 'venv'})
+# Hermes recreates these coordination records on startup; never restore stale
+# liveness or lock state. Exact root-relative names, not suffix/glob exclusions.
+RUNTIME_EXCLUSIONS = frozenset({
+    'cron/.tick.lock', 'cron/ticker_heartbeat', 'cron/ticker_last_success',
+    'state/dashboard_clients.heartbeat', 'state/gateway.heartbeat',
+    'gateway_state.json', 'runtime/active_sessions.json', 'channel_directory.json',
+    'auth.lock', 'shared/nous_auth.lock',
+    # SDK gateway/control_socket.py: resolve_server_socket_path(home).
+    'gateway.sock',
+})
+# SDK gateway/shutdown_watchdog.py: get_loop_tick_socket_path(home, pid)
+# formats the positive os.getpid() as a decimal integer. Anchor the complete
+# root-relative path: neither arbitrary .sock files nor state/ are disposable.
+RUNTIME_LOOP_TICK = re.compile(r'state/gateway[.]loop-tick[.][1-9][0-9]*[.]sock')
 RECIPIENT = re.compile(r'age1[023456789acdefghjklmnpqrstuvwxyz]{58}')
 
 
@@ -51,10 +63,21 @@ class FinixError(Exception):
     """Safe, non-secret diagnostic suitable for the CLI."""
 
 
+class SourceCaptureError(FinixError):
+    """Only these ordinary-file capture outcomes permit explicit omission."""
+    def __init__(self, code):
+        if code not in {'LIVE_SOURCE_MISSING', 'SOURCE_UNSTABLE_CAPTURE'}:
+            raise ValueError('Unsupported capture outcome')
+        self.code = code
+        super().__init__(code)
+
+
 def excluded(name):
     """Single v2 policy shared by traversal and archive admission."""
-    parts = PurePosixPath(name).parts
-    return bool(parts) and (parts[0] in ROOT_EXCLUSIONS
+    parts = PurePosixPath(name.lower() if os.name == 'nt' else name).parts
+    return bool(parts) and (str(PurePosixPath(*parts)) in RUNTIME_EXCLUSIONS
+                            or RUNTIME_LOOP_TICK.fullmatch(str(PurePosixPath(*parts))) is not None
+                            or parts[0] in ROOT_EXCLUSIONS
                             or any(p in TREE_EXCLUSIONS for p in parts))
 
 
@@ -71,6 +94,8 @@ def allowed(name):
 
 
 def legacy_allowed(name):
+    if os.name == 'nt':
+        name = name.lower()
     parts = PurePosixPath(name).parts
     excluded_plugin = (parts and parts[0] in {'plugins', 'desktop-plugins'}
                        and any(p in LEGACY_PLUGIN_EXCLUSIONS for p in parts[1:]))
@@ -88,6 +113,9 @@ def checked_path(value):
 
 
 def private_dir(path):
+    if os.name == 'nt':
+        from .windows_native import private_dir as native_private_dir
+        return native_private_dir(path)
     path = checked_path(path)
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     if not path.is_dir():
@@ -97,6 +125,12 @@ def private_dir(path):
 
 @contextmanager
 def locked(path):
+    if os.name == 'nt':
+        from .windows_native import locked as native_locked
+        with native_locked(path) as anchor:
+            yield anchor
+        return
+    import fcntl
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         try:
@@ -108,8 +142,94 @@ def locked(path):
         os.close(fd)
 
 
+@contextmanager
+def regular_input(path):
+    if os.name == 'nt':
+        from .windows_native import regular
+        with regular(path) as fd:
+            yield fd
+        return
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        yield fd
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def regular_output(path):
+    if os.name == 'nt':
+        from .windows_native import regular
+        with regular(path, create_new=True) as fd:
+            yield fd
+        return
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def root_stat(root):
+    return os.stat(root.path, follow_symlinks=False) if os.name == 'nt' else os.fstat(root)
+
+
+def publish_file(source, target):
+    if os.name == 'nt':
+        from .windows_native import publish_directory
+        publish_directory(source, target)
+    else:
+        os.link(source, target, follow_symlinks=False)
+
+
 def fingerprint(s):
     return (s.st_dev, s.st_ino, s.st_mode, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
+
+
+class SourceFingerprint(tuple):
+    """Six-field public fingerprint with discovery-time SQLite provenance.
+
+    Tuple equality/indexing remain compatible with scan callers. Plain legacy
+    tuples carry no SQLite provenance and therefore retain strict full checks.
+    """
+    def __new__(cls, values, sqlite=False, opaque=None):
+        result = super().__new__(cls, values)
+        result.sqlite = sqlite
+        result.opaque = opaque
+        return result
+
+
+def discovered_source(fd, parent, name, *, relative=None):
+    """Classify a pinned file only after validating header, schema and identity."""
+    before = fingerprint(os.fstat(fd))
+
+    from .custody_payload import classify
+    opaque = classify(fd, parent, relative)
+    sqlite = peek(fd, 16) == b'SQLite format 3\x00'
+    if sqlite:
+        from .streaming import _connect_source
+        try:
+            connection = _connect_source(fd, parent, name)
+            connection.close()
+        except (sqlite3.Error, OSError):
+            raise FinixError('SQLite source validation failed') from None
+    after = fingerprint(os.fstat(fd))
+    if before[:3] != after[:3]:
+        raise FinixError('Source changed during discovery')
+    if sqlite and peek(fd, 16) != b'SQLite format 3\x00':
+        raise FinixError('SQLite source validation failed')
+    return SourceFingerprint(after, sqlite, opaque)
+
+
+def peek(fd, size):
+    if os.name != 'nt':
+        return os.pread(fd, size, 0)
+    position = os.lseek(fd, 0, os.SEEK_CUR)
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        return os.read(fd, size)
+    finally:
+        os.lseek(fd, position, os.SEEK_SET)
 
 
 def read_regular(fd, limit=MAX_BYTES):
@@ -132,16 +252,19 @@ def read_regular(fd, limit=MAX_BYTES):
 
 def scan(rootfd, directory_guard=None):
     """Open every included component relative to anchored directory descriptors."""
+    if os.name == 'nt':
+        from .windows_native import scan as native_scan
+        result = native_scan(rootfd, directory_guard)
+        from .custody_payload import inventory
+        inventory(rootfd, result)
+        return result
     result = {}
-    directories = 0
 
     def walk(fd, prefix=''):
-        nonlocal directories
         if directory_guard is not None:
             directory_guard(fd, prefix)
-        directories += 1
-        if directories > MAX_FILES or (prefix and len(PurePosixPath(prefix).parts) > 32):
-            raise FinixError('Source directory count or depth exceeds limit')
+        if prefix and len(PurePosixPath(prefix).parts) > 32:
+            raise FinixError('Source directory depth exceeds limit')
         for name in sorted(os.listdir(fd)):
             relative = f'{prefix}/{name}' if prefix else name
             if excluded(relative):
@@ -152,23 +275,95 @@ def scan(rootfd, directory_guard=None):
             if stat.S_ISDIR(s.st_mode):
                 child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
                 try:
-                    if fingerprint(s) != fingerprint(os.fstat(child)):
+                    if fingerprint(s)[:3] != fingerprint(os.fstat(child))[:3]:
                         raise FinixError('Source changed during discovery')
                     walk(child, relative)
                 finally:
                     os.close(child)
             elif stat.S_ISREG(s.st_mode) and allowed(relative):
-                result[relative] = fingerprint(s)
-                if len(result) > MAX_FILES:
-                    raise FinixError('Too many files')
+                child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+                try:
+                    if not stat.S_ISREG(os.fstat(child).st_mode):
+                        raise FinixError('Source changed during discovery')
+                    result[relative] = discovered_source(child, fd, name, relative=relative)
+                finally:
+                    os.close(child)
             else:
                 raise FinixError('Included source contains a symlink or special file')
     walk(rootfd)
+    from .custody_payload import inventory
+    inventory(rootfd, result)
     return result
 
 
 @contextmanager
+def validated_source(fd, parent, name, expected):
+    """SQLite retains pinned identity/transaction checks across its snapshot.
+
+    All full fingerprints here originate from fstat (not Path.stat on Windows).
+    The held SQLite connection also pins/validates its current companions.
+    Ordinary discovery metadata is not a snapshot: stability belongs to the
+    separate bounded ordinary_payload copy, not this descriptor scope.
+    """
+    before = fingerprint(os.fstat(fd))
+    if isinstance(expected, SourceFingerprint) and not expected.sqlite:
+        if not stat.S_ISREG(before[2]):
+            raise FinixError('Source changed before read')
+        yield  # Ordinary stability is checked across the bounded capture only.
+        return
+    if before[:3] != expected[:3]:
+        raise FinixError('Source changed before read')
+    connection = None
+    sqlite = getattr(expected, 'sqlite', False)
+    try:
+        if sqlite:
+            if peek(fd, 16) != b'SQLite format 3\x00':
+                raise FinixError('Source changed before read')
+            from .streaming import _connect_source
+            try:
+                connection = _connect_source(fd, parent, name)
+            except sqlite3.Error:
+                raise FinixError('SQLite source validation failed') from None
+        elif before != expected:
+            raise FinixError('Source changed before read')
+        yield
+        after = fingerprint(os.fstat(fd))
+        if (after[:3] != expected[:3] if sqlite else after != expected):
+            raise FinixError('Source changed during snapshot')
+        if sqlite and peek(fd, 16) != b'SQLite format 3\x00':
+            raise FinixError('SQLite source validation failed')
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def check_inventory(inventory, final, companions, databases, rootfd):
+    """Revalidate captured SQLite, not a global ordinary-file inventory.
+
+    Keep the legacy call shape for scan callers; final ordinary generations,
+    additions and removals cannot invalidate already completed private copies.
+    """
+    from .custody_payload import inventory as custody_inventory
+    custody_inventory(rootfd, inventory)
+    if any(not getattr(inventory[name], 'sqlite', False) for name in databases):
+        raise FinixError('Source changed during snapshot')
+    # Companion identities are pinned/validated while the database reader is
+    # held. After its verified snapshot is complete, SQLite may legitimately
+    # checkpoint, delete and recreate WAL/SHM. Those files are never payload;
+    # their later lifecycle must not invalidate the already captured snapshot.
+    for name in databases:
+        with source_file(rootfd, name, inventory[name]) as (fd, _, _):
+            if peek(fd, 16) != b'SQLite format 3\x00':
+                raise FinixError('SQLite source validation failed')
+
+
+@contextmanager
 def source_file(rootfd, name, expected):
+    if os.name == 'nt':
+        from .windows_native import source_file as native_source_file
+        with native_source_file(rootfd, name, expected) as opened:
+            yield opened
+        return
     parent = os.dup(rootfd)
     fd = None
     try:
@@ -178,13 +373,14 @@ def source_file(rootfd, name, expected):
             os.close(parent)
             parent = child
         fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
-        if fingerprint(os.fstat(fd)) != expected:
-            raise FinixError('Source changed before read')
-        yield fd, parent, parts[-1]
-        if fingerprint(os.fstat(fd)) != expected:
-            raise FinixError('Source changed during snapshot')
-        if fingerprint(os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)) != expected:
-            raise FinixError('Source replaced during snapshot')
+        with validated_source(fd, parent, parts[-1], expected):
+            yield fd, parent, parts[-1]
+        # SQLite identity is held for its transaction. Ordinary identity checks
+        # occur inside the copy, never after its completed private snapshot.
+        if getattr(expected, 'sqlite', False):
+            current = fingerprint(os.stat(parts[-1], dir_fd=parent, follow_symlinks=False))
+            if current[:3] != expected[:3]:
+                raise FinixError('Source replaced during snapshot')
     finally:
         if fd is not None:
             os.close(fd)
@@ -219,20 +415,47 @@ def normalize_cron(data):
         raise FinixError('Invalid cron JSON') from None
 
 
+def validate_completion(manifest, admit):
+    """Optional v2/v3 annotation; legacy archives remain complete by default."""
+    omitted = manifest.get('omitted', [])
+    complete = manifest.get('complete', True)
+    if (type(complete) is not bool or not isinstance(omitted, list)
+            or complete != (not omitted)):
+        raise FinixError('Invalid archive completeness annotation')
+    seen = set()
+    for item in omitted:
+        if (not isinstance(item, dict) or set(item) != {'path', 'code'}
+                or not isinstance(item['path'], str) or not admit(item['path'])
+                or item['code'] not in {'LIVE_SOURCE_MISSING', 'SOURCE_UNSTABLE_CAPTURE'}
+                or item['path'] in seen or item['path'] in manifest['files']):
+            raise FinixError('Invalid archive omission annotation')
+        seen.add(item['path'])
+    return {'complete': complete, 'omitted_count': len(omitted)}
+
+
 def make_archive(rootfd):
     inventory = scan(rootfd)
     entries = {}
-    companions = set()
+    omitted = []
+    companions, databases = set(), set()
     total = 0
     for name, expected in inventory.items():
         if name in companions:
             continue
-        with source_file(rootfd, name, expected) as (fd, parent, leaf):
-            if os.pread(fd, 16, 0) == b'SQLite format 3\x00':
-                data = sqlite_snapshot(fd, parent, leaf)
-                companions.update(name + suffix for suffix in ('-wal', '-shm', '-journal'))
-            else:
-                data = read_regular(fd, MAX_BYTES)
+        from .streaming import captured_source, ordinary_payload
+        try:
+            with captured_source(rootfd, name, expected) as (fd, parent, leaf, captured):
+                if captured.sqlite:
+                    inventory[name] = captured
+                    data = sqlite_snapshot(fd, parent, leaf)
+                    databases.add(name)
+                    companions.update(name + suffix for suffix in ('-wal', '-shm', '-journal'))
+                else:
+                    with ordinary_payload(fd, parent, leaf, memory_limit=MAX_BYTES) as (stream, size):
+                        data = stream.read(MAX_BYTES + 1)
+        except SourceCaptureError as exc:
+            omitted.append({'path': name, 'code': exc.code})
+            continue
         if name == 'cron/jobs.json':
             if len(data) > 4 * 1024 * 1024:
                 raise FinixError('Cron JSON exceeds plaintext limit')
@@ -244,14 +467,8 @@ def make_archive(rootfd):
     # SQLite's own read connection may update/create SHM. Companions were
     # type-checked before SQLite opened them; the final scan checks types again.
     # Their bytes/metadata are not the snapshot and must not invalidate its RAM copy.
-    final_inventory = scan(rootfd)
-    for name in companions & inventory.keys() & final_inventory.keys():
-        if inventory[name][:3] != final_inventory[name][:3]:
-            raise FinixError('SQLite companion replaced during snapshot')
-    if ({n: s for n, s in inventory.items() if n not in companions}
-            != {n: s for n, s in final_inventory.items() if n not in companions}):
-        raise FinixError('Profile changed during snapshot; retry when quiescent')
-    manifest = {'format': 'finix-2', 'files': {
+    check_inventory(inventory, inventory, companions, databases, rootfd)
+    manifest = {'format': 'finix-2', 'complete': not omitted, 'omitted': omitted, 'files': {
         name: {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
         for name, data in entries.items()}}
     encoded_manifest = json.dumps(manifest, sort_keys=True).encode()
@@ -277,8 +494,12 @@ def make_archive(rootfd):
 
 
 def run_age(args, data=None, output=None):
+    runner = subprocess.run
+    if os.name == 'nt':
+        from .windows_native import run_tool
+        runner = run_tool
     try:
-        result = subprocess.run(['age', *args], input=data, stdout=output or subprocess.PIPE,
+        result = runner(['age', *args], input=data, stdout=output or subprocess.PIPE,
                                 stderr=subprocess.PIPE, timeout=60, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise FinixError('age could not complete') from None
@@ -288,6 +509,9 @@ def run_age(args, data=None, output=None):
 
 
 def keygen(path):
+    if os.name == 'nt':
+        from .windows_native import keygen as native_keygen
+        return native_keygen(path)
     path = checked_path(path)
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
@@ -317,6 +541,9 @@ def keygen(path):
 
 def sha256_file(path, *, cancel=None, progress=None):
     """Hash any regular file in bounded memory, checking for concurrent mutation."""
+    if os.name == 'nt':
+        from .windows_native import sha256_file as native_hash
+        return native_hash(path, cancel=cancel, progress=progress)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         before = os.fstat(fd)
@@ -357,7 +584,11 @@ def atomic_json(path, data):
             json.dump(data, stream, sort_keys=True)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temp, path)
+        if os.name == 'nt':
+            from .windows_native import publish_directory
+            publish_directory(temp, path, replace=True)
+        else:
+            os.replace(temp, path)
     finally:
         Path(temp).unlink(missing_ok=True)
 
@@ -366,11 +597,8 @@ def load_state(state):
     path = state / 'index.json'
     if not path.exists():
         return None
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    try:
+    with regular_input(path) as fd:
         data = json.loads(read_regular(fd, 1024 * 1024))
-    finally:
-        os.close(fd)
     if not isinstance(data, dict) or not re.fullmatch(r'[a-f0-9]{32}', data.get('namespace', '')):
         raise FinixError('Invalid local state')
     if not isinstance(data.get('backups'), list):
@@ -381,6 +609,37 @@ def load_state(state):
                 or not re.fullmatch(r'[a-f0-9]{64}', record.get('sha256', ''))):
             raise FinixError('Invalid local state')
     return data
+
+
+def validate_sqlite_temp_location(path, source, *forbidden, allow_parent=False):
+    """Admit an in-profile subtree only under the traversal's exclusion policy.
+
+    No new exclusion is added here: the same relative path must be skipped by
+    scan and archive admission. Storage/extra roots remain disjoint both ways.
+    Existing stage implementations still pin paths and create private children.
+    """
+    path, source = checked_path(path), checked_path(source)
+    # The legacy implicit OS temp parent may contain fixture/source/storage
+    # roots; its random private stage is separate. Explicit selections may not.
+    if (path == source or (not allow_parent and path in source.parents)
+            or any(path == root or root in path.parents
+                   or (not allow_parent and path in root.parents)
+                   for root in map(checked_path, forbidden))):
+        raise FinixError('NEED_SQLITE_TEMP_DIRECTORY')
+    if source in path.parents:
+        relative = path.relative_to(source).as_posix()
+        if not excluded(relative):
+            raise FinixError('NEED_SQLITE_TEMP_DIRECTORY')
+        if os.name == 'nt':
+            from .windows_native import trusted_directory
+            private = trusted_directory(path, private=True)
+        else:
+            info = path.stat()
+            private = (stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+                       and stat.S_IMODE(info.st_mode) == 0o700)
+        if not private:
+            raise FinixError('NEED_SQLITE_TEMP_DIRECTORY')
+    return path
 
 
 def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
@@ -394,14 +653,13 @@ def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
            for a, b in [(source, output), (source, state), (output, state)]):
         raise FinixError('Source, output and state must be disjoint directories')
     from .streaming import _temp_directory
-    sqlite_temp_dir = _temp_directory(sqlite_temp_dir)
-    if any(sqlite_temp_dir == root or root in sqlite_temp_dir.parents
-           for root in (source, output, state)):
-        raise FinixError('SQLite temporary storage must be outside source, output and state')
+    implicit_temp = sqlite_temp_dir is None
+    sqlite_temp_dir = validate_sqlite_temp_location(
+        _temp_directory(sqlite_temp_dir), source, output, state, allow_parent=implicit_temp)
     from .extra_sources import load
     extras = load(source, default_root, (output, state, *extra_forbidden)) if configured_extras else []
-    if any(sqlite_temp_dir == Path(item['path']) or Path(item['path']) in sqlite_temp_dir.parents for item in extras):
-        raise FinixError('SQLite temporary storage overlaps an extra source')
+    validate_sqlite_temp_location(sqlite_temp_dir, source, *(Path(item['path']) for item in extras),
+                                  allow_parent=implicit_temp)
     private_dir(output)
     private_dir(state)
     with ExitStack() as stack:
@@ -422,14 +680,14 @@ def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
         fd, temp = tempfile.mkstemp(prefix='.finix-', dir=output)
         try:
             with os.fdopen(fd, 'wb') as stream:
-                write_encrypted_snapshot(sourcefd, recipient, stream, sqlite_temp_dir, cancel, progress, extra_fds=extra_fds)
+                outcome = write_encrypted_snapshot(sourcefd, recipient, stream, sqlite_temp_dir, cancel, progress, extra_fds=extra_fds)
                 stream.flush()
                 os.fsync(stream.fileno())
             expected = digest_file(temp, cancel=cancel, progress=progress)
             for root in roots:
-                if fingerprint(os.stat(root, follow_symlinks=False))[:3] != fingerprint(os.fstat(descriptors[root]))[:3]:
+                if fingerprint(os.stat(root, follow_symlinks=False))[:3] != fingerprint(root_stat(descriptors[root]))[:3]:
                     raise FinixError('Source or storage directory replaced during backup')
-            os.link(temp, destination, follow_symlinks=False)
+            publish_file(temp, destination)
             try:
                 if digest_file(destination, cancel=cancel, progress=progress) != expected:
                     raise FinixError('Encrypted output readback verification failed')
@@ -438,13 +696,14 @@ def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
                 raise
         finally:
             Path(temp).unlink(missing_ok=True)
-        record = {'name': name, 'sha256': expected,
+        record = {'name': name, 'sha256': expected, **outcome,
                   'created_at': datetime.now(timezone.utc).isoformat()}
         index['backups'].append(record)
         # Persist new ownership before any retention deletion. Errors never prune.
         atomic_json(state / 'index.json', index)
-        if keep is not None:
-            old = index['backups'][:-keep]
+        if keep is not None and outcome['complete']:
+            old = [row for row in index['backups'][:-keep]
+                   if type(row.get('complete')) is bool]
             for previous in old:
                 path = output / previous['name']
                 if path.exists():
@@ -453,10 +712,22 @@ def backup(source, output, state, recipient, keep=None, *, sqlite_temp_dir=None,
                     path.unlink()
                 index['backups'].remove(previous)
             atomic_json(state / 'index.json', index)
-        return {'path': str(destination), 'sha256': expected}
+        return {'path': str(destination), 'sha256': expected, **outcome}
 
 
 def decrypt(path, identity):
+    if os.name == 'nt':
+        from .streaming import decrypted_stream, CHUNK
+        with decrypted_stream(path, identity) as stream:
+            chunks, size = [], 0
+            while True:
+                chunk = stream.read(min(CHUNK, MAX_BYTES + 1 - size))
+                if not chunk:
+                    return b''.join(chunks)
+                size += len(chunk)
+                if size > MAX_BYTES:
+                    raise FinixError('Decrypted archive exceeds limit')
+                chunks.append(chunk)
     path, identity = checked_path(path), checked_path(identity)
     # Decryption output is bounded before buffering; never a plaintext disk file.
     cipherfd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -527,7 +798,7 @@ def validate_archive(data):
                 candidate = member.name.removeprefix('profile/')
                 if (not member.isreg() or member.name in entries or member.pax_headers
                         or not (member.name == 'manifest.json' or safe_name(candidate))
-                        or len(entries) >= MAX_FILES + 1 or not 0 <= member.size <= MAX_BYTES):
+                        or not 0 <= member.size <= MAX_BYTES):
                     raise FinixError('Unsafe or unsupported archive entry')
                 if ((member.name == 'manifest.json' and member.size > 8 * 1024 * 1024)
                         or (candidate == 'cron/jobs.json' and member.size > 4 * 1024 * 1024)):
@@ -553,6 +824,7 @@ def validate_archive(data):
             raise FinixError('Unsupported archive format')
         if set(manifest['files']) != set(entries) or any(not admit(n) for n in entries):
             raise FinixError('Archive manifest or scope mismatch')
+        validate_completion(manifest, admit)
         for name in entries:
             if any(str(parent) in entries for parent in PurePosixPath(name).parents):
                 raise FinixError('Archive file/directory conflict')
@@ -576,6 +848,9 @@ def validate_archive(data):
 
 
 def restore(archive, identity, target, *, cancel=None, progress=None):
+    if os.name == 'nt':
+        from .windows_native import restore as native_restore
+        return native_restore(archive, identity, target, cancel=cancel, progress=progress)
     from .streaming import decrypted_stream, restore_stream
     target = checked_path(target)
     if target.exists() and (not target.is_dir() or any(target.iterdir())):
@@ -585,7 +860,7 @@ def restore(archive, identity, target, *, cancel=None, progress=None):
     stage = Path(tempfile.mkdtemp(prefix='.finix-restore-', dir=target.parent))
     try:
         with decrypted_stream(archive, identity, cancel) as stream:
-            payload, count, layout = restore_stream(stream, stage, cancel, progress)
+            payload, count, layout, completion = restore_stream(stream, stage, cancel, progress)
         # Wait for age authentication, gzip CRC/EOF and full manifest before publish.
         if target.exists():
             with locked(target):
@@ -597,11 +872,14 @@ def restore(archive, identity, target, *, cancel=None, progress=None):
         if stage.exists():
             shutil.rmtree(stage)
     return {'target': str(target), 'files': count, 'cron_disabled': True,
-            'layout': layout}
+            'layout': layout, **completion}
 
 
 
 def publish_directory(stage, target):
+    if os.name == 'nt':
+        from .windows_native import publish_directory as native_publish
+        return native_publish(stage, target)
     import ctypes
     libc = ctypes.CDLL(None, use_errno=True)
     result = libc.renameat2(-100, os.fsencode(stage), -100, os.fsencode(target), 1)

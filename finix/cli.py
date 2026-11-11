@@ -20,7 +20,7 @@ def main(argv=None):
         backup.add_argument('--' + option, required=True)
     backup.add_argument('--configured-extras', action='store_true', help='Load extra folders from the owning source config; requires Hermes canonical default-root verification')
     backup.add_argument('--keep', type=int, help='Explicit retention in this Finix namespace')
-    backup.add_argument('--sqlite-temp-dir', help='Optional existing owner-only temporary directory outside source; SQLite snapshots may be plaintext')
+    backup.add_argument('--sqlite-temp-dir', help='Optional existing owner-only temporary directory; inside source only under an excluded tree (cache/finix/sqlite-temp); SQLite snapshots are plaintext')
     restore = commands.add_parser('restore', help='Restore into an absent or empty directory; cron paused')
     for option in ('archive', 'identity', 'target'):
         restore.add_argument('--' + option, required=True)

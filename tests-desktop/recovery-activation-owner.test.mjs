@@ -1,0 +1,32 @@
+// F2: exact review scheduling, real production controller; synthetic SDK/REST only.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+const atom=value=>({get:()=>value,set:v=>{value=v;},subscribe:()=>()=>{}});
+test('load/poll cannot dispatch a second activation while registry or ensureAgent is pending',async()=>{
+ let epoch=1,calls=0;const selectionCalls=[],activationRegistry=deferred();
+ const sdk={atom,gatewayActivationEpoch:()=>epoch,host:{activeConnectionId:()=> 'local',state:{profile:atom('source'),connectionId:atom('local'),gateway:atom(null)},connections:async()=>{calls++;if(calls===2)await activationRegistry.promise;return [{id:'local',kind:'local'}];},profileRoutes:async()=>[{mode:'local',connectionId:'local',profile:'recovered-test',targetProfile:'recovered-test'}],requestProfile:async()=>({name:'recovered-test'}),ensureAgent:(...args)=>{const d=deferred();selectionCalls.push({args,...d});return d.promise;}}};
+ globalThis.__reviewSDK=sdk;
+ let source=fs.readFileSync(new URL('../desktop/src/recovery-operation.mjs',import.meta.url),'utf8');
+ source=source.replace("import * as sdk from '@hermes/plugin-sdk';","const sdk=globalThis.__reviewSDK;").replace("import {scopedLanguage} from './i18n.mjs';","const scopedLanguage=()=> 'en';");
+ const {createRecovery}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const receipt={name:'recovered-test',served:'recovered-test',backend_target_ready:true,archive_verified:true,content_verified:true,integrations_paused:true,history_pending:false,full_acceptance:false,contract:'sdk-new-content-copy-v1'};
+ const input={id:'a'.repeat(32),request_id:'11111111-1111-4111-8111-111111111111',profile_id:'b'.repeat(64),state:'succeeded',phase:'backend_target_ready',cancellable:false,cancel_requested:false,name:'recovered-test',receipt};
+ const restCalls=[];let selected=false;
+ const recovery=createRecovery({rest:async path=>{assert.equal(selected,false,'ZERO SOURCE REST after selection');restCalls.push(path);return path==='/recovery/capabilities'?{code_version:'recovery-v1',operation_protocol:'recovery-operations-v1',local_only:true,profile_id:input.profile_id}:input;},storage:{get:()=>null,set:()=>{}},onDispose:()=>{}});
+ const settle=()=>new Promise(r=>setImmediate(r));
+ const load=recovery.actions.load();for(let n=0;n<20&&calls<2;n++)await settle();
+ assert.equal(calls,2);assert.equal(recovery.state.get().busy,true);
+ const poll=recovery.actions.poll();await settle();
+ assert.equal(selectionCalls.length,0,'registry await must retain exclusive activation owner');
+ activationRegistry.resolve();for(let n=0;n<20&&selectionCalls.length<1;n++)await settle();
+ assert.equal(selectionCalls.length,1);selected=true;
+ await recovery.actions.poll();await recovery.actions.cancel();
+ assert.equal(selectionCalls.length,1,'pending SDK call must not dispatch again');
+ assert.equal(recovery.state.get().activated,false);
+ sdk.host.state.profile.set('recovered-test');epoch=2;selectionCalls[0].resolve();await Promise.all([load,poll]);
+ assert.equal(recovery.state.get().activated,true);assert.equal(selectionCalls.length,1);
+ assert.deepEqual(selectionCalls[0].args,['local','recovered-test']);
+ delete globalThis.__reviewSDK;
+});

@@ -44,24 +44,30 @@ class SetupFlow:
         config, _ = read_config(self.profile.home)
         files = {}
         if cfg['storage'] == 'rclone' and cfg.get('rclone_config'):
-            files['rclone'] = _stamp(cfg['rclone_config'])
+            # Rclone owns refresh and may replace the token file atomically.
+            # Bind the selected logical connection and its private parent,
+            # never credential bytes, inode, size or refresh timestamps. The
+            # transport ledger independently binds the validated remote type.
+            parent = Path(cfg['rclone_config']).parent
+            try:
+                st = parent.stat()
+                files['rclone_parent'] = (st.st_dev, st.st_ino)
+            except FileNotFoundError:
+                files['rclone_parent'] = None
         if cfg['storage'] == 'workspace':
-            files['workspace'] = _stamp(self.profile.home / 'google_token.json')
+            parent = self.profile.home
+            st = parent.stat()
+            files['workspace_parent'] = (st.st_dev, st.st_ino)
         binding = {'profile_id': self.profile.profile_id, 'settings': settings,
                    'extra_sources': records(config), 'credential_metadata': files}
         return hashlib.sha256(json.dumps(binding, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
     def _receipt(self, binding):
         try:
-            fd = os.open(self.receipt_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        except FileNotFoundError:
+            with core.regular_input(self.receipt_path) as fd:
+                receipt = json.loads(core.read_regular(fd, 16384))
+        except (FileNotFoundError, ValueError, core.FinixError):
             return None
-        try:
-            receipt = json.loads(core.read_regular(fd, 16384))
-        except (ValueError, core.FinixError):
-            return None
-        finally:
-            os.close(fd)
         if (not isinstance(receipt, dict) or receipt.get('profile_id') != self.profile.profile_id
                 or receipt.get('binding') != binding or receipt.get('version') != 1):
             return None
@@ -70,6 +76,9 @@ class SetupFlow:
     def view(self):
         cfg = self.profile.config()
         receipt = self._receipt(self._binding(cfg))
+        capture = self.profile.capture_status()
+        if capture and not capture['complete']:
+            receipt = None
         present = bool(cfg.get('recipient'))
         stage = 'key' if not present else 'check'
         if present and cfg['storage'] != 'local':
@@ -81,7 +90,7 @@ class SetupFlow:
             stage = 'complete' if cfg.get('interval_hours') else 'schedule'
         return {'profile_id': self.profile.profile_id, 'recipient_present': present,
                 'recipient_locked': present, 'recipient': cfg.get('recipient'),
-                'stage': stage, 'verified': bool(receipt),
+                'stage': stage, 'verified': bool(receipt), 'capture': capture,
                 'interval_hours': cfg.get('interval_hours', 0), 'storage': cfg['storage'],
                 'storage_label': 'Local only (not a cloud backup)' if cfg['storage'] == 'local' else cfg['storage'],
                 'proof': receipt, 'key_instructions':
@@ -102,7 +111,7 @@ class SetupFlow:
             view['offline_page_url'] = page.as_uri()
         return view
 
-    def check_and_run(self):
+    def check_and_run(self, progress=None, cancel=None, *, resume=False):
         # Never leave an earlier success usable after a new failed check.
         with core.locked(self.profile.directories()):
             self.receipt_path.unlink(missing_ok=True)
@@ -121,7 +130,11 @@ class SetupFlow:
                 core.atomic_json(self.profile.root / 'settings.json', before_cfg)
         # Profile owns encryption, source validation, upload/readback and retention.
         # Its lock is intentionally non-reentrant, so do not nest that lock here.
-        result = self.profile.backup()
+        options = {}
+        if progress is not None: options['progress'] = progress
+        if cancel is not None: options['cancel'] = cancel
+        if resume: options['resume'] = resume
+        result = self.profile.backup(**options)
         with core.locked(self.profile.directories()), core.locked(self.profile.home):
             after_cfg = self.profile.config()
             # Legacy Drive allocates the folder on its first successful upload.
@@ -134,7 +147,7 @@ class SetupFlow:
                     or _stamp(self.profile.home / 'config.yaml') != yaml_before):
                 raise core.FinixError('Setup changed during backup; check and run again')
             path = Path(result['path'])
-            digest = core.digest_file(path)
+            digest = core.digest_file(path, cancel=cancel, progress=progress)
             if result.get('sha256') and result['sha256'] != digest:
                 raise core.FinixError('Completed archive changed; check and run again')
             receipt = {'version': 1, 'profile_id': self.profile.profile_id,
@@ -144,7 +157,9 @@ class SetupFlow:
             # Recheck after the archive I/O, before committing proof.
             if self._binding() != before or _stamp(self.profile.home / 'config.yaml') != yaml_before:
                 raise core.FinixError('Setup changed during verification; check and run again')
-            core.atomic_json(self.receipt_path, receipt)
+            if result.get('complete') is True:
+                core.atomic_json(self.receipt_path, receipt)
+        result['verified'] = True
         return {**self.view(), 'first_backup': result}
 
     def schedule(self, period):
@@ -152,7 +167,8 @@ class SetupFlow:
         with core.locked(self.profile.directories()), core.locked(self.profile.home):
             cfg = self.profile.config()
             binding = self._binding(cfg)
-            if not self._receipt(binding):
+            capture = self.profile.capture_status()
+            if (capture and not capture['complete']) or not self._receipt(binding):
                 raise core.FinixError('Check and run a successful first backup before scheduling')
             if self._binding() != binding:
                 raise core.FinixError('Setup changed; check and run again')

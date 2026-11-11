@@ -1,8 +1,9 @@
 import { build } from 'esbuild';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 const root = new URL('../', import.meta.url);
 const result = await build({
-  entryPoints: [new URL('desktop/src/plugin.mjs', root).pathname],
+  entryPoints: [fileURLToPath(new URL('desktop/src/plugin.mjs', root))],
   bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022',
   external: ['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'],
   legalComments: 'inline', metafile: true

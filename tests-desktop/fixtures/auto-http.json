@@ -1,0 +1,91 @@
+{
+  "responses": {
+    "/recovery/capabilities": {
+      "code_version": "recovery-v1",
+      "profile_id": "f301948cfe21954c211e9c46cfb54e51f4b22a0a384e964063d85b4585849f6e",
+      "local_only": true,
+      "local_request": true,
+      "destination_policy": "same_volume_only",
+      "same_volume_only": true,
+      "destination_action": "Choose an empty folder on the same volume as the local profile.",
+      "max_key_bytes": 16384,
+      "source_limits": {
+        "drive": "committed_journal_required_no_cloud_scans"
+      },
+      "supported_sources": [
+        "local",
+        "rclone",
+        "workspace",
+        "drive",
+        "connector-drive"
+      ]
+    },
+    "/recovery/catalog": {
+      "profile_id": "f301948cfe21954c211e9c46cfb54e51f4b22a0a384e964063d85b4585849f6e",
+      "items": [
+        {
+          "id": "902ed0602eb7d1e5f56744dbc9110285a9acd7f88d30dc80a75ea9c0b71bb15e",
+          "size": 929,
+          "sha256": "d999ed33d4f971e494ce838407f6f8531396fa01d83f2963512a2b12032848e6",
+          "complete": true,
+          "created_at": "2026-11-08T11:35:18.460688+00:00",
+          "label": "Encrypted backup",
+          "source": "local",
+          "omitted_count": 0
+        }
+      ]
+    },
+    "/recovery/prepare-auto": {
+      "id": "2ad6e919ea8049d7b2f99173ab2c78b1",
+      "profile_id": "f301948cfe21954c211e9c46cfb54e51f4b22a0a384e964063d85b4585849f6e",
+      "state": "awaiting_key",
+      "name": "recovered-3ca8d78054404c64"
+    },
+    "/recovery/jobs/2ad6e919ea8049d7b2f99173ab2c78b1/key": {
+      "status": "running",
+      "state": "running",
+      "phase": "preparing",
+      "bytes": 0,
+      "progress": 0,
+      "error": null,
+      "code": null,
+      "complete": null,
+      "omitted_count": null,
+      "can_import": false,
+      "extras_policy": "separate_manual_import_only",
+      "id": "2ad6e919ea8049d7b2f99173ab2c78b1",
+      "profile_id": "f301948cfe21954c211e9c46cfb54e51f4b22a0a384e964063d85b4585849f6e"
+    },
+    "/recovery/jobs/2ad6e919ea8049d7b2f99173ab2c78b1": {
+      "status": "succeeded",
+      "state": "succeeded",
+      "phase": "complete",
+      "bytes": 8192,
+      "progress": 100,
+      "error": null,
+      "code": null,
+      "complete": true,
+      "omitted_count": 0,
+      "can_import": true,
+      "extras_policy": "separate_manual_import_only",
+      "id": "2ad6e919ea8049d7b2f99173ab2c78b1",
+      "profile_id": "f301948cfe21954c211e9c46cfb54e51f4b22a0a384e964063d85b4585849f6e"
+    },
+    "/recovery/jobs/2ad6e919ea8049d7b2f99173ab2c78b1/import-auto": {
+      "name": "recovered-3ca8d78054404c64",
+      "can_activate": true,
+      "complete": true,
+      "omitted_count": 0,
+      "parked": true
+    },
+    "/recovery/jobs/2ad6e919ea8049d7b2f99173ab2c78b1/start": {
+      "name": "recovered-3ca8d78054404c64",
+      "served": "recovered-3ca8d78054404c64",
+      "integrations_paused": true
+    }
+  },
+  "name": "recovered-3ca8d78054404c64",
+  "job": "2ad6e919ea8049d7b2f99173ab2c78b1",
+  "profile_id": "f301948cfe21954c211e9c46cfb54e51f4b22a0a384e964063d85b4585849f6e",
+  "candidate": "902ed0602eb7d1e5f56744dbc9110285a9acd7f88d30dc80a75ea9c0b71bb15e"
+}

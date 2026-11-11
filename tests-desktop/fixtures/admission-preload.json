@@ -1,0 +1,63 @@
+{
+  "scope": {
+    "profile": "fixture-source",
+    "source": "local",
+    "connection": "local",
+    "epoch": 1
+  },
+  "connections": [
+    {
+      "id": "local",
+      "kind": "local"
+    }
+  ],
+  "readOnly": {
+    "capabilities": {
+      "code_version": "recovery-v1",
+      "operation_protocol": "recovery-operations-v1",
+      "profile_id": "1111111111111111111111111111111111111111111111111111111111111111",
+      "local_only": true,
+      "local_request": true,
+      "destination_policy": "same_volume_only",
+      "same_volume_only": true,
+      "destination_action": "Choose an empty folder on the same volume as the local profile.",
+      "max_key_bytes": 16384,
+      "source_limits": {
+        "drive": "committed_journal_required_no_cloud_scans"
+      },
+      "supported_sources": [
+        "local",
+        "rclone",
+        "workspace",
+        "drive",
+        "connector-drive"
+      ]
+    },
+    "operations/current": null,
+    "catalog": {
+      "profile_id": "1111111111111111111111111111111111111111111111111111111111111111",
+      "items": [
+        {
+          "id": "2222222222222222222222222222222222222222222222222222222222222222",
+          "size": 12345,
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "complete": true,
+          "created_at": "2026-01-01T00:00:00+00:00",
+          "label": "Encrypted backup",
+          "source": "local",
+          "omitted_count": 0
+        },
+        {
+          "id": "3333333333333333333333333333333333333333333333333333333333333333",
+          "size": 12345,
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "complete": true,
+          "created_at": "2026-01-01T00:00:00+00:00",
+          "label": "Encrypted backup",
+          "source": "workspace",
+          "omitted_count": 0
+        }
+      ]
+    }
+  }
+}

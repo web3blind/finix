@@ -29,6 +29,8 @@ def read_answer(count):
 
 def rclone_call(binary, config, args):
     """Capture all rclone output internally, including token-bearing JSON/errors."""
+    if os.name == 'nt':
+        return windows_rclone_call(binary, config, args)
     argv = [binary, '--config', str(config), '--ask-password=false',
             '--contimeout', '15s', '--timeout', '30s', *args]
     p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -124,6 +126,80 @@ def connect_rclone(binary, stage, provider):
     raise ValueError('steps')
 
 
+def windows_rclone_call(binary, config, args):
+    from finix import windows_native as win
+    if not win.trusted_binary(binary):
+        raise ValueError('binary')
+    argv = [binary, '--config', str(config), '--ask-password=false',
+            '--contimeout', '15s', '--timeout', '30s', *args]
+    # Both binary and its full ancestor chain stay pinned until exit.
+    with win.regular(binary), win.directory(Path(binary).parent):
+        process = win.popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, line, total = bytearray(), bytearray(), 0
+        try:
+            for stdout, chunk in win.output_events(process, time.monotonic() + 300):
+                total += len(chunk)
+                if total > 131072:
+                    raise ValueError('output')
+                if stdout:
+                    out.extend(chunk)
+                else:
+                    line.extend(chunk)
+                    while b'\n' in line:
+                        item, _, rest = line.partition(b'\n')
+                        line = bytearray(rest)
+                        match = re.search(rb'http://127\.0\.0\.1:53682/auth\?state=[A-Za-z0-9_~.%-]+', item)
+                        if match:
+                            emit(status='authorize', url=match[0].decode())
+            if process.wait(timeout=5):
+                raise ValueError('provider')
+            return bytes(out)
+        finally:
+            win.cleanup(process)
+            process.stdout.close()
+            process.stderr.close()
+
+
+def preflight(binary, provider):
+    """Local capability query only: no config creation, OAuth, browser or cloud I/O."""
+    if provider not in {'yandex', 'onedrive', 'dropbox'}:
+        raise ValueError('provider')
+    if os.name == 'nt':
+        from finix import windows_native as win
+        if not win.trusted_binary(binary):
+            raise ValueError('binary')
+        with win.regular(binary):
+            process = win.popen([binary, '--config', 'NUL', 'config', 'providers'],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            output, total = bytearray(), 0
+            try:
+                for stdout, chunk in win.output_events(process, time.monotonic() + 15):
+                    total += len(chunk)
+                    if total > 2 * 1024 * 1024:
+                        raise ValueError('output')
+                    if stdout:
+                        output.extend(chunk)
+                if process.wait(timeout=5):
+                    raise ValueError('binary')
+            finally:
+                win.cleanup(process)
+                process.stdout.close()
+                process.stderr.close()
+    else:
+        info = Path(binary).stat()
+        if info.st_uid not in {0, os.getuid()} or info.st_mode & 0o022:
+            raise ValueError('binary')
+        result = subprocess.run([binary, '--config', os.devnull, 'config', 'providers'],
+                                stdin=subprocess.DEVNULL, capture_output=True, timeout=15)
+        if result.returncode or len(result.stdout) + len(result.stderr) > 2 * 1024 * 1024:
+            raise ValueError('binary')
+        output = result.stdout
+    providers = json.loads(output)
+    if not isinstance(providers, list) or not any(p.get('Prefix') == provider for p in providers if isinstance(p, dict)):
+        raise ValueError('provider unavailable')
+    emit(status='ready', provider=provider)
+
+
 def connect_workspace(home, stage):
     # This subprocess alone owns Google credentials; never forward setup.py's
     # localhost:1/manual-code/argv protocol to the model or plugin settings.
@@ -186,15 +262,25 @@ class SafeStdout:
 
 
 def main():
-    import resource
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    # Hard stop also covers a parent restart, unanswered choices and callbacks.
-    import signal
-    signal.signal(signal.SIGALRM, lambda *_: os._exit(1))
-    signal.alarm(330)
-    provider, home, stage, binary = sys.argv[1:]
+    if os.name != 'nt':
+        import resource
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        # Linux's existing hard deadline is retained.
+        import signal
+        signal.signal(signal.SIGALRM, lambda *_: os._exit(1))
+        signal.alarm(330)
+    else:
+        # Direct script entry must resolve the sibling package, not cwd modules.
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        import threading
+        timer = threading.Timer(330, lambda: os._exit(1))
+        timer.daemon = True
+        timer.start()
     try:
-        if provider == 'workspace-reuse':
+        provider, home, stage, binary = sys.argv[1:]
+        if provider.startswith('preflight-'):
+            preflight(binary, provider.removeprefix('preflight-'))
+        elif provider == 'workspace-reuse':
             import importlib.util
             sys.path.insert(0, str(Path(binary).parent))
             spec = importlib.util.spec_from_file_location('finix_workspace_auth', binary)
@@ -219,10 +305,15 @@ def main():
             raise ValueError('provider')
     except BaseException as exc:
         # Only this closed remediation code crosses; never serialize exceptions.
-        if isinstance(exc, ValueError) and exc.args == ('WORKSPACE_REFRESH_TOKEN_REQUIRED',):
-            emit(status='failed', code='WORKSPACE_REFRESH_TOKEN_REQUIRED')
-        else:
-            emit(status='failed')
+        code = 'CONNECTION_FAILED'
+        if isinstance(exc, (TimeoutError, subprocess.TimeoutExpired)):
+            code = 'CONNECTION_TIMEOUT'
+        elif isinstance(exc, ValueError) and len(exc.args) == 1 and isinstance(exc.args[0], str):
+            code = {'WORKSPACE_REFRESH_TOKEN_REQUIRED': 'WORKSPACE_REFRESH_TOKEN_REQUIRED',
+                    'binary': 'UNTRUSTED_BINARY', 'provider': 'RCLONE_PROVIDER_FAILED',
+                    'probe': 'RCLONE_PROVIDER_FAILED', 'unsupported': 'CONNECTION_UNSUPPORTED',
+                    'expired': 'CONNECTION_TIMEOUT'}.get(exc.args[0], 'CONNECTION_FAILED')
+        emit(status='failed', code=code)
         return 1
     return 0
 

@@ -46,10 +46,13 @@ class CoreReviewTests(unittest.TestCase):
             'vault/vault.key', 'vault/vault.json.enc', 'secrets/custom.json',
             'pairing/telegram.json', 'platforms/pairing/discord.json',
             'sessions/custom/session.json', 'auth.json', '.env',
-            'gateway_state.json', 'channel_aliases.json', 'channel_directory.json',
+            'channel_aliases.json',
             'processes.json', 'feishu_comment_pairing.json',
         ]
         for name in names:
+            self.put(name)
+        # Current durable policy deliberately excludes regenerated runtime caches.
+        for name in ('gateway_state.json','channel_directory.json'):
             self.put(name)
         databases = ['memory_store.db', 'response_store.db', 'projects.db',
                      'verification_evidence.db', 'kanban.db',
@@ -76,6 +79,8 @@ class CoreReviewTests(unittest.TestCase):
         result = self.backup()
         entries = core.validate_archive(core.decrypt(result['path'], self.key))
         target = self.restore(result)
+        for name in ('gateway_state.json','channel_directory.json'):
+            self.assertFalse((target/name).exists())
         self.assertEqual([n for n in names if not (target / n).is_file()], [])
         for name in names:
             self.assertEqual((target / name).read_bytes(), (self.source / name).read_bytes())

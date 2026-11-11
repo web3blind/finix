@@ -48,6 +48,64 @@ class SetupApiTests(unittest.TestCase):
         self.addCleanup(self.client.close)
         self.state, self.calls, self.module = state, calls, module
 
+    def test_check_failure_codes_are_closed_and_survive_status_refresh(self):
+        import importlib
+        rclone = importlib.import_module(self.module._package + '.rclone_storage')
+        cases = [
+            (__import__('sqlite3').DatabaseError('private SQLite path'), 'SETUP_SQLITE_FAILED'),
+            (self.module.FinixError('Source changed during discovery'), 'SETUP_SOURCE_CHANGED'),
+            (self.module.FinixError('Ciphertext readback mismatch'), 'SETUP_READBACK_FAILED'),
+            (rclone.RcloneError('SHORT_DOWNLOAD'), 'SETUP_READBACK_FAILED'),
+            (rclone.RcloneError('BINARY_MISSING'), 'SETUP_DEPENDENCY_UNAVAILABLE'),
+            (rclone.RcloneError('CONFIG_UNAVAILABLE'), 'SETUP_CLOUD_CONFIG_UNAVAILABLE'),
+            (rclone.RcloneError('PROVIDER_ERROR'), 'SETUP_CLOUD_FAILED'),
+            (self.module.FinixError('NEED_SQLITE_TEMP_DIRECTORY'), 'SETUP_SQLITE_TEMP_REQUIRED'),
+            (PermissionError('C:/private/user/data provider-secret'), 'SETUP_ACCESS_DENIED'),
+            (ValueError('private provider stderr token=secret'), 'SETUP_CHECK_FAILED'),
+        ]
+        flow = self.module.setup_flow(None)
+        body = {'profile_id': self.state['profile_id']}
+        for error, code in cases:
+            with self.subTest(code=code), patch.object(flow, 'check_and_run', side_effect=error), \
+                    patch.object(self.module, 'setup_flow', lambda p: flow):
+                failed = self.client.post('/setup/check', json=body)
+                self.assertEqual(failed.status_code, 409)
+                self.assertEqual(failed.json(), {'detail': code})
+                status = self.client.get('/setup').json()
+                self.assertEqual(status['last_error_code'], code)
+                self.assertFalse(status['check_running'])
+                self.assertNotIn('private', str(status))
+                self.assertNotIn('secret', failed.text)
+        self.client.post('/setup/check', json=body)
+        self.assertIsNone(self.client.get('/setup').json()['last_error_code'])
+
+    def test_public_readiness_is_no_spawn_and_strictly_allowlisted(self):
+        import os
+        import importlib
+        import subprocess
+        resolver = importlib.import_module(self.module._package + '.windows_native') if os.name == 'nt' else None
+        with patch.object(subprocess, 'Popen', side_effect=AssertionError('NO SPAWN')):
+            response = self.client.get('/readiness')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        data = response.json()
+        self.assertEqual(set(data), {'platform', 'code_version', 'tools'})
+        self.assertEqual(data['code_version'], 'canonical-tools-v1')
+        self.assertEqual(set(data['tools']), {'age', 'age-keygen', 'rclone'})
+        for tool in data['tools'].values():
+            self.assertEqual(set(tool), {'available', 'code'})
+            self.assertIsInstance(tool['available'], bool)
+            self.assertIn(tool['code'], {'READY', 'TOOL_MISSING', 'UNTRUSTED_BINARY', 'TOOL_CHECK_FAILED'})
+        if resolver:
+            for exc, code in [(FileNotFoundError('secret-path'), 'TOOL_MISSING'),
+                              (PermissionError('secret-acl'), 'UNTRUSTED_BINARY'),
+                              (RuntimeError('secret-runtime'), 'TOOL_CHECK_FAILED')]:
+                with patch.object(resolver, 'find_tool', side_effect=exc):
+                    denied = self.client.get('/readiness')
+                self.assertNotIn('secret', denied.text)
+                self.assertTrue(all(t == {'available': False, 'code': code}
+                                    for t in denied.json()['tools'].values()))
+
     def test_setup_order_binding_and_exact_period_readback(self):
         client, state, calls = self.client, self.state, self.calls
         assert client.get('/setup').headers['cache-control'] == 'no-store'

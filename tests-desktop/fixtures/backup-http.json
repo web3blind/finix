@@ -1,0 +1,341 @@
+{
+  "initial": {
+    "code_version": "backup-jobs-v1",
+    "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+    "job": null
+  },
+  "setup_before": {
+    "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+    "recipient_present": true,
+    "recipient_locked": true,
+    "recipient": "age16ufu69atwee9tpgvzvzw9r2y2h7n27ja9ss6zqfnesmdxkmtug7ssgma86",
+    "stage": "check",
+    "verified": false,
+    "capture": null,
+    "interval_hours": 0,
+    "storage": "rclone",
+    "storage_label": "rclone",
+    "proof": null,
+    "key_instructions": "The server stores only the public age recipient, never your private key. If absent, create and save the recovery key on your own device using the offline dist/keygen.html or Desktop client; register only its public age1 recipient. An existing registered recipient cannot be replaced.",
+    "cloud_instructions": "Choose workspace, yandex, onedrive or dropbox using connect; choose local explicitly for local-only copies. Check runs the actual first backup and cloud readback before enabling a period.",
+    "check_running": false,
+    "last_error_code": null
+  },
+  "setup_terminal": {
+    "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+    "recipient_present": true,
+    "recipient_locked": true,
+    "recipient": "age16ufu69atwee9tpgvzvzw9r2y2h7n27ja9ss6zqfnesmdxkmtug7ssgma86",
+    "stage": "schedule",
+    "verified": true,
+    "capture": {
+      "complete": true,
+      "omitted_count": 0
+    },
+    "interval_hours": 0,
+    "storage": "rclone",
+    "storage_label": "rclone",
+    "proof": {
+      "archive": "finix-e2fe789706144de6bea21feac393c4c4-a3fd0dfee0d74daebc5a0dba926fa95a.age",
+      "binding": "bb85e3838a417498556a535d0161b050a46da3d537ddeba031c6b6645af51d33",
+      "checked_at": 1794152239.7000732,
+      "cloud_readback": true,
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "sha256": "f46d9d9876ed7a3bd14290f6d8db2ec065690d84a975d734087b7ee5df87e72f",
+      "storage": "rclone",
+      "version": 1
+    },
+    "key_instructions": "The server stores only the public age recipient, never your private key. If absent, create and save the recovery key on your own device using the offline dist/keygen.html or Desktop client; register only its public age1 recipient. An existing registered recipient cannot be replaced.",
+    "cloud_instructions": "Choose workspace, yandex, onedrive or dropbox using connect; choose local explicitly for local-only copies. Check runs the actual first backup and cloud readback before enabling a period.",
+    "check_running": false,
+    "last_error_code": null
+  },
+  "ack": {
+    "code_version": "backup-jobs-v1",
+    "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+    "job": {
+      "id": "e0abb56779c24b1880d470533c5cb81f",
+      "state": "running",
+      "phase": "starting",
+      "progress": {
+        "percent": null,
+        "completed_bytes": null,
+        "total_bytes": null,
+        "completed_files": null,
+        "total_files": null
+      },
+      "started_at": 1794152236.44091,
+      "updated_at": 1794152236.44091,
+      "error_code": null,
+      "verified": false,
+      "complete": null,
+      "omitted_count": null
+    }
+  },
+  "polls": [
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "upload",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152238.1237156,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    },
+    {
+      "code_version": "backup-jobs-v1",
+      "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+      "job": {
+        "id": "e0abb56779c24b1880d470533c5cb81f",
+        "state": "running",
+        "phase": "verify",
+        "progress": {
+          "completed_bytes": 2874,
+          "completed_files": null,
+          "percent": 50,
+          "total_bytes": 5748,
+          "total_files": null
+        },
+        "started_at": 1794152236.44091,
+        "updated_at": 1794152239.24065,
+        "error_code": null,
+        "verified": false,
+        "complete": null,
+        "omitted_count": null
+      }
+    }
+  ],
+  "terminal": {
+    "code_version": "backup-jobs-v1",
+    "profile_id": "8b4743c0725425a8639c744b7cd1af34e76e7ba1ca41b9586fdfb3ddf86c65d5",
+    "job": {
+      "id": "e0abb56779c24b1880d470533c5cb81f",
+      "state": "succeeded",
+      "phase": "committed",
+      "progress": {
+        "completed_bytes": null,
+        "completed_files": null,
+        "percent": 100,
+        "total_bytes": null,
+        "total_files": null
+      },
+      "started_at": 1794152236.44091,
+      "updated_at": 1794152239.739577,
+      "error_code": null,
+      "verified": true,
+      "complete": true,
+      "omitted_count": 0
+    }
+  }
+}

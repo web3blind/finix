@@ -248,7 +248,7 @@ class StreamingTests(unittest.TestCase):
                 stream.write(os.urandom(MiB))
         tracemalloc.start()
         try:
-            result = self.backup()
+            result = self.backup(sqlite_temp_dir=self.stage)
             self.assertGreater(Path(result['path']).stat().st_size, 128 * MiB)
             core.restore(result['path'], self.key, self.root / 'restored')
             _, peak = tracemalloc.get_traced_memory()

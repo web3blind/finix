@@ -65,13 +65,17 @@ class WorkspaceTests(unittest.TestCase):
         self.path = self.root / 'input.age'
         self.path.write_bytes(b'age-encryption.org/v1\nsynthetic-ciphertext')
 
+    def completion(self):
+        # Synthetic transport fixtures explicitly attest their known provenance.
+        return dict(sha256=core.digest_file(self.path), complete=True, omitted_count=0)
+
     def test_upload_recovery_restart_retention_and_foreign(self):
         foreign = dict(id='foreign', mimeType=MIME, parents=['irrelevant'], trashed=False)
         self.fake.objects['foreign'] = foreign
-        first = self.drive.backup_cipher(self.path)
-        record = self.drive.backup_cipher(self.path)
+        first = self.drive.backup_cipher(self.path, completion=self.completion())
+        record = self.drive.backup_cipher(self.path, completion=self.completion())
         restarted = WorkspaceDrive(self.home, 'a' * 64, self.state, runner=self.fake)
-        latest = restarted.backup_cipher(self.path, keep=1)
+        latest = restarted.backup_cipher(self.path, completion=self.completion(), keep=1)
         self.assertTrue(self.fake.objects[first['id']]['trashed'])
         self.assertTrue(self.fake.objects[record['id']]['trashed'])
         self.assertFalse(self.fake.objects['foreign']['trashed'])
@@ -85,41 +89,41 @@ class WorkspaceTests(unittest.TestCase):
             recovery.download(latest, output)
 
     def test_corrupt_and_wrong_parent_do_not_index_or_prune(self):
-        first = self.drive.backup_cipher(self.path)
+        first = self.drive.backup_cipher(self.path, completion=self.completion())
         for flag in ('corrupt', 'bad_parent'):
             setattr(self.fake, flag, True)
             with self.assertRaises(core.FinixError):
-                self.drive.backup_cipher(self.path, keep=1)
+                self.drive.backup_cipher(self.path, completion=self.completion(), keep=1)
             setattr(self.fake, flag, False)
         self.assertFalse(self.fake.objects[first['id']]['trashed'])
         self.assertEqual(len(json.loads((self.state / 'workspace.json').read_text())['records']), 1)
         self.assertTrue(self.path.exists())
 
     def test_missing_ledger_new_namespace_and_binding(self):
-        first = self.drive.backup_cipher(self.path)
+        first = self.drive.backup_cipher(self.path, completion=self.completion())
         (self.state / 'workspace.json').unlink()
-        new = self.drive.backup_cipher(self.path, keep=1)
+        new = self.drive.backup_cipher(self.path, completion=self.completion(), keep=1)
         self.assertNotEqual(first['folder_id'], new['folder_id'])
         self.assertFalse(self.fake.objects[first['id']]['trashed'])
         wrong = WorkspaceDrive(self.home, 'b' * 64, self.state, runner=self.fake)
         with self.assertRaises(core.FinixError):
-            wrong.backup_cipher(self.path, keep=1)
+            wrong.backup_cipher(self.path, completion=self.completion(), keep=1)
 
     def test_partial_prune_restart_404_and_owner_changed(self):
-        records = [self.drive.backup_cipher(self.path) for _ in range(3)]
+        records = [self.drive.backup_cipher(self.path, completion=self.completion()) for _ in range(3)]
         self.fake.fail_delete = records[1]['id']
         with self.assertRaises(WorkspaceError):
-            self.drive.backup_cipher(self.path, keep=1)
+            self.drive.backup_cipher(self.path, completion=self.completion(), keep=1)
         journal = json.loads((self.state / 'workspace.json').read_text())
         self.assertNotIn(records[0]['id'], [x['id'] for x in journal['records']])
         del self.fake.objects[records[1]['id']]
         self.fake.fail_delete = None
-        self.drive.backup_cipher(self.path, keep=1)
+        self.drive.backup_cipher(self.path, completion=self.completion(), keep=1)
         self.assertEqual(len(json.loads((self.state / 'workspace.json').read_text())['records']), 1)
-        row = self.drive.backup_cipher(self.path)
+        row = self.drive.backup_cipher(self.path, completion=self.completion())
         self.fake.objects[row['id']]['owners'] = [{'emailAddress': 'changed@example.invalid'}]
         with self.assertRaises(core.FinixError):
-            self.drive.backup_cipher(self.path, keep=1)
+            self.drive.backup_cipher(self.path, completion=self.completion(), keep=1)
         self.assertFalse(self.fake.objects[row['id']]['trashed'])
 
     def test_profile_handler_e2e_age_restore_and_failure_preserves_local(self):
@@ -149,11 +153,11 @@ class WorkspaceTests(unittest.TestCase):
             self.assertGreaterEqual(len(list((profile.root / 'copies').glob('*.age'))), 2)
 
     def test_readiness_presence_only_missing_deps_and_minimal_env(self):
-        with patch('finix.workspace_drive.helper_path', return_value=self.path), patch('importlib.util.find_spec', return_value=object()):
+        with patch('finix.workspace_drive.helper_path', return_value=self.path), patch('finix.workspace_drive.WorkspaceRunner.__call__', return_value={'dependencies_ready': True}):
             self.assertEqual(self.drive.status()['code'], 'TOKEN_ABSENT')
             (self.home / 'google_token.json').write_text('invalid synthetic token, must not parse')
             self.assertEqual(self.drive.status()['code'], 'LOCAL_READY')
-        with patch('finix.workspace_drive.helper_path', return_value=self.path), patch('importlib.util.find_spec', return_value=None):
+        with patch('finix.workspace_drive.helper_path', return_value=self.path), patch('finix.workspace_drive.WorkspaceRunner.__call__', return_value={'dependencies_ready': False}):
             self.assertEqual(self.drive.status()['code'], 'DEPENDENCIES_MISSING')
         with patch.dict(os.environ, {'HERMES_HOME': '/wrong', 'GOOGLE_APPLICATION_CREDENTIALS': '/secret', 'HERMES_GWS_BIN': '/hostile', 'PYTHONPATH': '/hostile'}):
             env = child_env(self.home)
@@ -184,7 +188,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_cli_recovery_and_cipher_bounds(self):
         from finix.workspace_drive import main
-        record = self.drive.backup_cipher(self.path)
+        record = self.drive.backup_cipher(self.path, completion=self.completion())
         saved = self.root / 'public.json'
         saved.write_text(json.dumps(record))
         output = self.root / 'cli.age'
@@ -194,7 +198,7 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(main(argv), 0)
         self.assertEqual(output.read_bytes(), self.path.read_bytes())
         self.assertEqual(output.stat().st_mode & 0o777, 0o600)
-        self.assertTrue(self.drive.backup_cipher(self.path)['verified'])
+        self.assertTrue(self.drive.backup_cipher(self.path, completion=self.completion())['verified'])
         link = self.root / 'link.age'
         link.symlink_to(self.path)
         with self.assertRaises(core.FinixError):

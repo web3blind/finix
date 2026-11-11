@@ -1,8 +1,12 @@
 import * as sdk from '@hermes/plugin-sdk';
+import {useLocalized,createLocale,translate} from './i18n.mjs';
 import { jsx, jsxs } from 'react/jsx-runtime';
+import { useEffect } from 'react';
 import { createKeySession, validateRecipient } from '../../web/keys.mjs';
 import { createCloud, Cloud } from './cloud.mjs';
 import { createSetup, SetupCheck } from './setup.mjs';
+import { createRecovery, Recovery } from './recovery.mjs';
+import { createDefaultMaintenance, DefaultMaintenance } from './default-maintenance.mjs';
 
 // Authority is window-route scoped, not the currently focused chat's profile.
 // Older hosts may generate/save keys, but cannot safely register them.
@@ -48,7 +52,8 @@ function createWorkflow(ctx) {
   }
   const actions = {
     generate: () => run(async () => {
-      if (state.get().backend?.recipient) return;
+      if (!state.get().backend || state.get().backend.recipient) return;
+      assertOwner();
       key.clear(); owner = scope();
       publish({ recipient: null, saved: false, verified: false, backend: null, replacement: false });
       const recipient = await key.generate();
@@ -87,7 +92,7 @@ function createWorkflow(ctx) {
       }
       const backend = await readStatus();
       publish({ backend, replacement: false, message: 'Backend status loaded for this key’s profile and route. Registration still requires your explicit click.' });
-    }, 'Registration unavailable: backend missing, incompatible, or active profile/backend changed. Local key generation and saving do not require a backend.'),
+    }, 'Public recipient status unknown. Registration unavailable: backend missing, incompatible, or active profile/backend changed. Refresh backend status before generating a key; your registered public key and saved private files are not deleted.'),
     replacement: checked => {
       try { assertOwner(); publish({ replacement: checked === true }); }
       catch { publish({ message: 'Profile/backend changed. Generate a new key before registering.' }); }
@@ -115,7 +120,8 @@ function createWorkflow(ctx) {
     }, 'Registration not confirmed. Check status and profile/backend, verify the saved key, and an existing registered key cannot be replaced.'),
     copy: () => run(async () => {
       assertOwner();
-      if (!key.recipient || !await ctx.os?.writeClipboard(key.recipient)) throw new Error('clipboard unavailable');
+      const recipient = key.recipient ?? state.get().backend?.recipient;
+      if (!recipient || !await ctx.os?.writeClipboard(recipient)) throw new Error('clipboard unavailable');
       assertOwner(); publish({ message: 'Public recipient copied.' });
     }, 'Copy unavailable or profile/backend changed. Only the public recipient may be copied.'),
     clear: () => {
@@ -125,12 +131,19 @@ function createWorkflow(ctx) {
     }
   };
   ctx.onDispose(() => { disposed = true; key.clear(); owner = null; });
-  return { state, actions };
+  return { state, actions, isCurrent: () => !disposed && owner !== null && sameScope(owner, scope()) };
 }
 
 function Finix({ workflow }) {
-  const s = sdk.useValue(workflow.state);
+ const {jsx,jsxs,language}=useLocalized();
+  const value = sdk.useValue(workflow.state);
   const profile = sdk.useValue(sdk.host.state.profile);
+  const gateway = sdk.useValue(sdk.host.state.gateway);
+  const epoch = sdk.gatewayActivationEpoch?.();
+  // Registration can precede gateway readiness. Retry on mount/activation,
+  // never poll or infer that an unavailable backend has no registered key.
+  useEffect(() => { void workflow.actions.refresh(); }, [workflow, profile, gateway, epoch]);
+  const s = workflow.isCurrent() ? value : { ...value, recipient: null, backend: null, saved: false, verified: false };
   const a = workflow.actions;
   const button = (label, onClick, disabled = false) => jsx(sdk.Button, { type: 'button', disabled: s.busy || disabled, onClick, children: label });
   const locked = !!s.backend?.recipient;
@@ -142,11 +155,11 @@ function Finix({ workflow }) {
       jsx('p', { children: 'Store the private recovery file outside Hermes in a safe local folder. Never send it in chat. Registration sends only the public recipient. Clearing or generating again discards the in-memory key.' }),
       jsx('h2', { children: '1. Ключ восстановления' }),
       locked && jsx('p', { role: 'status', children: 'Публичный ключ зарегистрирован. Приватный ключ хранится у вас. Изменение ключа недоступно.' }),
-      button('Generate new key', a.generate, locked),
+      button('Generate new key', a.generate, locked || !s.backend),
       button('Clear key', a.clear, !s.recipient || locked),
       jsx('p', { children: 'Public age recipient' }),
-      jsx('output', { 'aria-label': 'Public age recipient', style: { overflowWrap: 'anywhere', display: 'block' }, children: s.recipient ?? s.backend?.recipient ?? 'No key generated' }),
-      button('Copy public recipient', a.copy, !s.recipient),
+      jsx('output', { 'aria-label': 'Public age recipient', style: { overflowWrap: 'anywhere', display: 'block' }, children: s.recipient ?? s.backend?.recipient ?? (s.backend ? 'No public recipient registered' : 'Public recipient status unknown. Refresh backend status; saved keys are unchanged.') }),
+      button('Copy public recipient', a.copy, !s.recipient && !locked),
       button('Save private key to local folder', a.save, !s.recipient),
       jsxs('label', { children: ['Verify saved recovery file (maximum 4096 bytes)', jsx('input', {
         type: 'file', accept: '.txt,text/plain', disabled: s.busy || !s.saved,
@@ -156,7 +169,7 @@ function Finix({ workflow }) {
           if (file) return a.verify(file);
         }
       })] }),
-      jsx('p', { children: s.verified ? 'Saved key: verified' : 'Saved key: not verified' }),
+      jsx('p', { children: s.verified ? 'Saved key: verified' : locked && !s.recipient ? 'Private recovery file: not loaded in this session. This does not mean your saved file is missing or deleted. Cloud/setup uses the registered public recipient; no private file is required.' : 'Saved key: not verified' }),
       button('Refresh backend status', a.refresh),
       jsx('p', { children: s.backend ? `Backend profile: ${s.backend.profile_id}; configured recipient: ${s.backend.recipient ?? 'none'}` : 'Backend registration unavailable until status is loaded.' }),
       button('Register public recipient', a.register, !s.saved || !s.verified || !s.backend || locked),
@@ -170,8 +183,9 @@ function Finix({ workflow }) {
 export default {
   id: 'finix', name: 'Finix',
   register(ctx) {
+    const locale = createLocale(ctx);
     const workflow = createWorkflow(ctx);
-    workflow.cloud = createCloud(ctx, () => !!workflow.state.get().backend?.recipient);
+    workflow.cloud = createCloud(ctx, () => workflow.isCurrent() && !!workflow.state.get().backend?.recipient);
     workflow.setup = createSetup(ctx);
     void workflow.actions.refresh();
     const render = () => jsx(Finix, { workflow });
@@ -179,5 +193,21 @@ export default {
     ctx.register({ id: 'page', area: sdk.ROUTES_AREA, data: { path: '/finix' }, render });
     ctx.register({ id: 'nav', area: sdk.SIDEBAR_NAV_AREA, data: { path: '/finix', label: 'Finix', codicon: 'shield' } });
     ctx.register({ id: 'open', area: sdk.PALETTE_AREA, data: { id: 'finix.open', label: 'Open Finix', run: () => sdk.host.navigate('/finix') } });
+    const recovery = createRecovery(ctx);
+    const maintenance = createDefaultMaintenance(ctx);
+    ctx.register({ id: 'default-maintenance-page', area: sdk.ROUTES_AREA, data: { path: '/finix/default-maintenance' }, render: () => jsx(DefaultMaintenance, { maintenance }) });
+    ctx.register({ id: 'default-maintenance-nav', area: sdk.SIDEBAR_NAV_AREA, data: { path: '/finix/default-maintenance', label: 'Finix — physical-default maintenance', codicon: 'tools' } });
+    ctx.register({ id: 'default-maintenance-open', area: sdk.PALETTE_AREA, data: { id: 'finix.default-maintenance', label: 'Finix: physical-default maintenance', run: () => sdk.host.navigate('/finix/default-maintenance') } });
+    ctx.register({ id: 'recovery-page', area: sdk.ROUTES_AREA, data: { path: '/finix/restore' }, render: () => jsx(Recovery, { recovery }) });
+    ctx.register({ id: 'recovery-nav', area: sdk.SIDEBAR_NAV_AREA, data: { path: '/finix/restore', label: 'Finix — восстановление', codicon: 'history' } });
+    ctx.register({ id: 'recovery-open', area: sdk.PALETTE_AREA, data: { id: 'finix.restore', label: 'Finix: восстановить копию', run: () => sdk.host.navigate('/finix/restore') } });
+    let navLanguage = 'ru';
+    const localizedNav = language => {
+      if(language===navLanguage)return;
+      navLanguage=language;
+      ctx.register({ id: 'recovery-nav', area: sdk.SIDEBAR_NAV_AREA, data: { path: '/finix/restore', label: translate('Finix — восстановление',language), codicon: 'history' } });
+      ctx.register({ id: 'recovery-open', area: sdk.PALETTE_AREA, data: { id: 'finix.restore', label: translate('Finix: восстановить копию',language), run: () => sdk.host.navigate('/finix/restore') } });
+    };
+    ctx.onDispose(locale.subscribe(localizedNav));
   }
 };
