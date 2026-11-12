@@ -125,7 +125,19 @@ class SharedTargetRuntime:
         names=ack.get('served_profiles')
         if (ack.get('served')!=r['name'] or ack.get('pending') or ack.get('error')
                 or not isinstance(names,list) or any(not isinstance(n,str) for n in names)
-                or len(names)!=len(expected) or set(names)!=expected):_fail()
+                or len(names)!=len(expected) or set(names)!=expected):
+            # A non-final ACK cannot authorize durable unparked startup. Restore
+            # the inert marker only after re-admitting the retained exact target.
+            # This does not stop or claim to revoke an ambiguously served host.
+            from . import core
+            from .recovery_pipeline import _CAPS, _admit
+            cap=next((cap for cap,record in _CAPS.items() if record is r),None)
+            if cap is not None:
+                _admit(cap)
+                with core.regular_output(r['target']/'gateway.parked') as fd:
+                    os.write(fd,b'finix-recovered-review-required\n')
+                    os.fsync(fd)
+            _fail()
         r['serve_ack']=ack
         self.ready()
         return ack

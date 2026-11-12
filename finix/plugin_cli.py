@@ -246,7 +246,7 @@ def _recovery(profile, args):
         try:
             while state['state']=='running':
                 try:
-                    if state['phase']=='awaiting_key' and not key_sent:
+                    if not interrupted and state['phase']=='awaiting_key' and not key_sent:
                         with trusted_file(identity) as fd:
                             key=bytearray(core.read_regular(fd,MAX_KEY))
                         operations.key(service,state['id'],request_id=str(uuid.uuid5(uuid.UUID(intent),'identity')),identity=key)

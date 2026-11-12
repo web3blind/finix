@@ -23,9 +23,11 @@ def invoke(profile, *words):
 
 @pytest.fixture
 def local(tmp_path, monkeypatch):
-    home = core.private_dir(tmp_path/'owner')
+    host_root = core.private_dir(tmp_path/'host')
+    home = core.private_dir(host_root/'profiles/owner')
     (home/'config.yaml').write_text('model:\n  default: synthetic-no-provider\n')
-    profile = Profile(home, default_root=home)
+    profile = Profile(home, default_root=host_root)
+    monkeypatch.setenv('HERMES_HOME',str(host_root))
     import hermes_constants
     monkeypatch.setattr(hermes_constants, 'get_hermes_home', lambda: home)
     return profile, tmp_path
@@ -91,18 +93,8 @@ def backup(local):
 def test_restore_real_import_then_requires_exact_serving_ack(local, monkeypatch):
     profile, root = local
     copy, key = backup(local)
-    monkeypatch.setenv('HERMES_HOME', str(root/'host'))
-    from gateway import host_attach, control_socket
-    from types import SimpleNamespace
-    monkeypatch.setattr(host_attach,'host_gateway',lambda **kw:SimpleNamespace(home=root/'host',standalone=False))
-    calls=[]
-    def serve(home,name):
-        assert home == root/'host'
-        assert name.startswith('recovered-')
-        assert not (home/'profiles'/name/'gateway.parked').exists()
-        calls.append(name)
-        return dict(served=name,served_profiles=['default',name])
-    monkeypatch.setattr(control_socket,'request_serve_profile_hot',serve)
+    from cli_sdk_fixture import host
+    calls=host(local,monkeypatch)
     code, events = invoke(profile,'recovery','restore','--copy-id',copy,'--identity',str(key))
     assert code == 0, events
     assert events[-1]['activated'] is True
@@ -148,45 +140,83 @@ def test_closed_failures_never_activate(local, monkeypatch, case):
     assert not any(e.get('activated') or e.get('use_command') for e in events)
     assert str(key) not in json.dumps(events)
     assert 'AGE-SECRET-KEY' not in json.dumps(events)
-    assert not list((root/'host/profiles').glob('*'))
+    assert not list((root/'host/profiles').glob('recovered-*'))
     assert (profile.home/'state.db').exists()
 
 
 @pytest.mark.parametrize('interrupt',[False,True])
 def test_pending_sdk_ack_is_not_success_and_import_stays_parked(local, monkeypatch, interrupt):
-    from types import SimpleNamespace
+    import threading
+    from cli_sdk_fixture import host
+    from finix.recovery_operations import RecoveryOperations
     profile, root = local
     copy, key = backup(local)
-    monkeypatch.setenv('HERMES_HOME', str(root/'host'))
-    from gateway import host_attach, control_socket
-    monkeypatch.setattr(host_attach,'host_gateway',lambda **kw:SimpleNamespace(home=root/'host',standalone=False))
-    def serve(home,name):
-        if interrupt:raise KeyboardInterrupt
-        return dict(pending=True,served=name,served_profiles=[name])
-    monkeypatch.setattr(control_socket,'request_serve_profile_hot',serve)
+    entered=threading.Event();release=threading.Event();observed=[]
+    calls=host(local,monkeypatch,pending=True,entered=entered,release=release)
+    original=RecoveryOperations.status
+    def status(self,service,identifier):
+        state=original(self,service,identifier)
+        if entered.is_set() and not release.is_set():
+            observed.append(state)
+            release.set()
+            if interrupt:raise KeyboardInterrupt
+        return state
+    monkeypatch.setattr(RecoveryOperations,'status',status)
     code, events=invoke(profile,'recovery','restore','--copy-id',copy,'--identity',str(key))
-    assert code == (130 if interrupt else 1)
-    assert events[-1]['error'] == ('CANCELLED' if interrupt else 'SERVING_NOT_CONFIRMED')
-    assert not any(e.get('use_command') for e in events)
-    target=next((root/'host/profiles').iterdir())
+    # Import/bootstrap is no longer a cancellable worker phase. Ctrl-C here
+    # cannot turn an ambiguous SDK admission into a safe CANCELLED receipt.
+    assert code == 1
+    assert events[-1]['error'] == 'RECOVERY_INTERRUPTED'
+    assert len(calls)==1 and observed and observed[0]['cancellable'] is False
+    if interrupt:assert any(e.get('error')=='NOT_CANCELLABLE' for e in events)
+    assert not any(e.get('activated') or e.get('use_command') for e in events)
+    target=root/'host/profiles'/calls[0]
     assert (target/'gateway.parked').is_file()
     assert (target/'.finix-paused/hooks/never.py').is_file()
+
+
+def test_nonfinal_ack_never_reparks_a_replaced_target(local, monkeypatch):
+    from cli_sdk_fixture import host
+    profile,root=local
+    copy,key=backup(local)
+    replaced=[]
+    def substitute(target):
+        target.rename(root/'preserved-original-target')
+        core.private_dir(target)
+        (target/'foreign-note').write_text('must remain unchanged')
+        replaced.append(target)
+    calls=host(local,monkeypatch,pending=True,before_ack=substitute)
+    code,events=invoke(profile,'recovery','restore','--copy-id',copy,'--identity',str(key))
+    assert code==1 and len(calls)==1 and len(replaced)==1
+    assert events[-1]['state']=='interrupted'
+    assert not any(e.get('activated') or e.get('use_command') for e in events)
+    assert sorted(p.name for p in replaced[0].iterdir())==['foreign-note']
+    assert (replaced[0]/'foreign-note').read_text()=='must remain unchanged'
+    assert (root/'preserved-original-target/.finix-paused/hooks/never.py').is_file()
 
 
 def test_keyboard_abort_cancels_worker_and_never_imports(local, monkeypatch):
     profile, root = local
     copy, key = backup(local)
-    from finix.recovery import RecoveryService
-    original=RecoveryService.wait
+    from cli_sdk_fixture import host
+    host(local,monkeypatch)
+    from finix.recovery_operations import RecoveryOperations
+    from finix.recovery_import import RecoveryImporter
     calls=[]
-    def interrupt(self, job, timeout=None):
+    original_key=RecoveryOperations.key
+    def interrupt(self,service,identifier,**kwargs):
         if not calls:
-            calls.append(True)
+            calls.append(identifier)
             raise KeyboardInterrupt
-        return original(self, job, timeout)
-    monkeypatch.setattr(RecoveryService,'wait',interrupt)
+        return original_key(self,service,identifier,**kwargs)
+    def forbidden(*a,**kw):pytest.fail('cancelled worker reached import')
+    monkeypatch.setattr(RecoveryOperations,'key',interrupt)
+    monkeypatch.setattr(RecoveryImporter,'import_job',forbidden)
     code, events=invoke(profile,'recovery','restore','--copy-id',copy,'--identity',str(key))
     assert code == 130
+    assert len(calls)==1
+    assert events[-1]['state']=='cancelled'
+    assert not list((root/'host/profiles').glob('recovered-*'))
     assert events[-1]['error'] == 'CANCELLED'
     assert not any(e.get('activated') for e in events)
 
