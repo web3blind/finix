@@ -1,11 +1,14 @@
 """Offline production adapter: synthetic transport, no cloud authorization."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from finix import core
 from finix.workspace_drive import WorkspaceDrive, WorkspaceError, MIME, FOLDER_MIME
+
+ACCOUNT_DIGEST = hashlib.sha256(b'synthetic-account').hexdigest()
 
 class Transport:
     def __init__(self):
@@ -44,7 +47,7 @@ class ReconcileTests(unittest.TestCase):
         self.root=core.private_dir(Path(self.tmp.name)/'private');self.home=core.private_dir(self.root/'home')
         self.state=self.root/'state';self.transport=Transport()
         self.path=self.root/'cipher.age';self.path.write_bytes(b'age-encryption.org/v1\nsynthetic ciphertext')
-        self.drive=WorkspaceDrive(self.home,'a'*64,self.state,runner=self.transport)
+        self.drive=WorkspaceDrive(self.home,'a'*64,self.state,runner=self.transport,account_digest=ACCOUNT_DIGEST)
     def test_invalid_local_inputs_have_no_provider_io(self):
         for completion in ({'sha256':'0'*64,'complete':True,'omitted_count':0},
                            {'sha256':core.digest_file(self.path),'complete':True},
@@ -82,7 +85,7 @@ class ReconcileTests(unittest.TestCase):
 
     def test_active_lease_rejects_second_adapter_without_io(self):
         core.private_dir(self.state)
-        other=WorkspaceDrive(self.home,'a'*64,self.state,runner=self.transport)
+        other=WorkspaceDrive(self.home,'a'*64,self.state,runner=self.transport,account_digest=ACCOUNT_DIGEST)
         with self.drive._locked():
             with self.assertRaises((core.FinixError,OSError)):other.reconcile(self.path)
         self.assertEqual(self.transport.calls,[])
@@ -171,7 +174,7 @@ class ReconcileTests(unittest.TestCase):
         with self.assertRaises(WorkspaceError):self.drive.reconcile(self.path)
         pending=json.loads((self.state/'workspace-pending.json').read_text())
         self.assertIn(pending['record']['id'],self.transport.objects)
-        row=WorkspaceDrive(self.home,'a'*64,self.state,runner=self.transport).reconcile(self.path)
+        row=WorkspaceDrive(self.home,'a'*64,self.state,runner=self.transport,account_digest=ACCOUNT_DIGEST).reconcile(self.path)
         self.assertEqual(row['id'],pending['record']['id'])
         self.assertEqual(self.drive.reconcile(self.path)['id'],row['id'])
         self.assertEqual(sum(op=='upload' for op,_ in self.transport.calls),1)

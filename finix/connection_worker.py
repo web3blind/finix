@@ -116,7 +116,7 @@ def connect_rclone(binary, stage, provider):
                 if any(x in label.lower() for x in ('http', 'token', 'secret', 'code=')):
                     label = ''
                 label = ''.join(c for c in label if c.isprintable())
-                labels.append({'id': str(i), 'label': label or 'Диск ' + str(i + 1)})
+                labels.append({'id': str(i), 'label': label or 'Drive ' + str(i + 1)})
             emit(status='choice', question=name, choices=labels)
             answer = str(examples[read_answer(len(examples))]['Value'])
         else:
@@ -200,67 +200,6 @@ def preflight(binary, provider):
     emit(status='ready', provider=provider)
 
 
-def connect_workspace(home, stage):
-    # This subprocess alone owns Google credentials; never forward setup.py's
-    # localhost:1/manual-code/argv protocol to the model or plugin settings.
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    client = home / 'google_client_secret.json'
-    if (home / 'google_token.json').exists():
-        raise ValueError('reuse existing account')
-
-    # google-auth-oauthlib uses its own WSGI handler; suppress its callback
-    # access log (which otherwise includes the authorization code).
-    with contextlib.redirect_stderr(io.StringIO()):
-        # The client file is owner-controlled, but never let it redirect a
-        # Google grant to an arbitrary token server.
-        payload = json.loads(client.read_text())
-        installed = payload.get('installed') or {}
-        if (installed.get('auth_uri') not in {'https://accounts.google.com/o/oauth2/auth',
-                                            'https://accounts.google.com/o/oauth2/v2/auth'}
-                or installed.get('token_uri') != 'https://oauth2.googleapis.com/token'):
-            raise ValueError('client endpoints')
-        flow = InstalledAppFlow.from_client_config(
-            payload, ['https://www.googleapis.com/auth/drive'])
-        flow.run_local_server(host='127.0.0.1', port=53683, open_browser=False,
-                              authorization_prompt_message='FINIX_AUTH {url}',
-                              success_message='Finix: можно закрыть окно.', timeout_seconds=300,
-                              prompt='consent')
-        # Validate exactly the authorized-user contract the Workspace loader uses.
-        # Never borrow a refresh token from a different, existing grant.
-        from google.oauth2.credentials import Credentials
-        serialized = flow.credentials.to_json()
-        if not flow.credentials.refresh_token:
-            raise ValueError('WORKSPACE_REFRESH_TOKEN_REQUIRED')
-        credentials = Credentials.from_authorized_user_info(json.loads(serialized))
-        # Read-only Drive probe before exposing success. No provider data leaves.
-        from googleapiclient.discovery import build
-        build('drive', 'v3', credentials=credentials).about().get(fields='user').execute()
-        fd = os.open(stage / 'workspace-token.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, 'w') as stream:
-            stream.write(serialized)
-            stream.flush()
-            os.fsync(stream.fileno())
-    emit(status='verified')
-
-
-class SafeStdout:
-    """Convert the library's one authorization prompt into a closed event."""
-    def __init__(self, original):
-        self.original = original
-
-    def write(self, text):
-        if text.startswith('FINIX_AUTH '):
-            url = text[len('FINIX_AUTH '):].strip()
-            parsed = urlsplit(url)
-            if parsed.scheme == 'https' and parsed.hostname == 'accounts.google.com':
-                self.original.write(json.dumps({'status': 'authorize', 'url': url}) + '\n')
-                self.original.flush()
-        return len(text)
-
-    def flush(self):
-        self.original.flush()
-
-
 def main():
     if os.name != 'nt':
         import resource
@@ -280,25 +219,6 @@ def main():
         provider, home, stage, binary = sys.argv[1:]
         if provider.startswith('preflight-'):
             preflight(binary, provider.removeprefix('preflight-'))
-        elif provider == 'workspace-reuse':
-            import importlib.util
-            sys.path.insert(0, str(Path(binary).parent))
-            spec = importlib.util.spec_from_file_location('finix_workspace_auth', binary)
-            module = importlib.util.module_from_spec(spec)
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                spec.loader.exec_module(module)
-                module._gws_binary = lambda: None
-                module.build_service('drive', 'v3').about().get(fields='user').execute()
-            emit(status='verified')
-        elif provider == 'workspace':
-            original = sys.stdout
-            sys.stdout = SafeStdout(original)
-            try:
-                connect_workspace(Path(home), Path(stage))
-            finally:
-                sys.stdout = original
-            # emit inside helper is filtered; final event is explicit.
-            emit(status='verified')
         elif provider in {'yandex', 'onedrive', 'dropbox'}:
             connect_rclone(binary, Path(stage), provider)
         else:
@@ -309,8 +229,7 @@ def main():
         if isinstance(exc, (TimeoutError, subprocess.TimeoutExpired)):
             code = 'CONNECTION_TIMEOUT'
         elif isinstance(exc, ValueError) and len(exc.args) == 1 and isinstance(exc.args[0], str):
-            code = {'WORKSPACE_REFRESH_TOKEN_REQUIRED': 'WORKSPACE_REFRESH_TOKEN_REQUIRED',
-                    'binary': 'UNTRUSTED_BINARY', 'provider': 'RCLONE_PROVIDER_FAILED',
+            code = {'binary': 'UNTRUSTED_BINARY', 'provider': 'RCLONE_PROVIDER_FAILED',
                     'probe': 'RCLONE_PROVIDER_FAILED', 'unsupported': 'CONNECTION_UNSUPPORTED',
                     'expired': 'CONNECTION_TIMEOUT'}.get(exc.args[0], 'CONNECTION_FAILED')
         emit(status='failed', code=code)

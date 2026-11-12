@@ -5,6 +5,7 @@ A read-issued ticket additionally prevents cross-site form/JSON CSRF. Session
 workers are process-local: restart invalidates them; they self-expire on disk.
 """
 import hmac
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,7 +22,7 @@ from urllib.parse import urlsplit, parse_qs
 from . import core
 from .rclone_storage import child_env, relative_root
 
-PROVIDERS = {'workspace': 'Google Workspace', 'yandex': 'Яндекс Диск',
+PROVIDERS = {'workspace': 'Google Drive', 'yandex': 'Yandex Disk',
              'onedrive': 'OneDrive', 'dropbox': 'Dropbox'}
 TTL = 300
 
@@ -45,35 +46,10 @@ def safe_url(provider, url):
     if any(k in query for k in ('code', 'access_token', 'refresh_token', 'id_token')):
         return False
     if provider == 'workspace':
-        allowed = {'response_type', 'client_id', 'redirect_uri', 'scope', 'state', 'access_type',
-                   'prompt', 'code_challenge', 'code_challenge_method', 'include_granted_scopes'}
-        return (u.scheme == 'https' and u.netloc == 'accounts.google.com'
-                and u.path in {'/o/oauth2/auth', '/o/oauth2/v2/auth'}
-                and set(query) <= allowed and all(len(v) == 1 and v[0] for v in query.values())
-                and query.get('response_type') == ['code']
-                and query.get('redirect_uri') == ['http://127.0.0.1:53683/']
-                and bool(query.get('state')) and bool(query.get('client_id')))
+        return False  # Hermes owns Google authorization; Finix never exposes a callback.
     return (u.scheme == 'http' and u.netloc == '127.0.0.1:53682' and u.path == '/auth'
             and set(query) == {'state'} and len(query['state']) == 1
             and re.fullmatch(r'[A-Za-z0-9_~.%-]{1,512}', query['state'][0]) is not None)
-
-
-def workspace_prerequisites(profile, *, oauth=False):
-    from importlib.util import find_spec
-    from .workspace_drive import helper_path
-    helper = helper_path(profile.home)
-    if not helper:
-        raise ConnectionError('WORKSPACE_HELPER_REQUIRED')
-    dependencies = ['google.auth', 'googleapiclient']
-    if oauth:
-        dependencies.append('google_auth_oauthlib')
-    try:
-        ready = all(find_spec(name) is not None for name in dependencies)
-    except (ImportError, ValueError):
-        ready = False
-    if not ready:
-        raise ConnectionError('WORKSPACE_DEPENDENCIES_REQUIRED')
-    return helper
 
 
 class Connections:
@@ -94,7 +70,7 @@ class Connections:
             return {'profile_id': profile.profile_id, 'ticket': entry[0],
                     'providers': [{'id': k, 'label': v} for k, v in PROVIDERS.items()],
                     'session': public, 'local_only': True,
-                    'workspace_setup': 'Owning profile: skills/productivity/google-workspace/scripts/setup.py --client-secret /absolute/local/file.json; do not send file contents or authorization codes in chat.'}
+                    'workspace_setup': 'Run hermes auth add finix:google in this profile. Hermes owns login and credentials. Existing Workspace data is not adopted automatically.'}
 
     def _expire(self):
         for key, s in list(self.sessions.items()):
@@ -146,6 +122,20 @@ class Connections:
         if any(s['public']['status'] in {'working', 'authorize', 'choice', 'verified'}
                for s in self.sessions.values()):
             raise ConnectionError('CONNECTION_BUSY')
+        if provider == 'workspace':
+            from .workspace_drive import WorkspaceRunner
+            try:
+                account = WorkspaceRunner(profile.home)('identity')['account_id']
+                if not isinstance(account, str) or not account:
+                    raise ValueError
+            except Exception:
+                raise ConnectionError('GOOGLE_AUTH_SETUP_REQUIRED') from None
+            ident = secrets.token_hex(16)
+            self.sessions[profile.profile_id] = {
+                'public': {'id': ident, 'provider': provider, 'status': 'verified', 'folder': folder, 'expires_in': TTL},
+                'deadline': time.monotonic() + TTL, 'before': profile.config(), 'process': None, 'stage': None,
+                'account_digest': hashlib.sha256(account.encode()).hexdigest()}
+            return
         binary = ''
         if provider != 'workspace':
             if os.name == 'nt':
@@ -163,15 +153,8 @@ class Connections:
                 info = Path(binary).stat()
                 if info.st_uid not in {0, os.getuid()} or info.st_mode & 0o022:
                     raise ConnectionError('UNTRUSTED_BINARY')
-        else:
-            if not (profile.home / 'google_token.json').exists() and not (profile.home / 'google_client_secret.json').is_file():
-                raise ConnectionError('WORKSPACE_CLIENT_REQUIRED')
-        reuse = provider == 'workspace' and (profile.home / 'google_token.json').exists()
-        worker_provider = 'workspace-reuse' if reuse else provider
-        if provider == 'workspace':
-            helper = workspace_prerequisites(profile, oauth=not reuse)
-            if reuse:
-                binary = str(helper)
+        reuse = False
+        worker_provider = provider
         ident = secrets.token_hex(16)
         stage = profile.root / 'connections' / ident
         core.private_dir(stage.parent)
@@ -233,7 +216,7 @@ class Connections:
                             if any(x in label.lower() for x in ('http', 'token', 'secret', 'code=')):
                                 label = ''
                             label = ''.join(c for c in label if c.isprintable())
-                            labels.append({'id': str(i), 'label': label or 'Диск ' + str(i + 1)})
+                            labels.append({'id': str(i), 'label': label or 'Drive ' + str(i + 1)})
                         s['public'].update(status='choice', question=event['question'],
                                            choices=labels)
                         s['public'].pop('url', None)
@@ -270,6 +253,9 @@ class Connections:
 
     def _stop(self, s, status):
         p = s['process']
+        if p is None:
+            s['public']['status'] = status
+            return
         if os.name == 'nt':
             from .windows_native import cleanup
             cleanup(p)
@@ -284,6 +270,15 @@ class Connections:
         shutil.rmtree(s['stage'], ignore_errors=True)
 
     def _apply(self, profile, s):
+        if s['public']['provider'] == 'workspace':
+            from .workspace_drive import WorkspaceRunner
+            try:
+                account = WorkspaceRunner(profile.home)('identity')['account_id']
+                digest = hashlib.sha256(account.encode()).hexdigest()
+            except Exception:
+                raise ConnectionError('GOOGLE_AUTH_SETUP_REQUIRED') from None
+            if not hmac.compare_digest(digest, s.get('account_digest', '')):
+                raise ConnectionError('GOOGLE_ACCOUNT_CHANGED')
         from .backup_jobs import BackupJobs, state_lease, file_lease
         from .setup_flow import SetupFlow
         jobs = BackupJobs()
@@ -302,14 +297,8 @@ class Connections:
                 if not jobs._transition(profile, job, before_binding):
                     raise ConnectionError('SETTINGS_CHANGED')
             if s['public']['provider'] == 'workspace':
-                workspace_prerequisites(profile, oauth=not s['reuse'])
-                target = profile.home / 'google_token.json'
-                if not s['reuse'] and target.exists():
-                    raise ConnectionError('WORKSPACE_REUSE_EXISTING')
-                # Link is exclusive: never overwrite an existing Workspace account.
-                if not s['reuse']:
-                    os.link(s['stage'] / 'workspace-token.json', target, follow_symlinks=False)
                 cfg['storage'] = 'workspace'
+                cfg['workspace_account'] = digest
             else:
                 from .rclone_storage import config_path
                 path = config_path(str(s['stage'] / 'rclone.conf'))

@@ -242,15 +242,10 @@ class Profile:
         with core.regular_input(path) as fd:
             return json.loads(core.read_regular(fd, 65536))
 
-    def connector(self, cfg=None):
-        from .connector_drive import ManagedDrive
-        cfg = cfg or self.config()
-        return ManagedDrive(self.home, self.profile_id, cfg.get('connector_account', ''),
-                            cfg.get('connector_alias', ''), cfg.get('connector_folder', ''))
-
     def workspace(self):
         from .workspace_drive import WorkspaceDrive
-        return WorkspaceDrive(self.home, self.profile_id, self.root / 'workspace')
+        return WorkspaceDrive(self.home, self.profile_id, self.root / 'workspace',
+                              account_digest=self.config().get('workspace_account'))
 
     def rclone(self, cfg=None):
         from .rclone_storage import RcloneStorage
@@ -292,11 +287,8 @@ class Profile:
         result['capture'] = self.capture_status()
         result['sqlite_temp'] = core.sqlite_temp_readiness(cfg.get('sqlite_temp_dir'))
         if cfg['storage'] == 'connector-drive':
-            from .connector_drive import ConnectorError, ACTIONS
-            try:
-                result['managed_connector'] = self.connector(cfg).status()
-            except ConnectorError as exc:
-                result['managed_connector'] = {'ready': False, 'code': exc.code, 'action': ACTIONS[exc.code]}
+            result['managed_connector'] = {'ready': False, 'code': 'BACKEND_REMOVED',
+                'action': 'Managed Drive is unsupported. Explicitly select Google Drive or rclone; existing data and settings are preserved.'}
         if cfg['storage'] == 'workspace':
             result['workspace'] = self.workspace().status()
         if cfg['storage'] == 'rclone':
@@ -336,8 +328,8 @@ class Profile:
                 if key == 'interval_hours':
                     cfg['next_run'] = time.time() + value * 3600 if value else 0
             elif key == 'storage':
-                if value not in {'local', 'drive', 'connector-drive', 'workspace', 'rclone'}:
-                    raise core.FinixError('Storage must be local, drive, workspace, rclone or connector-drive')
+                if value not in {'local', 'drive', 'workspace', 'rclone'}:
+                    raise core.FinixError('Unsupported storage; select local, drive, workspace or rclone. Existing Managed Drive data is preserved.')
             elif key == 'sqlite_temp_dir':
                 import stat
                 if not isinstance(value, str) or not Path(value).is_absolute():
@@ -364,12 +356,8 @@ class Profile:
                 cfg.pop('rclone_connection', None)
                 if key == 'rclone_config' and Path(value).is_relative_to(self.home):
                     raise core.FinixError('Rclone credentials must remain outside the backed-up profile')
-            elif key in {'connector_account', 'connector_alias', 'connector_folder'}:
-                import re
-                if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.@-]{1,200}', value):
-                    raise core.FinixError('Expected an explicit managed account ID, alias or folder ID')
             else:
-                raise core.FinixError('Allowed settings: storage, retention, interval_hours, sqlite_temp_dir, connector_account, connector_alias, connector_folder, rclone_config, rclone_remote, rclone_root')
+                raise core.FinixError('Allowed settings: storage, retention, interval_hours, sqlite_temp_dir, rclone_config, rclone_remote, rclone_root')
             cfg[key] = value
             core.atomic_json(self.root / 'settings.json', cfg)
         return self.status()
@@ -381,6 +369,8 @@ class Profile:
     def backup(self, scheduled=False, *, progress=None, cancel=None, resume=False):
         with core.locked(self.directories()):
             cfg = self.config()
+            if cfg['storage'] == 'connector-drive':
+                raise core.FinixError('Managed Drive backend removed; select supported storage explicitly. Existing data is preserved.')
             now = time.time()
             if scheduled and (not cfg['interval_hours'] or cfg['next_run'] > now):
                 return {'skipped': True}
@@ -425,7 +415,7 @@ class Profile:
             if cancel is not None: transport_options['cancel'] = cancel
             if cfg['storage'] == 'drive':
                 from .drive import Drive
-                drive = Drive(self.profile_id)
+                drive = Drive(self.profile_id, home=self.home)
                 if not cfg['folder_id']:
                     cfg['folder_id'] = drive.create_folder()
                     core.atomic_json(self.root / 'settings.json', cfg)
@@ -440,9 +430,6 @@ class Profile:
                 # Public recovery record, independent of the original server ledger.
                 core.atomic_json(Path(result['path'] + '.workspace.json'), result['workspace'])
                 check_cancel(cancel)
-            elif cfg['storage'] == 'connector-drive':
-                result['managed_connector'] = self.connector(cfg).upload(
-                    Path(result['path']), self.root / 'connector-index', keep, completion=result)
             elif cfg['storage'] == 'rclone':
                 result['rclone'] = self.rclone(cfg).backup_cipher(Path(result['path']), keep, completion=result, **transport_options)
                 core.atomic_json(Path(result['path'] + '.rclone.json'), result['rclone'])
@@ -731,9 +718,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
                     'Use /finix recipient NEW none for initial registration; '
                     'an existing public recipient cannot be replaced. '
                     'Storage choices: local; drive (own OAuth: hermes auth add finix:google in owner terminal); '
-                    'connector-drive (experimental/unavailable, actual gateway cap 20 MiB; not for large archives: explicitly select connector_account, '
-                    'connector_alias, connector_folder; no automatic login); '
-                    'workspace (existing owning-profile Google Workspace authorization; no token copy or login); '
+                    'workspace (Finix Google OAuth: hermes auth add finix:google; no legacy grant adoption); '
                     'rclone (existing Yandex Disk, OneDrive Personal or Dropbox remote; explicit rclone_config absolute path, '
                     'rclone_remote name and rclone_root relative folder; config outside the backed-up profile). '
                     'New account connection: /finix connect shows the owner-only connection commands.')
@@ -758,7 +743,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
             return json.dumps(profile.configure(args[1], args[2]))
         if args == ['restore']:
             return 'Restore only on your recovery device: python -m finix restore --archive FILE --identity KEYFILE --target NEW_DIRECTORY. Never send a private key to chat.'
-        return 'Usage: /finix status|setup|recipient NEW none|backup|configure storage local/drive/workspace/rclone/connector-drive|configure sqlite_temp_dir ABSOLUTE_PRIVATE_DIRECTORY|configure rclone_config ABSOLUTE_PATH|configure rclone_remote NAME|configure rclone_root RELATIVE_FOLDER|configure connector_account ID|configure connector_alias ALIAS|configure connector_folder ID|configure retention N|configure interval_hours N|restore'
+        return 'Usage: /finix status|setup|recipient NEW none|backup|configure storage local/drive/workspace/rclone|configure sqlite_temp_dir ABSOLUTE_PRIVATE_DIRECTORY|configure rclone_config ABSOLUTE_PATH|configure rclone_remote NAME|configure rclone_root RELATIVE_FOLDER|configure retention N|configure interval_hours N|restore'
     except core.FinixError as exc:
         from .connector_drive import ConnectorError
         from .workspace_drive import WorkspaceError

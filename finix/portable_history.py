@@ -8,12 +8,88 @@ from contextlib import closing
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import sqlite3
 from . import core
 
 CONTRACT = 'sdk-new-content-copy-v1'
+# Finix's per-session RPC admission budget (UTF-8 JSON, excluding derived
+# timings). No archive-wide session/message count cap: each physical session
+# is submitted separately. These are Finix policy, not private SDK constants
+# or a promise that a future server accepts the same payload.
+MAX_SESSION_BYTES = 5 * 1024 * 1024
+MAX_SESSION_MESSAGES = 10_000
+SESSION_TEXT_FIELDS = ('parent_session_id', 'source', 'user_id', 'model', 'system_prompt',
+    'end_reason', 'cwd', 'git_branch', 'git_repo_root', 'billing_provider',
+    'billing_base_url', 'billing_mode', 'cost_status', 'cost_source', 'pricing_version', 'title')
+MESSAGE_TEXT_FIELDS = ('tool_call_id', 'tool_name', 'effect_disposition', 'finish_reason',
+    'reasoning', 'reasoning_content', 'platform_message_id', 'message_id', 'message_uid')
+SESSION_INTEGER_FIELDS = ('input_tokens', 'output_tokens', 'cache_read_tokens',
+    'cache_write_tokens', 'reasoning_tokens', 'api_call_count')
+SESSION_NUMBER_FIELDS = ('estimated_cost_usd', 'actual_cost_usd')
+
+
+def _validate_fields(row, *, text=(), integers=(), numbers=(), epochs=()):
+    for key in text:
+        if row.get(key) is not None and not isinstance(row[key], str):
+            _fail('HISTORY_INVALID_CONTENT')
+    for key in integers:
+        value = row.get(key)
+        if value is not None and (type(value) is not int or not -(1 << 63) <= value < (1 << 63)):
+            _fail('HISTORY_INVALID_CONTENT')
+    for key in (*numbers, *epochs):
+        value = row.get(key)
+        if value is not None and (type(value) not in (int, float) or not math.isfinite(value)):
+            _fail('HISTORY_INVALID_CONTENT')
+        # Cross-platform epoch window accepted by the public history transport.
+        if key in epochs and value is not None and not 0 <= value <= 4_200_000_000:
+            _fail('HISTORY_INVALID_CONTENT')
+
+
+def validate_sessions(sessions):
+    """Validate without normalizing IDs, truncating content, or SDK internals."""
+    if not isinstance(sessions, list):
+        _fail('HISTORY_INVALID_CONTENT')
+    message_ids, message_uids = set(), set()
+    for session in sessions:
+        if (not isinstance(session, dict) or not isinstance(session.get('id'), str)
+                or not session['id'] or session['id'] != session['id'].strip()
+                or not isinstance(session.get('messages'), list)
+                or any(not isinstance(m, dict) for m in session['messages'])):
+            _fail('HISTORY_INVALID_CONTENT')
+        try:
+            size = len(json.dumps({k:v for k,v in session.items() if k != 'timings'},
+                ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode('utf-8'))
+        except (TypeError, ValueError, UnicodeError, RecursionError):
+            _fail('HISTORY_INVALID_CONTENT')
+        if size > MAX_SESSION_BYTES or len(session['messages']) > MAX_SESSION_MESSAGES:
+            _fail('HISTORY_CONTENT_BOUNDS')
+        _validate_fields(session, text=SESSION_TEXT_FIELDS, integers=SESSION_INTEGER_FIELDS,
+                         numbers=SESSION_NUMBER_FIELDS, epochs=('started_at','ended_at'))
+        config = session.get('model_config')
+        if config is not None:
+            try:
+                parsed = json.loads(config) if isinstance(config, str) else config
+                if not isinstance(parsed, dict): _fail('HISTORY_INVALID_CONTENT')
+                json.dumps(parsed, allow_nan=False)
+            except (TypeError, ValueError, RecursionError):
+                _fail('HISTORY_INVALID_CONTENT')
+        for message in session['messages']:
+            if not isinstance(message.get('role'), str) or not message['role']:
+                _fail('HISTORY_INVALID_CONTENT')
+            _validate_fields(message, text=MESSAGE_TEXT_FIELDS, integers=('token_count','id'),
+                             epochs=('timestamp',))
+            if message.get('session_id') != session['id']:
+                _fail('HISTORY_INVALID_LINEAGE')
+            mid, uid = message.get('id'), message.get('message_uid')
+            if mid is None: _fail('HISTORY_INVALID_CONTENT')
+            if mid in message_ids or (uid and uid in message_uids):
+                _fail('HISTORY_ID_COLLISION')
+            message_ids.add(mid)
+            if uid: message_uids.add(uid)
+    return ordered(sessions)
 
 
 def _fail(code):
@@ -51,6 +127,35 @@ def ordered(sessions):
     return output
 
 
+def _verify_inventory(census, sessions):
+    """Match physical identities, not only totals (which can hide substitutions)."""
+    inventories = {}
+    for table, required in (('sessions', {'id','parent_session_id','title'}),
+                            ('messages', {'id','session_id'})):
+        data = census.get(table)
+        if not isinstance(data, dict) or not required <= set(data.get('columns', [])):
+            _fail('HISTORY_INVALID_CONTENT')
+        rows = [dict(zip(data['columns'], row)) for row in data['rows']]
+        by_id = {row['id']: row for row in rows}
+        if len(by_id) != len(rows): _fail('HISTORY_ID_COLLISION')
+        inventories[table] = by_id
+    original_sessions, original_messages = inventories['sessions'], inventories['messages']
+    if set(original_sessions) != {s['id'] for s in sessions}: _fail('HISTORY_TRUNCATED')
+    messages = [m for s in sessions for m in s['messages']]
+    if set(original_messages) != {m['id'] for m in messages} or len(messages) != len(original_messages):
+        _fail('HISTORY_TRUNCATED')
+    for session in sessions:
+        original = original_sessions[session['id']]
+        if any(original.get(k) != session.get(k) for k in ('parent_session_id','title','title_source')):
+            _fail('HISTORY_RICH_DATA_LOSS')
+    for message in messages:
+        original = original_messages[message['id']]
+        if original['session_id'] != message['session_id']:
+            _fail('HISTORY_INVALID_LINEAGE')
+        if original.get('message_uid') != message.get('message_uid'):
+            _fail('HISTORY_ID_COLLISION')
+
+
 def prepare(source, stage, *, expected_payload):
     """Snapshot exact verified DB; public per-session export, no export_all cap."""
     stage=Path(stage);source=Path(source)
@@ -62,7 +167,10 @@ def prepare(source, stage, *, expected_payload):
     if expected_payload != actual: _fail('HISTORY_SOURCE_BINDING_REQUIRED')
     census=_census(original)
     _json(stage/'census.json',census)
-    if 'sessions' not in census: _fail('HISTORY_INVALID_CONTENT')
+    for table, required in (('sessions', {'id','parent_session_id','title'}),
+                            ('messages', {'id','session_id','role','content'})):
+        if table not in census or not required <= set(census[table]['columns']):
+            _fail('HISTORY_INVALID_CONTENT')
     cols=census['sessions']['columns'];i=cols.index('id')
     ids=[r[i] for r in census['sessions']['rows']]
     if len(set(ids))!=len(ids):_fail('HISTORY_ID_COLLISION')
@@ -78,18 +186,13 @@ def prepare(source, stage, *, expected_payload):
         if any(s is None for s in sessions):_fail('HISTORY_TRUNCATED')
         message_count=len(census.get('messages',{}).get('rows',[]))
         if sum(len(s['messages']) for s in sessions)!=message_count:_fail('HISTORY_TRUNCATED')
-        sessions=ordered(sessions)
-        uids=[m.get('message_uid') for s in sessions for m in s['messages'] if m.get('message_uid')]
-        if len(uids)!=len(set(uids)):_fail('HISTORY_ID_COLLISION')
-        # One session per batch permits arbitrarily many sessions, preserving
-        # parent links via previously imported target-owned history bindings.
-        for s in sessions:
-            _,errors=db._validate_import_payload([s])
-            if errors:_fail('HISTORY_SDK_BOUNDS')
-        bounds={k:getattr(db,k) for k in ('_IMPORT_MAX_SESSIONS','_IMPORT_MAX_MESSAGES_PER_SESSION','_IMPORT_MAX_SESSION_BYTES','_IMPORT_MAX_TOTAL_BYTES','_IMPORT_MAX_TOTAL_MESSAGES')}
+        sessions=validate_sessions(sessions)
+        _verify_inventory(census, sessions)
     finally:db.close()
     _json(stage/'exports.json',sessions)
-    plan={'contract':CONTRACT,'original':actual,'sessions':sessions,'sdk_bounds':bounds,
+    plan={'contract':CONTRACT,'original':actual,'sessions':sessions,
+          'validation':{'owner':'finix','version':1,'max_session_bytes':MAX_SESSION_BYTES,
+                        'max_session_messages':MAX_SESSION_MESSAGES,'batch_sessions':1},
           'logical_count':sum(not s.get('parent_session_id') for s in sessions),
           'full_acceptance':False,
           'projection_notice':{'owner_label':'new authenticated target owner; original labels retained in exports/census/raw DB',
@@ -118,7 +221,21 @@ async def _import_authenticated(rpc, target, *, owner_subject, expected_original
         plan=json.loads((provenance/'plan.json').read_text(encoding='utf8'))
         if plan['contract']!=CONTRACT or plan['original']!=expected_original or core.digest_file(provenance/'state.db')!=expected_original['sha256']:
             _fail('HISTORY_SOURCE_BINDING_REQUIRED')
-        sessions=ordered(plan['sessions'])
+        sessions=validate_sessions(plan['sessions'])
+        # The persisted plan is not authority for its own completeness. Rebuild
+        # from a newly hash-bound raw copy using the public per-session exporter
+        # and physical ID census, including inactive rows. SDK migrations touch
+        # only the disposable copy; the preserved original stays byte-identical.
+        import tempfile
+        with tempfile.TemporaryDirectory(dir=core.private_dir(provenance/'validation'),
+                                         prefix='inventory-') as scratch:
+            trusted=prepare(provenance/'state.db',core.private_dir(Path(scratch)),
+                            expected_payload=expected_original)
+            _verify_inventory(_census(Path(scratch)/'original.db'),sessions)
+            canonical=lambda rows:json.dumps(rows,sort_keys=True,ensure_ascii=False,
+                                             separators=(',', ':'),allow_nan=False)
+            if canonical(sessions)!=canonical(trusted['sessions']):
+                _fail('HISTORY_RICH_DATA_LOSS')
         # Public picker is not a complete physical inventory; inspect final new
         # store read-only before the first write, including hidden/inactive IDs.
         with closing(sqlite3.connect((target/'state.db').as_uri()+'?mode=ro',uri=True)) as c:
@@ -149,6 +266,8 @@ async def _import_authenticated(rpc, target, *, owner_subject, expected_original
                     fence()
                 observed=db.export_session(raw['id'],include_inactive=True)
                 if observed is None or len(observed['messages'])!=len(raw['messages']):_fail('HISTORY_TRUNCATED')
+                if any(observed.get(k) != raw.get(k) for k in ('id','parent_session_id','title')):
+                    _fail('HISTORY_RICH_DATA_LOSS')
                 changed={k:{'archived':raw.get(k),'projection':observed.get(k)} for k in set(raw)|set(observed)
                     if k not in {'messages','timings'} and raw.get(k)!=observed.get(k)}
                 rich=[]

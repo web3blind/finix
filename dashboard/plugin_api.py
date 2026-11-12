@@ -105,7 +105,8 @@ def ui_language(response: Response):
         language = display.get('language') if isinstance(display, dict) else None
     except Exception:
         pass  # Closed default; never echo config values, paths or exceptions.
-    return {'ui_language': 'en' if isinstance(language, str) and language in ('en', 'en-US', 'en-GB') else 'ru'}
+    normalized = language.strip().replace('_', '-').lower() if isinstance(language, str) else ''
+    return {'ui_language': 'ru' if normalized in ('ru', 'ru-ru') else 'en'}
 
 
 @router.get('/status')

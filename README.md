@@ -25,6 +25,12 @@ notices and licenses are preserved in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTIC
   Desktop cold preview timed out before Plan/Apply. The new native Windows UI,
   physical-default Apply, restored-history and restored-note workflow remains
   **pending**, not proven fixed by the Linux result.
+- New-profile import/activation is currently blocked with
+  `HOST_IMPORT_CONTRACT_UNSUPPORTED`: the public SDK importer does not provide
+  the required publication contract. Finix does not replace Hermes modules or
+  mutate the interpreter's global temporary-directory setting. This restriction
+  does not disable inert extraction or the separate guarded in-place default
+  replacement; its final integrated acceptance remains separate.
 - Default recovery remains experimental and restricted to guarded inert/default-only
   ownership, explicit root/plan-bound consent and fail-closed safety fences.
   Interrupted legacy operations remain blocked; never discard retained state to
@@ -56,8 +62,10 @@ See [publication status](docs/PUBLICATION-STATUS.md) for the current limits.
 - [Test restore, new-profile import and explicit activation](docs/RESTORE.md)
 
 Python **3.11–3.14**, **PyYAML >=6,<7**, and separately installed `age` and
-`age-keygen` are required. Pip installs PyYAML as a runtime dependency. Optional
-rclone and Google Workspace dependencies are not bundled. Nothing downloads
+`age-keygen` are required. Pip installs PyYAML as a runtime dependency.
+Optional rclone is not bundled. Google Drive uses only the declared Finix
+OAuth client and Hermes' public credentialed request API; no Google Workspace
+skill token or separate Google Python client libraries are used. Nothing downloads
 executables at runtime. Test in a separate virtual environment, not a running
 Hermes installation.
 
@@ -96,5 +104,5 @@ are not portable Windows/offline tests. Use `python scripts/release/offline_gate
 for the narrow, network-denied packaging gate. See [the test matrix](docs/RELEASE.md).
 Native age round trips, Linux permissions, NTFS ACL/link checks, real Desktop
 pickers/accessibility and live-provider authorization are separate gates. A build
-is not evidence that they passed. The UI still contains Russian labels; a fully
-English UI is not claimed. These installation documents are English.
+is not evidence that they passed. English is the default and fallback UI language;
+Russian remains an explicit option. The installation documents are English.

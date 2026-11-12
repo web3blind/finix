@@ -128,7 +128,8 @@ namespace. That endpoint projects only `{ui_language: "en" | "ru"}` from
 `hermes_cli.config.load_config_readonly().display.language`, whose installed
 cache is keyed by the context-local configuration path. It never returns the
 configuration, reads credentials, writes a display preference, or starts work.
-An unavailable/unknown preference keeps the legacy Russian presentation.
+An unavailable/unknown preference falls back to English. Russian is used only
+when explicitly selected for the active profile.
 
 `desktop/src/messages.mjs` is the sole presentation dictionary. The localized
 JSX boundary changes only displayed text and accessible labels, not event

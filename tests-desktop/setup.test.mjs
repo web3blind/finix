@@ -16,7 +16,7 @@ async function harness(options={}){
  const jsx=(type,props)=>({type,props}),context=vm.createContext({crypto:webcrypto,TextEncoder,TextDecoder,Uint8Array,Uint32Array,ArrayBuffer,DataView,console,Date:class extends Date{static now(){return now;}},setTimeout(){assert.fail('Unmanaged timer');},clearTimeout(){}});
  const modules={'@hermes/plugin-sdk':sdk,'react':{useEffect(){}},'react/jsx-runtime':{jsx,jsxs:jsx}};
  const entry=new vm.SourceTextModule(bundle,{context});await entry.link(spec=>{const values=modules[spec];assert.ok(values,spec);return new vm.SyntheticModule(Object.keys(values),function(){for(const[k,v]of Object.entries(values))this.setExport(k,v);},{context});});await entry.evaluate();
- entry.namespace.default.register({register:c=>contributions.push(c),onDispose:f=>disposers.push(f),rest:async(p,o)=>{calls.push([p,o]);const supplied=await options.rest?.(p,o);if(supplied!==undefined)return supplied;if(p==='/status')return {profile_id:'bound',recipient:'age17s43yv3l8556x4m657nehv25sngyjjjfehgz87m2rmwc0k6nd5ksy43uvu'};if(p==='/setup')return {profile_id:'bound',verified:current?.verified===true,stage:'check',storage:'workspace',interval_hours:0};if(p==='/backup/jobs/current')return envelope(current);if(p==='/backup/jobs'){current=job();return envelope(current);}throw Error('Unexpected '+p);}});
+ entry.namespace.default.register({register:c=>contributions.push(c),onDispose:f=>disposers.push(f),rest:async(p,o)=>{calls.push([p,o]);const supplied=await options.rest?.(p,o);if(supplied!==undefined)return supplied;if(p==='/ui-language'){assert.equal(o?.method,undefined,'locale attestation is read-only');return {ui_language:options.locale??'ru'};}if(p==='/status')return {profile_id:'bound',recipient:'age17s43yv3l8556x4m657nehv25sngyjjjfehgz87m2rmwc0k6nd5ksy43uvu'};if(p==='/setup')return {profile_id:'bound',verified:current?.verified===true,stage:'check',storage:'workspace',interval_hours:0};if(p==='/backup/jobs/current')return envelope(current);if(p==='/backup/jobs'){current=job();return envelope(current);}throw Error('Unexpected '+p);}});
  function expand(n){if(Array.isArray(n))return n.flatMap(expand);if(!n||typeof n!=='object')return[n];if(typeof n.type==='function')return expand(n.type(n.props));return[n,...expand(n.props?.children)];}
  const nodes=()=>{queries=[];return expand(contributions.find(c=>c.id==='pane').render());};
  const button=label=>nodes().find(n=>n?.type==='button'&&n.props.children===label);
@@ -25,6 +25,17 @@ async function harness(options={}){
  const click=async()=>{const b=button(start);assert.ok(b);assert.equal(b.props.disabled,false);await b.props.onClick();};
  await tick(0);
  return {calls,nodes,button,text,tick,click,queries:()=>queries,setJob:j=>{current=j;},switch:()=>{epoch++;},source:()=>connectionId.set('other'),dispose:()=>disposers.forEach(f=>f())};
+}
+for(const scenario of ['missing field','backend error','explicit English']){
+ test('shipped bundle English locale: '+scenario,async()=>{
+  const h=await harness({rest:p=>{if(p==='/ui-language'){if(scenario==='backend error')throw Error('private locale sentinel');return scenario==='missing field'?{}:{ui_language:'en'};}}});
+  assert.ok(h.nodes().some(n=>n?.type==='section'&&n.props.lang==='en'));
+  assert.equal(h.button('Check and create first backup')?.props.disabled,false);
+  assert.equal(h.button(start),undefined);assert.doesNotMatch(h.text(),/private locale sentinel/);
+  const localeCalls=h.calls.filter(([p])=>p==='/ui-language');assert.ok(localeCalls.length>0);
+  for(const [,options]of localeCalls){assert.equal(options?.method,undefined);assert.equal(options?.body,undefined);assert.equal(options.timeoutMs,10000);}
+  assert.equal(h.calls.some(([,options])=>options?.method==='POST'),false);
+ });
 }
 test('shipped backup jobs: quick Start, 20-minute worker, SDK polling, reopen attaches same job',async()=>{
  const h=await harness();assert.ok(h.calls.some(([p])=>p==='/backup/jobs/current'),'automatic mount GET');await h.click();
@@ -84,7 +95,7 @@ test('native synthetic DOM: named progressbar and polite bounded status, indeter
   window.current=current;window.queries=[];window.calls=[];window.contributions=[];let pending=false;const seen=new Set();
   const atom=value=>({get:()=>value,set:v=>{value=v;if(!pending){pending=true;queueMicrotask(()=>{pending=false;window.render?.();});}}});
   window.sdk={atom,useValue:a=>a.get(),Button:'button',Input:'input',gatewayActivationEpoch:()=>1,host:{state:{profile:atom('default'),connectionId:atom('local'),gateway:atom('open')},activeConnectionId:()=> 'local'},useQuery:q=>{window.queries=[q];const k=JSON.stringify(q.queryKey);if(q.enabled&&!seen.has(k)){seen.add(k);queueMicrotask(()=>q.queryFn());}}};
-  window.jsx=(type,props)=>({type,props});window.ctx={register:c=>contributions.push(c),onDispose(){},rest:async(p,o)=>{calls.push([p,o]);if(p==='/status')return {profile_id:'bound',recipient:'age17s43yv3l8556x4m657nehv25sngyjjjfehgz87m2rmwc0k6nd5ksy43uvu'};if(p==='/setup')return {profile_id:'bound',verified:false,stage:'check',storage:'workspace',interval_hours:0};if(p==='/backup/jobs/current')return {code_version:'backup-jobs-v1',profile_id:'bound',job:window.current};throw Error('Unexpected route');}};
+  window.jsx=(type,props)=>({type,props});window.ctx={register:c=>contributions.push(c),onDispose(){},rest:async(p,o)=>{calls.push([p,o]);if(p==='/ui-language'){if(o?.method)throw Error('locale attestation must be read-only');return {ui_language:'ru'};}if(p==='/status')return {profile_id:'bound',recipient:'age17s43yv3l8556x4m657nehv25sngyjjjfehgz87m2rmwc0k6nd5ksy43uvu'};if(p==='/setup')return {profile_id:'bound',verified:false,stage:'check',storage:'workspace',interval_hours:0};if(p==='/backup/jobs/current')return {code_version:'backup-jobs-v1',profile_id:'bound',job:window.current};throw Error('Unexpected route');}};
   function dom(n){if(n==null||typeof n==='boolean')return document.createTextNode('');if(Array.isArray(n)){const f=document.createDocumentFragment();n.forEach(x=>f.append(dom(x)));return f;}if(typeof n!=='object')return document.createTextNode(n);if(typeof n.type==='function')return dom(n.type(n.props));const el=document.createElement(n.type);for(const[k,v]of Object.entries(n.props??{})){if(k==='children')continue;if(k.startsWith('on'))el.addEventListener(k.slice(2).toLowerCase(),e=>v({currentTarget:el,target:e.target}));else if(k==='style')Object.assign(el.style,v);else if(['value','disabled','checked'].includes(k))el[k]=v;else if(v!=null)el.setAttribute(k,v);}el.append(dom(n.props?.children));return el;}
   window.render=()=>{const pane=contributions.find(c=>c.id==='pane');if(pane)document.querySelector('#app').replaceChildren(dom(pane.render()));};
  },{current:job()});

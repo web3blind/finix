@@ -40,10 +40,10 @@ def test_generated_age_service_handoff_sdk_import(tmp_path, monkeypatch, variant
     if variant=='old':
         # Actual production ledger producer; transport/account are declared synthetic.
         from finix.workspace_drive import WorkspaceDrive
-        from test_workspace_reconcile import Transport
+        from test_workspace_reconcile import Transport, ACCOUNT_DIGEST
         from finix.recovery import committed_journal_source
         state=tmp_path/'synthetic-workspace-ledger'
-        adapter=WorkspaceDrive(home,'a'*64,state,runner=Transport())
+        adapter=WorkspaceDrive(home,'a'*64,state,runner=Transport(),account_digest=ACCOUNT_DIGEST)
         committed=adapter.reconcile(cipher,completion=result)
         journal=json.loads((state/'workspace.json').read_text())
         assert journal['binding']['home_identity']==adapter._directory_identity(home)

@@ -28,6 +28,8 @@ async function harness(o = {}) {
   const ctx = { register: x => contributions.push(x), onDispose: f => disposers.push(f),
     files: { requestFolder: async () => o.pick ? o.pick() : { ok:true, folder:{id:'grant',name:'folder',path:o.path ?? 'C:\\restore'} }, list: async () => ({ok:true,entries:o.entries ?? [{name:'backup.age',path:'backup.age',isDirectory:false}]}) },
     rest: (p, opts) => { calls.push([p,opts]); if(p.startsWith('/recovery'))assert.equal(selected,false,'ZERO SOURCE REST after ensureAgent'); if (o.rest) { const result = o.rest(p,opts,{row,receipt,current:()=>operation,set:v=>operation=v}); if (result !== undefined) return Promise.resolve(result).then(value=>{if(p.startsWith('/recovery/operations')&&value?.id)operation=value;return value;}); }
+      // Locale is read from the currently bound profile, never a global shell default.
+      if (p === '/ui-language') { assert.equal(opts?.method,undefined,'locale attestation is read-only'); return Promise.resolve({ui_language:o.locale??'ru'}); }
       if (p === '/status') return Promise.resolve({profile_id:profile.get(),recipient:null});
       if (p === '/recovery/capabilities') return Promise.resolve({code_version:'recovery-v1',operation_protocol:'recovery-operations-v1',profile_id:profile.get()==='default'?'bound':'bound-'+profile.get(),local_only:true});
       if (p === '/recovery/catalog') return Promise.resolve({profile_id:'bound',items:[{id:'b'.repeat(64),label:'Copy',source:'cloud',size:100,sha256:'a'.repeat(64),complete:o.catalogComplete===undefined?true:o.catalogComplete,created_at:'2026-11-08T00:00:00Z',omitted_count:2}]});

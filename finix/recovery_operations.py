@@ -179,9 +179,11 @@ class RecoveryOperations:
     def key(self,service,identifier,*,request_id,identity):
         _request(request_id)
         if not isinstance(identity,bytearray) or not 0<len(identity)<=16384:_fail('INVALID_IDENTITY')
-        root,path,_=self._paths(service)
-        service._fence(service.profile_id,service.activation)
         try:
+            from .recovery_shared_host import check_bootstrap_compatibility
+            check_bootstrap_compatibility(service)
+            root,path,_=self._paths(service)
+            service._fence(service.profile_id,service.activation)
             with state_lease(root/'state.lock'):
                 state=self._read(service,path)
                 if not state or state['id']!=identifier:_fail('NOT_FOUND')
@@ -218,6 +220,8 @@ class RecoveryOperations:
             return state['cancel_requested']
 
     def _execute(self,service,owned):
+        from .recovery_shared_host import check_bootstrap_compatibility
+        check_bootstrap_compatibility(service)
         from hermes_cli import profiles as host
         from .recovery_pipeline import complete_restore
         import io

@@ -372,6 +372,8 @@ def create_router(current_profile):
     async def operation_key(identifier: str,request: Request,response: Response):
         profile=guard(request,response)
         with closed_errors():
+            from .recovery_shared_host import check_bootstrap_compatibility
+            check_bootstrap_compatibility(operation_service(profile))
             data=await bounded_body(request,MAX_BODY)
             identity=None
             try:
@@ -398,7 +400,7 @@ def create_router(current_profile):
                     destination_action='Choose an empty folder on the same volume as the local profile.',
                     max_key_bytes=MAX_KEY,
                     source_limits={'drive':'committed_journal_required_no_cloud_scans'},
-                    supported_sources=['local','rclone','workspace','drive','connector-drive'])
+                    supported_sources=['local','rclone','workspace','drive'])
 
     @router.get('/catalog')
     def catalog(request: Request,response: Response):
@@ -774,17 +776,20 @@ def create_router(current_profile):
         from . import default_recovery_api as maintenance
         try:
             from . import default_recovery_lifecycle as life
-            root=authority(profile)
+            scope=maintenance._DefaultAuthority(profile)
+            scope.check()
+            root=scope.root
             life.preflight(root,trusted_finix=True)
             if not life._exact(life.identify(root),root):
                 refusal='OWNER_NOT_VERIFIED'
             else:
-                current_root_token=maintenance.token({'root_identity': maintenance.cold._identity(root)})
+                scope.check()
+                current_root_token=maintenance.token({'root_identity': scope.identity})
         except Exception as exc:
             refusal=public_error(exc)
         # Read the single reviewed gate dynamically; never capture a second flag.
         return dict(code_version='default-recovery-v1',preview_contract='default-preview-job-v1',supported=refusal is None,refusal=refusal,
-                    serverRootToken=current_root_token,
+                    serverRootToken=current_root_token,profile_id=profile.profile_id if refusal is None else None,local_only=refusal is None,
                     apply_enabled=maintenance.DEFAULT_APPLY_REVIEWED,active_shared_autoruns_supported=False,
                     explanation='Active shared autoruns, supervisors and sibling-serving multiplexers are unsupported; refusal occurs before shutdown.')
 

@@ -7,7 +7,7 @@ const envelope=JSON.parse(await readFile(process.argv[2],'utf8'));
 assert.equal(envelope.contract,'default-preview-job-v1');assert.equal(envelope.state,'succeeded');
 const root=envelope.result.preview.root_binding,job=envelope.id,profile='a'.repeat(64);
 const h=await harness({bundle:true,rest:path=>{
- if(path==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',preview_contract:'default-preview-job-v1',supported:true,apply_enabled:false,active_shared_autoruns_supported:false,serverRootToken:root};
+ if(path==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',preview_contract:'default-preview-job-v1',supported:true,apply_enabled:false,active_shared_autoruns_supported:false,serverRootToken:root,profile_id:profile,local_only:true};
  if(path==='/recovery/default/prepare-auto')return {id:job,profile_id:profile,state:'awaiting_key',complete:true};
  if(path.endsWith('/key'))return {id:job,profile_id:profile,state:'running',complete:null};
  if(path===`/recovery/jobs/${job}`)return {id:job,profile_id:profile,state:'succeeded',complete:true};

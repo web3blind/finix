@@ -54,7 +54,10 @@ for(const mode of ['source','bundle'])test(`${mode}: invariant guidance covers g
   root=true;check(h.nodes());await h.key({size:8,arrayBuffer:async()=>{check(h.nodes());return new ArrayBuffer(8);}});check(h.nodes());
   root=false;const retained=h.button('Восстановить').props.onClick;const running=retained();await h.settle();check(h.nodes());assert.equal(h.calls.filter(([p])=>p.includes('/key?')).length,0);root=true;gate.resolve(prepare);await running;await h.settle();check(h.nodes());
   assert.equal(h.calls.filter(([p])=>p.includes('/key?')).length,1);assert.equal(reads,1);
-  h.switch();check(h.nodes());await retained();h.dispose();await retained();assert.equal(h.calls.filter(([p])=>p.includes('/key?')).length,1);
+  // A profile switch resets locale synchronously to English; warning must
+  // remain visible before the picker while the new read-only locale loads.
+  h.switch();check(h.nodes(),EN);await retained();assert.equal(h.calls.filter(([p])=>p.includes('/key?')).length,1);
+  await h.settle();check(h.nodes());h.dispose();await retained();assert.equal(h.calls.filter(([p])=>p.includes('/key?')).length,1);
  }
 });
 for(const metadata of [undefined,null,{contract:'unexpected'}])test(`bundle: guidance survives disabled or unknown capability ${JSON.stringify(metadata)}`,async()=>{

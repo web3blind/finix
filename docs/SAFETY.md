@@ -58,18 +58,32 @@ scheduling. Authenticated host APIs are required; do not expose a standalone
 public Finix server. Private owner chat also requires configured stable owner ID
 and platform; groups and absent actor identity do not confer ownership.
 
-Supported implementation paths include local storage, Google Workspace (existing
-credential-owning helper), own-OAuth Drive, and rclone Yandex Disk/OneDrive/Dropbox.
-`connector-drive` is experimental and fails closed until actual authenticated
-schema/availability is admitted. OneDrive Business/SharePoint and live provider
-compatibility are not certified by this release build.
+Supported paths are local storage, Google Drive through the declared Finix OAuth
+client, and rclone Yandex Disk/OneDrive/Dropbox. The unsupported `connector-drive`
+backend is not offered. OneDrive Business/SharePoint and live provider
+compatibility are not certified by a release build.
 
-Workspace needs the target Hermes runtime's trusted Workspace helper and
-`google-auth-oauthlib`, `google-auth`, `google-api-python-client`; standalone Finix
-pip installation does not provide them. First-time Google login requires an
-owner-created Desktop OAuth client, enabled Drive API and test users where
-applicable. Set it up through that Workspace integration, never send client JSON
-or tokens through chat. Existing grants must already have sufficient Drive scope.
+Google authorization belongs to Hermes: configure the declared client and run
+`hermes auth add finix:google` in the owning profile. Finix sends requests through
+public `credentialed_provider_request` with the declared `drive.file` scope; it
+never reads or writes Google Workspace skill tokens/client configuration or
+borrows a Nous login. Legacy Workspace journals and cloud objects are preserved
+but are not automatically adopted as authority for a new grant. Reconnect/migrate
+explicitly; never send client configuration or tokens through chat. Apply retains
+an explicit logical account selection; missing selections require reselection.
+Identity checks before provider operations do not constitute an atomic lease on
+Hermes' OAuth grant if another actor changes that grant concurrently.
+
+The current public SDK credentialed HTTP API buffers each response before Finix
+can inspect its headers or body. Finix's response-size checks therefore protect
+publication and the output sink **after receipt**, not a pre-body memory/network
+ceiling. Range requests do not enforce that ceiling if a server ignores them.
+Cancellation is cooperative between synchronous requests, not an interruption
+of an in-flight SDK call. These limitations remain unresolved release blockers;
+a successful offline test or catalog validator run does not certify the new
+Google transport for production use. Finix does not work around them with
+private signing, token access or SDK monkeypatches.
+
 The rclone connection worker expects the reviewed noninteractive config state
 protocol; the historical implementation target is v1.75.2, not a newly verified
 binary in this packaging run. OAuth may grant broad whole-drive rights. Existing
@@ -78,12 +92,12 @@ readiness does not prove account identity, network availability or valid tokens.
 
 Choose `local` only with a browser on the backend machine, `server-browser` for
 an explicitly available backend browser, or `tunnel` for an owner-managed SSH
-local forward. Google callback uses loopback 53683; rclone uses 53682. For a remote
-backend run the relevant forward on the device containing the browser:
+local forward. Google authorization and callback handling belong to
+`hermes auth add finix:google`; follow that command's actual callback/tunnel
+instructions rather than the retired Workspace callback. The rclone worker uses
+loopback 53682. For its remote backend, run the forward on the browser device:
 
 ```sh
-ssh -N -L 127.0.0.1:53683:127.0.0.1:53683 USER@SERVER
-# rclone instead:
 ssh -N -L 127.0.0.1:53682:127.0.0.1:53682 USER@SERVER
 ```
 

@@ -214,6 +214,9 @@ def check_bootstrap_compatibility(service):
     Runtime/native admission is repeated at bootstrap. Metadata communicates
     the cooperative condition; it never grants server mutation authority.
     """
+    from hermes_cli import profiles as host
+    from .recovery_import import verify_host_compatibility
+    verify_host_compatibility(host)
     from hermes_constants import get_default_hermes_root
     runtime=shared_host({'root':Path(get_default_hermes_root()),'service':service})
     return ({'contract':'cooperative-root-boundaries-v1',

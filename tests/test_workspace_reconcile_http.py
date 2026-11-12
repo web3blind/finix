@@ -8,7 +8,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
-from tests.test_workspace_reconcile import Transport
+from tests.test_workspace_reconcile import Transport, ACCOUNT_DIGEST
 
 class WorkspaceHTTP(unittest.TestCase):
     def test_preintent_no_ledger_http_adopts_retained_cipher(self):
@@ -31,7 +31,7 @@ class WorkspaceHTTP(unittest.TestCase):
             root=core.private_dir(Path(tmp)/'private');home=core.private_dir(root/'home')
             (home/'work').write_bytes(b'generated synthetic source\n'*100)
             profile=Profile(home,default_root=home);cfg=profile.config()
-            key=root/'generated.key';cfg.update(storage='workspace',recipient=core.keygen(key),retention=0)
+            key=root/'generated.key';cfg.update(storage='workspace',workspace_account=ACCOUNT_DIGEST,recipient=core.keygen(key),retention=0)
             core.atomic_json(profile.root/'settings.json',cfg)
             fake=Transport();fake.error=workspace.WorkspaceError;fake.lost=not preintent
             interrupted=[preintent]
@@ -40,7 +40,7 @@ class WorkspaceHTTP(unittest.TestCase):
                     interrupted[0]=False
                     raise workspace.WorkspaceError('TIMEOUT')
                 return fake(op,*args,**kwargs)
-            adapter=workspace.WorkspaceDrive(home,profile.profile_id,profile.root/'workspace',runner=transport)
+            adapter=workspace.WorkspaceDrive(home,profile.profile_id,profile.root/'workspace',runner=transport,account_digest=ACCOUNT_DIGEST)
             app=FastAPI();app.include_router(api.router)
             def terminal(client):
                 deadline=time.monotonic()+15

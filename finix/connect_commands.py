@@ -7,37 +7,33 @@ from .connections import Connections, ConnectionError, PROVIDERS, connections, s
 
 MODES = {'local', 'tunnel', 'server-browser'}
 HELP = ('connect SERVICE local|tunnel|server-browser confirm; SERVICE: workspace|yandex|onedrive|dropbox. '
-        'confirm разрешает широкие права чтения/изменения/удаления диска. '
-        'Затем: connect status ID | choose ID NUMBER | apply ID | cancel ID. '
-        'Пароли вводите только у провайдера; коды, callback URL, токены и JSON в чат не отправляйте. '
-        'Сессия действует 5 минут; apply отдельно, только после verified.')
+        'Confirm the requested provider permissions. Google sign-in: hermes auth add finix:google. '
+        'Then: connect status ID | choose ID NUMBER | apply ID | cancel ID. '
+        'Enter passwords only at the provider; never send codes, callback URLs, tokens or JSON in chat. '
+        'Sessions expire after five minutes; apply is explicit and only available after verification.')
 
 
 def public_session(view, mode):
     session = view['session']
     result = {k: session[k] for k in ('id', 'provider', 'status', 'folder', 'choices', 'code') if k in session}
     result['mode'] = mode
-    result['instructions'] = 'После входа: connect status ID; после verified: connect apply ID. Отмена: connect cancel ID.'
+    result['instructions'] = 'After sign-in: connect status ID; after verified: connect apply ID. Cancel: connect cancel ID.'
     url = session.get('url')
     if url and safe_url(session['provider'], url):
-        port = 53683 if session['provider'] == 'workspace' else 53682
-        if session['provider'] == 'workspace':
-            redirect = urlsplit(parse_qs(urlsplit(url).query).get('redirect_uri', [''])[0])
-            if redirect.scheme != 'http' or redirect.netloc != '127.0.0.1:53683' or redirect.path != '/':
-                raise ConnectionError('UNSAFE_AUTHORIZATION_URL')
+        port = 53682
         result['url'] = url
         if mode == 'tunnel':
-            result['instructions'] = (f'На своём устройстве выполните: ssh -N -L 127.0.0.1:{port}:127.0.0.1:{port} USER@SERVER '
-                                      '(замените USER@SERVER своим SSH-адресом). Дождитесь подключения без ошибки '
-                                      'занятого порта; не закрывайте SSH до verified. Затем откройте url на этом устройстве. '
-                                      'На телефоне нужен собственный SSH-клиент с таким же local forward. '
-                                      'Finix не создаёт туннель автоматически.')
+            result['instructions'] = (f'Run on your device: ssh -N -L 127.0.0.1:{port}:127.0.0.1:{port} USER@SERVER '
+                                      '(replace USER@SERVER with your SSH address). Wait for a successful connection with no '
+                                      'port conflict; keep SSH open until verified, then open the URL on this device. '
+                                      'A phone requires its own SSH client with the same local forward. '
+                                      'Finix never creates tunnels automatically.')
         elif mode == 'server-browser':
-            result['instructions'] = ('Откройте url браузером на сервере backend (можно попросить агента открыть его). '
-                                      'Вход/пароль — только на сайте через защищённое заполнение, не в чате. '
-                                      'localhost на телефоне без туннеля не подходит.')
+            result['instructions'] = ('Open the URL in a browser on the backend server. '
+                                      'Enter credentials only on the site using secure filling, never in chat. '
+                                      'A phone localhost URL cannot reach the server without a tunnel.')
         else:
-            result['instructions'] = 'Откройте url браузером на той же машине, где запущен Finix.'
+            result['instructions'] = 'Open the URL in a browser on the same machine as Finix.'
     return result
 
 

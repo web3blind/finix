@@ -16,9 +16,7 @@ dependencies = ["PyYAML>=6.0,<7.0"]
 [project.scripts]
 finix = "finix.cli:main"
 
-# Workspace google.auth/googleapiclient dependencies belong to the existing
-# Hermes Workspace runtime, not to the standalone local-only Finix CLI.
-# Package discovery and the native payload glob both include workspace_*.py.
+# All Google credential handling belongs to the declared Hermes plugin OAuth API.
 [tool.setuptools.packages.find]
 include = ["finix*"]
 

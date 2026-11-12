@@ -4,6 +4,7 @@ Only initiation/metadata/media GETs use managed credentials. The provider-issued
 upload URI is a secret capability, used in memory for one raw unauthenticated PUT.
 Never persist it or include it (or provider response text) in diagnostics.
 """
+from contextlib import contextmanager
 import argparse
 
 import http.client
@@ -26,7 +27,21 @@ ID = re.compile(r'[A-Za-z0-9_-]{1,200}')
 JSON_LIMIT = 1024 * 1024
 
 
+@contextmanager
+def profile_scope(home):
+    """Public context-local home selector; reset even on failure, safe in threads."""
+    from hermes_constants import set_hermes_home_override, reset_hermes_home_override
+    token = set_hermes_home_override(checked_path(home))
+    try:
+        yield
+    finally:
+        reset_hermes_home_override(token)
+
+
 def managed_request(method, url, **kwargs):
+    from hermes_constants import get_hermes_home_override
+    if not get_hermes_home_override():
+        raise FinixError('Google provider profile context required; no default-account fallback')
     from hermes_cli.plugin_provider_requests import credentialed_provider_request
     return credentialed_provider_request('google', method, url, **kwargs)
 
@@ -50,7 +65,7 @@ def session_target(uri):
         raise FinixError('Unsafe Drive upload session; upload aborted') from None
 
 
-def upload_media(uri, path, size):
+def upload_media(uri, path, size, *, cancel=None):
     target = session_target(uri)
     # http.client neither redirects nor uses environment proxies/netrc, and has
     # no HTTPX request logger that might print the secret session query string.
@@ -60,6 +75,8 @@ def upload_media(uri, path, size):
         with path.open('rb') as stream:
             offset = 0
             while offset < size:
+                from .streaming import check_cancel
+                check_cancel(cancel)
                 data = stream.read(min(MEDIA_CHUNK, size - offset))
                 if not data:
                     raise ValueError
@@ -82,6 +99,8 @@ def upload_media(uri, path, size):
                         raise ValueError
                     return result
                 offset = end + 1
+    except FinixError:
+        raise
     except Exception:
         raise FinixError('Drive media upload failed; local backup preserved') from None
     finally:
@@ -89,12 +108,19 @@ def upload_media(uri, path, size):
 
 
 class Drive:
-    def __init__(self, profile_id, request=None, sleep=time.sleep):
+    def __init__(self, profile_id, request=None, sleep=time.sleep, home=None):
         if not re.fullmatch(r'[a-f0-9]{64}', profile_id):
             raise FinixError('Invalid profile binding')
         self.owner = profile_id
-        self.request = request or managed_request
+        self.home = home
+        self.request = request or self._managed_request
         self.sleep = sleep
+
+    def _managed_request(self, method, url, **kwargs):
+        if self.home is None:
+            return managed_request(method, url, **kwargs)
+        with profile_scope(self.home):
+            return managed_request(method, url, **kwargs)
 
     def response(self, method, url, payload=None, headers=None, limit=JSON_LIMIT, missing_ok=False):
         for attempt in range(3):
@@ -298,7 +324,8 @@ def main():
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
     path = checked_path(args.output)
-    result = Drive(args.profile_id).download(args.folder, args.object, path)
+    from hermes_constants import get_hermes_home
+    result = Drive(args.profile_id, home=get_hermes_home()).download(args.folder, args.object, path)
     print(json.dumps(dict(result, output=str(path))))
 
 

@@ -53,7 +53,7 @@ class PreviewTests(unittest.TestCase):
         class Headers(dict):pass
         request=SimpleNamespace(client=SimpleNamespace(host='127.0.0.1'),headers=Headers())
         from starlette.responses import Response
-        with patch.object(recovery_http,'binding',return_value='epoch'),patch.object(api,'authority',return_value=Path('synthetic')),patch.object(api.cold,'_identity',return_value=[1,2]),patch.object(api.lifecycle,'preflight'),patch.object(api.lifecycle,'identify',return_value={'owner':True}),patch.object(api.lifecycle,'_exact',return_value=True):
+        with patch.object(recovery_http,'binding',return_value='epoch'),patch.object(api,'authority',return_value=Path('synthetic')),patch.object(api.cold,'_identity',return_value=[1,2]),patch.object(api.lifecycle,'preflight'),patch.object(api.lifecycle,'identify',return_value={'owner':True}),patch.object(api.lifecycle,'_exact',return_value=True),patch.object(api,'_DefaultAuthority',return_value=SimpleNamespace(root=Path('synthetic'),identity=[1,2],check=lambda:None)):
             router=recovery_http.create_router(lambda:profile)
             endpoint=next(r.endpoint for r in router.routes if r.path=='/recovery/default/capabilities')
             for enabled in (False,True):
@@ -61,6 +61,8 @@ class PreviewTests(unittest.TestCase):
                     result=endpoint(request,Response())
                     self.assertEqual(result['apply_enabled'],enabled)
                     self.assertEqual(result['serverRootToken'],api.token({'root_identity':[1,2]}))
+                    self.assertEqual(result['profile_id'],profile.profile_id)
+                    self.assertIs(result['local_only'],True)
 
     def test_historical_ready_is_not_current_sdk_readiness(self):
         from unittest.mock import patch

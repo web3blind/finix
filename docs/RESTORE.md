@@ -4,6 +4,18 @@ Finix recovery is local-only. Use the Finix **Recovery** page on the reserved
 local Desktop connection. Remote, SSH, cloud and unknown connections are rejected
 before the selected key is read or sent. Never attach a recovery key to chat.
 
+## Current import availability
+
+Creating and activating a new recovered profile is currently blocked with
+`HOST_IMPORT_CONTRACT_UNSUPPORTED`, before candidate handoff. The public Hermes
+import command lacks the required publication guarantees, and Finix no longer
+replaces Hermes modules or changes global temporary-directory state to supply
+them. The separate guarded [physical-default replacement](default-maintenance-workflow.md)
+and inert archive extraction are distinct paths, not a claim that new-profile
+activation is available. Existing archives, interrupted jobs and parked profiles
+are preserved. The separate-profile UI contract below describes the intended
+workflow when a suitable public import contract is available.
+
 ## Restore and open a separate profile
 
 1. Choose a backup from the automatically loaded select. Labels show date, source

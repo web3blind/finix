@@ -35,28 +35,13 @@ FOLDER_MIME = 'application/vnd.google-apps.folder'
 class WorkspaceError(core.FinixError):
     def __init__(self, code):
         self.code = code
-        super().__init__('Workspace ' + code + ': check the selected profile Workspace setup, Drive permissions and network; no login/fallback attempted')
+        super().__init__('Workspace ' + code + ': use hermes auth add finix:google in this profile; legacy Workspace data requires explicit migration; no fallback attempted')
 
 
 def identifier(value):
     if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,200}', value):
         raise core.FinixError('Invalid Workspace object ID')
     return value
-
-
-def helper_path(home):
-    relative = Path('skills/productivity/google-workspace/scripts/google_api.py')
-    own = core.checked_path(home) / relative
-    if own.is_file():
-        return core.checked_path(own)
-    try:
-        import hermes_constants
-        builtin = Path(hermes_constants.__file__).parent / relative
-        if builtin.is_file():
-            return core.checked_path(builtin)
-    except ImportError:
-        pass
-    return None
 
 
 def child_env(home):
@@ -215,147 +200,77 @@ def trusted_runtime(script, *, entry=None):
 
 
 class WorkspaceRunner:
-    def __init__(self, home, *, script=None, timeout=120, max_bytes=65536, transfer_timeout=86400):
+    """Legacy journal protocol using only Finix's declared Google OAuth transport."""
+    def __init__(self, home, *, request=None, **unused):
         self.home = core.checked_path(home)
-        self.script = core.checked_path(script) if script else helper_path(self.home)
-        self.timeout, self.max_bytes = timeout, max_bytes
-        self.transfer_timeout = transfer_timeout
+        from .drive import Drive
+        self.drive = Drive('0' * 64, request=request or self._request)
 
-    def __call__(self, operation, *args, expected_size=None, cancel=None):
+    def _request(self, method, url, **kwargs):
+        from .drive import managed_request, profile_scope
+        with profile_scope(self.home):
+            return managed_request(method, url, **kwargs)
+
+    def __call__(self, operation, *args, expected_size=None, cancel=None, **unused):
+        from .drive import BASE, UPLOAD, MEDIA_CHUNK, upload_media
         check_cancel(cancel)
-        if not self.script:
-            raise WorkspaceError('HELPER_MISSING')
-        with trusted_runtime(self.script) as (prefix, wrapper):
-            argv = [*prefix, wrapper, str(self.script),
-                    str(expected_size if expected_size is not None else self.max_bytes), operation, *map(str, args)]
-            return self._call(argv, operation, cancel)
-
-    @staticmethod
-    def _wait(process, deadline, cancel):
-        while process.poll() is None:
+        def option(name):
+            return args[args.index(name) + 1]
+        def call(method, url, payload=None, headers=None, limit=1024*1024):
             check_cancel(cancel)
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise WorkspaceError('TIMEOUT')
-            try:
-                process.wait(timeout=min(.05, remaining))
-            except subprocess.TimeoutExpired:
-                pass
-        check_cancel(cancel)
-
-    def _call(self, argv, operation, cancel):
-        if os.name == 'nt':
-            return self._windows_call(argv, operation, cancel)
-        process = subprocess.Popen(argv, env=child_env(self.home), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, start_new_session=True)
-        output = bytearray()
-        total = 0
-        deadline = time.monotonic() + (self.transfer_timeout if operation in {'download', 'upload'} else self.timeout)
-        try:
-            with selectors.DefaultSelector() as selector:
-                selector.register(process.stdout, selectors.EVENT_READ, True)
-                selector.register(process.stderr, selectors.EVENT_READ, False)
-                while selector.get_map():
-                    check_cancel(cancel)
-                    if time.monotonic() >= deadline:
-                        raise WorkspaceError('TIMEOUT')
-                    for key, _ in selector.select(min(.1, max(0, deadline - time.monotonic()))):
-                        chunk = os.read(key.fileobj.fileno(), 8192)
-                        if not chunk:
-                            selector.unregister(key.fileobj)
-                            continue
-                        total += len(chunk)
-                        if total > 65536:
-                            raise WorkspaceError('OUTPUT_LIMIT')
-                        if key.data:
-                            output.extend(chunk)
-                self._wait(process, deadline, cancel)
-            try:
-                result = json.loads(output)
-            except (ValueError, UnicodeError):
-                raise WorkspaceError('INVALID_RESPONSE') from None
-            if not isinstance(result, dict):
-                raise WorkspaceError('INVALID_RESPONSE')
-            if result.get('finix_error'):
-                raise WorkspaceError(result['finix_error'] if result['finix_error'] in
-                                     {'NOT_FOUND', 'PERMISSION'} else 'PROVIDER_ERROR')
-            if process.returncode:
-                raise WorkspaceError('PROVIDER_ERROR')
-            return result
-        except subprocess.TimeoutExpired:
-            raise WorkspaceError('TIMEOUT') from None
-        finally:
-            # Kill only our isolated subprocess group, including any descendants.
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
-            process.stdout.close()
-            process.stderr.close()
-
-
-    def _windows_call(self, argv, operation, cancel):
-        from . import windows_native as win
-        deadline = time.monotonic() + (self.transfer_timeout if operation in {'download', 'upload'} else self.timeout)
-        process = win.popen(argv, env=child_env(self.home), stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        import threading
-        stop, interrupted = threading.Event(), []
-        def watch():
-            while not stop.wait(.05):
-                try:
-                    check_cancel(cancel)
-                except BaseException as exc:
-                    interrupted.append(exc)
-                    win.cleanup(process)
-                    return
-        watcher = threading.Thread(target=watch, daemon=True)
-        watcher.start()
-        output, total = bytearray(), 0
-        try:
-            for stdout, chunk in win.output_events(process, deadline):
-                total += len(chunk)
-                if total > 65536:
-                    raise WorkspaceError('OUTPUT_LIMIT')
-                if stdout:
-                    output.extend(chunk)
-            if interrupted:
-                raise interrupted[0]
+            response = self.drive.response(method, url, payload, headers, limit=limit, missing_ok=True)
             check_cancel(cancel)
-            self._wait(process, deadline, cancel)
-            if interrupted:
-                raise interrupted[0]
-            try:
-                result = json.loads(output)
-            except (ValueError, UnicodeError):
-                raise WorkspaceError('INVALID_RESPONSE') from None
-            if not isinstance(result, dict):
-                raise WorkspaceError('INVALID_RESPONSE')
-            if result.get('finix_error'):
-                raise WorkspaceError(result['finix_error'] if result['finix_error'] in
-                                     {'NOT_FOUND', 'PERMISSION'} else 'PROVIDER_ERROR')
-            if process.returncode:
-                raise WorkspaceError('PROVIDER_ERROR')
-            return result
-        except (TimeoutError, subprocess.TimeoutExpired):
-            raise WorkspaceError('TIMEOUT') from None
-        finally:
-            stop.set()
-            watcher.join()
-            win.cleanup(process)
-            process.stdout.close()
-            process.stderr.close()
+            if response is None:
+                raise WorkspaceError('NOT_FOUND')
+            return response
+        if operation == 'identity':
+            return {'account_id': call('GET', BASE.replace('/files', '/about') + '?fields=user(permissionId)').json()['user']['permissionId']}
+        if operation == 'generate-id':
+            return {'id': identifier(call('GET', BASE + '/generateIds?count=1&space=drive&type=files').json()['ids'][0])}
+        if operation == 'metadata':
+            return call('GET', BASE + '/' + identifier(args[0]) + '?fields=id,name,mimeType,size,parents,owners(emailAddress),trashed').json()
+        if operation == 'create-folder':
+            payload = {'id': identifier(option('--id')), 'name': option('--name'), 'mimeType': FOLDER_MIME}
+            return dict(call('POST', BASE + '?fields=id', payload).json(), status='created')
+        if operation == 'upload':
+            path = core.checked_path(args[0])
+            size = path.stat().st_size
+            payload = {'id': identifier(option('--id')), 'name': option('--name'),
+                       'parents': [identifier(option('--parent'))], 'mimeType': MIME}
+            response = call('POST', UPLOAD, payload, {'X-Upload-Content-Type': MIME, 'X-Upload-Content-Length': str(size)})
+            uri = next((v for k,v in response.headers.items() if k.lower() == 'location'), None)
+            return dict(upload_media(uri, path, size, cancel=cancel), status='uploaded')
+        if operation == 'download':
+            if type(expected_size) is not int or expected_size <= 0:
+                raise WorkspaceError('INVALID_STATE')
+            path = core.checked_path(option('--output'))
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, 'wb') as stream:
+                for start in range(0, expected_size, MEDIA_CHUNK):
+                    end = min(start + MEDIA_CHUNK, expected_size) - 1
+                    response = call('GET', BASE + '/' + identifier(args[0]) + '?alt=media',
+                        headers={'Range': f'bytes={start}-{end}', 'Accept-Encoding': 'identity'}, limit=end-start+1)
+                    headers = {k.lower():v for k,v in response.headers.items()}
+                    if (response.status != 206 or headers.get('content-range') != f'bytes {start}-{end}/{expected_size}'
+                            or headers.get('content-encoding', 'identity') != 'identity' or len(response.body) != end-start+1):
+                        raise WorkspaceError('INVALID_RESPONSE')
+                    stream.write(response.body)
+            return {'status': 'downloaded', 'id': args[0]}
+        if operation == 'delete':
+            call('PATCH', BASE + '/' + identifier(args[0]), {'trashed': True})
+            return {'status': 'trashed', 'fileId': args[0], 'permanent': False}
+        raise WorkspaceError('UNSUPPORTED_OPERATION')
 
 
 class WorkspaceDrive:
-    def __init__(self, home, profile_id, state, *, runner=None):
+    def __init__(self, home, profile_id, state, *, runner=None, account_digest=None):
         if not isinstance(profile_id, str) or not re.fullmatch(r'[a-f0-9]{64}', profile_id):
             raise core.FinixError('Invalid Finix profile binding')
         self.home, self.owner, self.state = core.checked_path(home), profile_id, core.checked_path(state)
         self.runner = runner or WorkspaceRunner(self.home)
+        self.account_digest = account_digest
         self._operation_lock = threading.RLock()
-        self._selection = (str(self.home), self.owner, str(self.state))
+        self._selection = (str(self.home), self.owner, str(self.state), self.account_digest)
         self._thread_state = threading.local()
         self._home_identity = self._directory_identity(self.home)
         self._state_identity = self._directory_identity(self.state) if self.state.exists() else None
@@ -374,7 +289,7 @@ class WorkspaceDrive:
             os.close(fd)
 
     def _binding(self):
-        if (str(self.home), self.owner, str(self.state)) != self._selection:
+        if (str(self.home), self.owner, str(self.state), self.account_digest) != self._selection:
             raise WorkspaceError('BINDING_CHANGED')
         home = self._directory_identity(self.home)
         state = self._directory_identity(self.state)
@@ -383,7 +298,7 @@ class WorkspaceDrive:
         if isinstance(self.runner, WorkspaceRunner) and self.runner.home != self.home:
             raise WorkspaceError('BINDING_CHANGED')
         self._state_identity = state
-        return dict(provider='workspace', profile_id=self.owner, home=str(self.home),
+        return dict(provider='finix:google', profile_id=self.owner, home=str(self.home),
                     home_identity=home, state=str(self.state), state_identity=state)
 
     @contextmanager
@@ -422,17 +337,26 @@ class WorkspaceDrive:
                     safe = info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o600
                 if not safe:
                     raise WorkspaceError('STATE_PERMISSIONS')
-                return json.loads(core.read_regular(fd, JOURNAL_BYTES))
+                value = json.loads(core.read_regular(fd, JOURNAL_BYTES))
+                if isinstance(self.runner, WorkspaceRunner) and value.get('credential_authority') != 'finix:google':
+                    raise WorkspaceError('MIGRATION_REQUIRED')
+                return value
         except FileNotFoundError:
             return None
 
     def _write_private(self, name, value):
         if len(json.dumps(value).encode()) > JOURNAL_BYTES:
             raise WorkspaceError('STATE_LIMIT')
+        if isinstance(self.runner, WorkspaceRunner):
+            value = dict(value, credential_authority='finix:google')
         core.atomic_json(self.state / name, value)
 
     def _run(self, operation, *args, cancel=None, **kwargs):
         check_cancel(cancel)
+        if not isinstance(self.account_digest, str) or not re.fullmatch(r'[a-f0-9]{64}', self.account_digest):
+            raise WorkspaceError('RESELECTION_REQUIRED')
+        if operation != 'identity':
+            self._account(cancel=cancel)
         result = self.runner(operation, *args, cancel=cancel, **kwargs)
         check_cancel(cancel)
         return result
@@ -446,7 +370,10 @@ class WorkspaceDrive:
         account = self._run('identity', cancel=cancel).get('account_id')
         if not isinstance(account, str) or not re.fullmatch(r'[A-Za-z0-9_@.:-]{1,256}', account):
             raise WorkspaceError('INVALID_IDENTITY')
-        return hashlib.sha256(account.encode()).hexdigest()
+        digest = hashlib.sha256(account.encode()).hexdigest()
+        if digest != self.account_digest:
+            raise WorkspaceError('ACCOUNT_CHANGED')
+        return digest
 
     def reconcile(self, path, *, completion=None, progress=None, cancel=None):
         """Resume the exact ciphertext; preallocated Drive IDs close lost-ACK gaps.
@@ -511,11 +438,14 @@ class WorkspaceDrive:
                 folder = journal['folder_id'] if journal else identifier(self._run('generate-id', cancel=cancel).get('id'))
                 obj = identifier(self._run('generate-id', cancel=cancel).get('id'))
                 row = dict(id=obj, profile_id=self.owner, folder_id=folder,
-                           owners=journal['owners'] if journal else None, **descriptor, completion=provenance)
+                           owners=journal['owners'] if journal else None, **descriptor, completion=provenance,
+                           account=account)
                 pending = dict(version=1, profile_id=self.owner, binding=binding, account=account,
                                folder_name='Finix-' + self.owner[:12] + '-' + folder,
                                name='finix-' + obj + '.age', record=row)
                 row.update(name=pending['name'], folder_name=(journal.get('folder_name') if journal else pending['folder_name']))
+                if isinstance(self.runner, WorkspaceRunner):
+                    row['credential_authority'] = 'finix:google'
                 self._write_private('workspace-pending.json', pending)
             row = pending['record']
             # Pre-contract pending intents already bound these names privately.
@@ -568,22 +498,9 @@ class WorkspaceDrive:
             return dict(row, verified=True, storage='workspace')
 
     def status(self):
-        script = helper_path(self.home)
-        if not script:
-            code = 'HELPER_MISSING'
-        else:
-            try:
-                # Use the same trusted, isolated child and bounded transport as
-                # actual operations; never import the provider or start login.
-                probe = WorkspaceRunner(self.home, script=script, timeout=5)('local-status')
-                deps = probe.get('dependencies_ready') is True
-                # Presence only; readiness is not authorization or a live probe.
-                token = (self.home / 'google_token.json').is_file()
-                code = 'DEPENDENCIES_MISSING' if not deps else 'TOKEN_ABSENT' if not token else 'LOCAL_READY'
-            except WorkspaceError as exc:
-                code = exc.code
-        return {'ready': code == 'LOCAL_READY', 'code': code, 'live_google_verified': False,
-                'action': 'Existing profile authorization must include Drive write access; new local login is available in the authenticated Finix UI.'}
+        # No credential introspection or authorization probes on GET.
+        return {'ready': False, 'code': 'GOOGLE_AUTH_SETUP_REQUIRED', 'live_google_verified': False,
+                'action': 'Use hermes auth add finix:google in this profile, then check the connection. Legacy Workspace journals require explicit migration and remain untouched.'}
 
     def metadata(self, obj, *, cancel=None):
         result = self._run('metadata', identifier(obj), cancel=cancel)
@@ -603,6 +520,10 @@ class WorkspaceDrive:
         return actual
 
     def descriptor(self, row):
+        if isinstance(self.runner, WorkspaceRunner) and row.get('credential_authority') != 'finix:google':
+            raise WorkspaceError('MIGRATION_REQUIRED')
+        if row.get('account') != self.account_digest:
+            raise WorkspaceError('ACCOUNT_CHANGED')
         if (row.get('profile_id') != self.owner or not re.fullmatch(r'[a-f0-9]{64}', row.get('sha256', ''))
                 or type(row.get('size')) is not int or row['size'] <= 0):
             raise core.FinixError('Invalid Workspace recovery record')
@@ -626,8 +547,9 @@ class WorkspaceDrive:
             self.folder_metadata(record['folder_id'], record.get('owners'),
                                  expected_name=record['folder_name'], cancel=cancel)
         self.file_metadata(record, cancel=cancel)
-        # The upstream CLI writes unbounded wb files: bound it in a private
-        # encrypted-only stage with subprocess RLIMIT_FSIZE and timeout.
+        # Private ciphertext staging and exact readback prevent publication of
+        # invalid media. The public SDK still buffers replies before validation;
+        # this is NOT a pre-body response-byte guarantee.
         with tempfile.TemporaryDirectory(prefix='finix-workspace-', dir=os.environ.get('TMPDIR')) as stage:
             path = Path(stage) / 'cipher.age'
             self._transfer_progress(progress, 'readback')
@@ -640,7 +562,7 @@ class WorkspaceDrive:
         path = self.state / 'workspace.json'
         if not path.exists():
             # Never adopt by name after state loss: create a fresh namespace.
-            result = self.runner('create-folder', 'Finix-' + self.owner[:12] + '-' + uuid.uuid4().hex)
+            result = self._run('create-folder', 'Finix-' + self.owner[:12] + '-' + uuid.uuid4().hex)
             if result.get('status') != 'created':
                 raise core.FinixError('Workspace folder creation failed')
             folder = identifier(result.get('id'))
@@ -651,6 +573,8 @@ class WorkspaceDrive:
         journal = self._read_private('workspace.json')
         if journal.get('profile_id') != self.owner or not isinstance(journal.get('records'), list):
             raise core.FinixError('Workspace ledger binding mismatch')
+        if journal.get('account') != self.account_digest:
+            raise WorkspaceError('ACCOUNT_CHANGED')
         self.folder_metadata(identifier(journal.get('folder_id')), journal.get('owners'))
         ids = set()
         for row in journal['records']:
@@ -695,7 +619,7 @@ class WorkspaceDrive:
                 obj = None
             if obj is not None and not obj['trashed']:
                 self.download(old)  # fresh ownership, parent, size, and SHA readback
-                result = self.runner('delete', old['id'])  # reversible trash only
+                result = self._run('delete', old['id'])  # reversible trash only
                 if (result.get('status') != 'trashed' or result.get('fileId') != old['id']
                         or result.get('permanent') is not False):
                     raise core.FinixError('Workspace trash failed')
@@ -715,7 +639,10 @@ def main(argv=None):
     parser.add_argument('--output')
     args = parser.parse_args(argv)
     try:
-        drive = WorkspaceDrive(args.home, args.profile_id, Path(args.home) / 'unused-finix-recovery-state')
+        from .integration import Profile
+        selected_account = Profile(args.home).config().get('workspace_account')
+        drive = WorkspaceDrive(args.home, args.profile_id, Path(args.home) / 'unused-finix-recovery-state',
+                               account_digest=selected_account)
         if args.command == 'status':
             result = drive.status()
             print(json.dumps(result))

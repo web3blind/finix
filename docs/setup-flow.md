@@ -12,11 +12,14 @@ Run `hermes finix` in an interactive terminal for the numbered menu:
    replacement. If absent, create and save a recovery key on your own device
    using the shipped offline `dist/keygen.html` or the native Desktop client.
    The server receives only its public `age1…` recipient, never the private key.
-2. **Cloud** chooses Google Workspace, Yandex Disk, OneDrive or Dropbox, or
-   explicitly local-only copies. Account connection uses the existing private
-   credential-owning workers, a provider sign-in URL and mode-specific
-   instructions. A connection is applied separately after verification. No
-   authorization codes, callback URLs or credentials should be pasted into the
+2. **Cloud** chooses Google Drive (the declared Finix OAuth client), Yandex Disk,
+   OneDrive or Dropbox, or explicitly local-only copies. For Google, first use
+   Hermes' public `hermes auth add finix:google` flow in the owning profile with
+   the configured `FINIX_GOOGLE_CLIENT_ID` and `FINIX_GOOGLE_CLIENT_SECRET`.
+   The declared scope is `drive.file`. Finix never reads or writes the Google
+   Workspace skill's credentials. Other providers use their explicitly selected
+   private connection workers. A connection is applied separately after verification.
+   No authorization codes, callback URLs or credentials should be pasted into the
    terminal or chat. Tunnel mode never opens a browser on the server.
 3. **Check everything and run first backup** runs the actual encrypted profile
    backup, source validation and selected cloud adapter's complete upload and

@@ -56,55 +56,52 @@ def register_cloud(service,profile):
         saved = read_journal(path)
         if saved is None:
             return
-        expected = {key:saved.get(key) for key in ('profile_id','folder_id','owners')}
+        if saved.get('credential_authority') != 'finix:google':
+            return  # Legacy Workspace authority is not a Finix OAuth grant.
+        selected_account = cfg.get('workspace_account')
+        if not selected_account or saved.get('account') != selected_account:
+            return  # An old journal cannot select or replace the applied account.
+        expected = {key:saved.get(key) for key in
+                    ('profile_id','folder_id','owners','account','binding','credential_authority')}
         if expected['profile_id'] != profile.profile_id or not expected['owners']:
+            raise RecoveryError('INVALID_SOURCE')
+        if expected['binding'] != adapter._binding():
             raise RecoveryError('INVALID_SOURCE')
         from .workspace_drive import identifier
         identifier(expected['folder_id'])
+        def selected():
+            current = profile.config()
+            if (current.get('storage') != 'workspace'
+                    or current.get('workspace_account') != selected_account
+                    or adapter._binding() != expected['binding']):
+                raise RecoveryError('INVALID_SOURCE')
         def validate(row):
+            selected()
             adapter.descriptor(row)
             return row['folder_id'] == expected['folder_id'] and row.get('owners') == expected['owners']
         def download(row,output,cancel):
-            adapter.folder_metadata(expected['folder_id'],expected['owners'])
-            adapter.file_metadata(row)
+            selected()
             # Ciphertext only; all staging explicitly under the excluded cache.
             core.private_dir(service.stage_root)
             with tempfile.TemporaryDirectory(dir=service.stage_root,prefix='cipher-') as directory:
                 target = Path(directory)/'cipher.age'
-                result = adapter.runner('download',row['id'],'--output',str(target),
-                                        expected_size=row['size'],cancel=cancel)
-                if result.get('status') != 'downloaded' or result.get('id') != row['id']:
-                    raise RecoveryError('INTEGRITY_FAILED')
+                adapter.download(row, target, cancel=cancel)
+                selected()
+                adapter._account(cancel=cancel)
                 with core.regular_input(target) as fd:
                     while chunk := os.read(fd,1024*1024):
                         if cancel():
                             raise RecoveryError('CANCELLED')
                         output.write(chunk)
     elif kind == 'connector-drive':
-        adapter = profile.connector(cfg)
-        path = profile.root/'connector-index/connector.json'
-        saved = read_journal(path)
-        if saved is None:
-            return
-        expected = dict(owner=profile.profile_id,account=adapter.account,alias=adapter.alias,folder=adapter.folder)
-        def validate(row):
-            adapter.checked_descriptor(row)
-            from .workspace_drive import identifier
-            identifier(row.get('id'))
-            return True
-        def download(row,output,cancel):
-            # Existing managed contract is explicitly size bounded (20 MiB).
-            data = adapter.download(row['id'],adapter.checked_descriptor(row))
-            if cancel():
-                raise RecoveryError('CANCELLED')
-            output.write(data)
+        return  # unsupported backend; preserve its existing settings/journal
     elif kind == 'drive':
         # Legacy Drive upload does not persist an exact local commit journal.
         # Do NOT scan Drive or manufacture candidates from names/metadata. New
         # host-reviewed commits may use this bound journal; old copies remain
         # recoverable via the explicitly selected local ciphertext workflow.
         from .drive import Drive
-        adapter = Drive(profile.profile_id)
+        adapter = Drive(profile.profile_id, home=profile.home)
         path = profile.root/'drive-index/drive.json'
         saved = read_journal(path)
         if saved is None:
@@ -145,7 +142,7 @@ def register_cloud(service,profile):
         transfer = download
         def download(row,output,cancel):
             # A new worker thread must not inherit ambient/default OAuth scope.
-            from .connector_drive import profile_scope
+            from .drive import profile_scope
             with profile_scope(profile.home):
                 transfer(row,output,cancel)
     source = committed_journal_source(connection=kind,generation=generation([expected,service.activation]),journal=path,

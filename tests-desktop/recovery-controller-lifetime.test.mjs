@@ -21,7 +21,7 @@ test('real Query ignores forged SOURCE storage hint and performs fresh server ad
 });
 test('real Query Back creates a fresh fenced admission without another Restore or key', {skip:!runtime&&'Set FINIX_SDK_QUERY_MODULE'},async t=>{
  const e=await environment({current:readyOperation,select:async()=>{}});t.after(e.close);const h=await e.evaluate();await h.settle();assert.equal(h.scope().activated,true);const before=e.calls.filter(c=>c.path.startsWith('/recovery/')).length;
- const back=h.render().find(n=>n.type==='button'&&n.props.children==='Назад к предыдущему профилю');assert.ok(back);await back.props.onClick();await h.settle();assert.equal(h.scope().ready,true);assert.equal(h.scope().activated,false);assert.equal(h.scope().key,false);assert.equal(h.scope().candidate,ID);assert.equal(e.calls.filter(c=>c.path.startsWith('/recovery/')).length-before,3);assert.equal(e.calls.some(c=>c.method==='POST'),false);assert.equal(e.calls.filter(c=>c.path==='select').length,2);
+ const back=h.render().find(n=>n.type==='button'&&n.props.children==='Back to previous profile');assert.ok(back);await back.props.onClick();await h.settle();assert.equal(h.scope().ready,true);assert.equal(h.scope().activated,false);assert.equal(h.scope().key,false);assert.equal(h.scope().candidate,ID);assert.equal(e.calls.filter(c=>c.path.startsWith('/recovery/')).length-before,3);assert.equal(e.calls.some(c=>c.method==='POST'),false);assert.equal(e.calls.filter(c=>c.path==='select').length,2);
 });
 async function environment(options={}){
  const client=new runtime.QueryClient({defaultOptions:{queries:{gcTime:Infinity}}});

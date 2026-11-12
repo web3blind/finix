@@ -12,10 +12,8 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import stat
-import subprocess
 import sys
 import tarfile
-from types import SimpleNamespace
 import uuid
 
 import yaml
@@ -61,20 +59,10 @@ UNSAFE_ENV = frozenset({'HERMES_HOME', 'HERMES_PROFILE', 'HERMES_PROFILE_NAME',
     'LD_LIBRARY_PATH', 'VIRTUAL_ENV', 'HERMES_BUNDLED_PLUGINS',
     'HERMES_ENABLE_PROJECT_PLUGINS', 'HERMES_OPTIONAL_MCPS', 'HERMES_CONFIG_PATH',
     'HERMES_ENV_PATH', 'HERMES_YOLO_MODE', 'HERMES_NEMO_RELAY_PLUGINS_TOML'})
-HOST_IMPORT_SOURCE_SHA256 = '50bafad68dd4b9ef3374a8892230c7d65c75d6e86c062820a10221458f90d991'
 DESKTOP_SDK_CONTRACT_VERSION = '0.23.0'
-# Normalized SOURCE, not ast.dump (which differs across Python releases).
-# import_profile also matches upstream v0.23.0 after CRLF normalization.
-# Shipped Python package metadata declares 0.0.0; version alone is not authority.
-HOST_SOURCE_PINS = {
-    'import_profile': HOST_IMPORT_SOURCE_SHA256,
-    'safe_extract_targz': 'f16cef5af19e3d36ffaa25a68e404a05e2da652d1947b6a15171a51a433b7290',
-    'archive_root_dirs': '4a7aa4b95c40ad4c9508a1333a192c0cae129379d4676e282646ce428184764e',
-    'get_profile_dir': '049f311c24503796423974e7b885596dcb1a21e3fa1411a036b331e6fec43876',
-    '_canon_valid': 'e47038ff587f6744ee3a85c0a550c9c7f4c455ad54d3f1e700183e8463242c84',
-}
 HOST_EXIT_CODES = {'HOST_UNAVAILABLE': 20, 'INVALID_CONFIG': 21, 'PROFILE_EXISTS': 22,
-                   'HOST_VERIFICATION_FAILED': 23, 'INVALID_NAME': 24}
+                   'HOST_VERIFICATION_FAILED': 23, 'INVALID_NAME': 24,
+                   'HOST_IMPORT_CONTRACT_UNSUPPORTED': 25}
 
 
 def _safe_env(data):
@@ -328,6 +316,8 @@ class RecoveryImporter:
             raise RecoveryImportError('INVALID_NAME') from None
         except ImportError:
             raise RecoveryImportError('HOST_UNAVAILABLE') from None
+        if self.host is None:
+            verify_host_compatibility(host)
         try:
             # Serialize cancellation/profile invalidation through publication, using
             # the SAME fence lock as RecoveryService, not an unrelated UI state.
@@ -528,9 +518,8 @@ class RecoveryImporter:
 def _publish_profile(source, target):
     """Same-filesystem atomic no-replace, never shutil.move's nested adoption.
 
-    The installed host uses shutil.move, whose EXDEV fallback publishes a partially
-    copied directory and whose existing-directory behavior adopts it. Apply this
-    guard only inside the disposable child, never patch the running host globals.
+    This is a Finix-owned primitive, not an SDK importer adapter. The public
+    importer cannot accept it as a capability; its unsupported path stays closed.
     """
     source, target = core.checked_path(source), core.checked_path(target)
     with core.locked(target.parent), core.locked(source):
@@ -543,92 +532,29 @@ def _publish_profile(source, target):
 
 
 def _host_import(host, archive, name, target, stage):
-    """Run the real supported importer with isolated temp/publication primitives."""
-    env = dict(os.environ)
-    env['PYTHONPATH'] = os.pathsep.join(dict.fromkeys([
-        str(Path(__file__).resolve().parent.parent), str(Path(host.__file__).resolve().parent.parent),
-        *(os.path.abspath(p) for p in sys.path if p)]))
-    # These affect ONLY the child. Never mutate live home, env, tempfile or shutil.
-    for key in ('TMPDIR', 'TMP', 'TEMP'):
-        env[key] = str(stage)
-    # SDK safe_extract_targz creates root/parents with mkdir's default mode;
-    # constrain those directories at creation, before any SDK child imports.
-    # Popen's POSIX-only child umask avoids process-global/thread races and
-    # preserves Windows invocation semantics (no unsupported keyword there).
-    child_creation = {'umask': 0o077} if os.name == 'posix' else {}
-    result = subprocess.run([sys.executable, '-m', 'finix.recovery_import',
-        '--host-import', str(archive), name, str(target), str(stage)],
-        env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL, shell=False, timeout=600, **child_creation)
-    if result.returncode:
-        code = next((code for code, number in HOST_EXIT_CODES.items() if number == result.returncode),
-                    'HOST_IMPORT_FAILED')
-        raise RecoveryImportError(code)
-    return target
+    """No public SDK import currently satisfies the protected publication contract.
+
+    A separate ``hermes profile import <archive> --name <name>`` process isolates
+    Python state, but its public implementation still uses shutil.move: an
+    existing-directory race adopts the source, and EXDEV can expose a partial
+    copy. It accepts no native directory-owner/lease or rollback capability.
+    Do not dispatch it, replace its filesystem primitives, or alter temp globals.
+    """
+    raise RecoveryImportError('HOST_IMPORT_CONTRACT_UNSUPPORTED')
 
 
 def verify_host_compatibility(host):
-    import inspect
-    try:
-        for name, expected in HOST_SOURCE_PINS.items():
-            source = inspect.getsource(getattr(host,name)).replace('\r\n','\n')
-            if hashlib.sha256(source.encode()).hexdigest() != expected:
-                raise RecoveryImportError('HOST_UNAVAILABLE')
-    except (AttributeError,OSError,TypeError):
-        raise RecoveryImportError('HOST_UNAVAILABLE') from None
+    """A source hash cannot manufacture a missing public publication capability.
+
+    Used by pipeline admission as well as activation: fail before key dispatch,
+    target startup, or any serving/selection acknowledgement can be issued.
+    """
+    raise RecoveryImportError('HOST_IMPORT_CONTRACT_UNSUPPORTED')
 
 
 def _host_worker(archive, name, target, stage):
-    """Private child entry point, not an HTTP operation or a gateway launcher."""
-    from hermes_cli import profiles as host
-    import tempfile
-    import inspect
-    target, stage = core.checked_path(target), core.checked_path(stage)
-    host.validate_profile_name(name)
-    if name == 'default' or Path(host.get_profile_dir(name)) != target or target.exists():
-        raise RecoveryImportError('INVALID_NAME')
-    from hermes_constants import get_default_hermes_root
-    if target != core.checked_path(get_default_hermes_root()) / 'profiles' / name:
-        raise RecoveryImportError('INVALID_NAME')
-    # Fail closed if host publication changed: reviewing another host version is
-    # preferable to pretending an unguarded call is atomic.
-    verify_host_compatibility(host)
-    bundled = Path(os.environ.get('HERMES_BUNDLED_PLUGINS') or
-                   Path(host.__file__).resolve().parent.parent / 'plugins') / 'platforms'
-    if not bundled.is_dir():
-        raise RecoveryImportError('HOST_UNAVAILABLE')
-    for manifest in bundled.glob('*/plugin.yaml'):
-        identity = _yaml_mapping(manifest.read_bytes())
-        if manifest.parent.name not in PLATFORMS or identity.get('name') not in PLATFORMS:
-            raise RecoveryImportError('HOST_UNAVAILABLE')
-    # Host schema checks consume this already-parsed inert mapping, NOT load_config
-    # and never import recovered plugin/skill/hook code or hydrate credentials.
-    from hermes_cli.config import validate_config_structure
-    with tarfile.open(archive, 'r:gz') as portable:
-        member = portable.extractfile(name + '/config.yaml')
-        if member is None:
-            raise RecoveryImportError('INVALID_CONFIG')
-        with member:
-            config = _yaml_mapping(member.read(MAX_CONFIG + 1))
-    if any(issue.severity == 'error' for issue in validate_config_structure(config)):
-        raise RecoveryImportError('INVALID_CONFIG')
-    tempfile.tempdir = str(stage)
-    original_shutil = host.shutil
-    calls = []
-    def publish(src, dst, *args, **kwargs):
-        if Path(dst) != target or calls or not Path(src).is_relative_to(stage):
-            raise RecoveryImportError('HOST_UNAVAILABLE')
-        calls.append(True)
-        return _publish_profile(src, dst)
-    host.shutil = SimpleNamespace(**{key: getattr(original_shutil, key) for key in dir(original_shutil)
-                                   if not key.startswith('__')})
-    host.shutil.move = publish
-    try:
-        actual = host.import_profile(archive, name=name)
-        if Path(actual) != target or len(calls) != 1:
-            raise RecoveryImportError('HOST_VERIFICATION_FAILED')
-    finally:
-        host.shutil = original_shutil
+    """Reject the retired child protocol before SDK imports or any side effects."""
+    raise RecoveryImportError('HOST_IMPORT_CONTRACT_UNSUPPORTED')
 
 
 if __name__ == '__main__':

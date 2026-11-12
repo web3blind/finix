@@ -18,7 +18,7 @@ class UiLanguageTests(unittest.TestCase):
         def read():return active['value']
         config.load_config_readonly=read
         with patch.dict(sys.modules,{'hermes_cli.config':config}),TestClient(app) as client:
-            for raw,expected in [('en','en'),('en-US','en'),('ru','ru'),('English','ru'),(None,'ru'),({'secret':'PRIVATE-SENTINEL'},'ru')]:
+            for raw,expected in [('en','en'),('en-US','en'),('ru','ru'),('ru-RU','ru'),('English','en'),(None,'en'),({'secret':'PRIVATE-SENTINEL'},'en')]:
                 active['value']={'display':{'language':raw},'secret':'PRIVATE-SENTINEL'}
                 before=repr(active['value'])
                 response=client.get('/ui-language')
@@ -27,4 +27,4 @@ class UiLanguageTests(unittest.TestCase):
                 self.assertEqual(response.headers['cache-control'],'no-store')
                 self.assertEqual(repr(active['value']),before)
             config.load_config_readonly=lambda:(_ for _ in ()).throw(RuntimeError('PRIVATE-SENTINEL'))
-            self.assertEqual(client.get('/ui-language').json(),{'ui_language':'ru'})
+            self.assertEqual(client.get('/ui-language').json(),{'ui_language':'en'})

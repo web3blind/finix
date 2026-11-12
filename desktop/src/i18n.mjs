@@ -18,7 +18,7 @@ export function createLocale(ctx){
   if(disposed)return null;
   const binding=snapshot();if(owner===binding&&pending)return pending;
   owner=binding;const r=++revision;state.set({scope:binding,language:null});
-  pending=(async()=>{let language='ru';try{const out=await ctx.rest('/ui-language',{timeoutMs:10000});if(out?.ui_language==='en')language='en';}catch{/* older backend: preserve legacy Russian UI */}
+  pending=(async()=>{let language='en';try{const out=await ctx.rest('/ui-language',{timeoutMs:10000});if(out?.ui_language==='ru')language='ru';}catch{/* unavailable or older backend: default to English */}
    if(!disposed&&r===revision&&binding===snapshot()){state.set({scope:binding,language});listeners.forEach(fn=>fn(language));}
   })();return pending;
  };
@@ -33,7 +33,7 @@ export const scopedLanguage=()=>current?.view()??null;
 export function useLocalized(pinned=null){
  const host=sdk.useI18n?.();
  if(current)sdk.useValue(current.state);
- const bound=pinned==='en'||pinned==='ru'?pinned:current?.view()??(typeof sdk.useI18n==='function'?null:'ru');
+ const bound=pinned==='en'||pinned==='ru'?pinned:current?.view()??(typeof sdk.useI18n==='function'?null:'en');
  // Prefer public SDK locale once the selected route agrees. The attestation
  // also covers a recovered profile whose integrations remain disabled.
  const language=bound===null?null:host&&!host.isLoadingConfig&&host.locale===bound?host.locale:bound;
@@ -43,8 +43,8 @@ export function useLocalized(pinned=null){
   const p={...props};
   if(Object.hasOwn(p,'children'))p.children=text(p.children);
   for(const k of ['aria-label','title','placeholder'])if(typeof p[k]==='string')p[k]=translate(p[k],language);
-  if(type==='section')p.lang=language??'ru';
+  if(type==='section')p.lang=language??'en';
   return fn(type,p,key);
  };
- return {jsx:wrap(reactJsx),jsxs:wrap(reactJsxs),language:language??'ru'};
+ return {jsx:wrap(reactJsx),jsxs:wrap(reactJsxs),language:language??'en'};
 }

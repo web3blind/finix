@@ -91,7 +91,7 @@ class TelegramMenu:
         from telegram.ext import ApplicationHandlerStop
         message = update.effective_message
         if not self.allowed(message):
-            await message.reply_text('Finix: откройте /finix в личном чате владельца бота.')
+            await message.reply_text('Finix: open /finix in the bot owner’s private chat.')
             raise ApplicationHandlerStop
         if context.args and context.args != ['setup']:
             self.sessions.pop(self.context(message), None)
@@ -101,7 +101,7 @@ class TelegramMenu:
             raise ApplicationHandlerStop
         old = self.session_for(message)
         if old and old.busy:
-            await message.reply_text('Finix: проверка уже выполняется.')
+            await message.reply_text('Finix: a check is already running.')
             raise ApplicationHandlerStop
         from .setup_flow import SetupFlow
         profile = await asyncio.to_thread(self.profile_factory)
@@ -138,24 +138,24 @@ class TelegramMenu:
         button = lambda label, action, value='': self.button(session, label, action, value)
         stage = view['stage']
         if not view['recipient_present']:
-            text = ('1/3. Создайте ключ на своём устройстве в офлайн-странице. Сохраните секретный ключ отдельно. '
-                    'В чат разрешён только публичный адрес age1. Никогда не присылайте секретный ключ, коды или токены.')
-            rows = [[button('Скачать офлайн-страницу', 'keypage')], [button('Ввести публичный age1', 'recipient')]]
+            text = ('1/3. Create a key on your device using the offline page. Store the private key separately. '
+                    'Only the public age1 address is allowed in chat. Never send a private key, codes or tokens.')
+            rows = [[button('Download offline page', 'keypage')], [button('Enter public age1', 'recipient')]]
         elif stage == 'cloud' or (view['storage'] == 'local' and not session.local_selected and not view['verified']):
-            text = '1/3. Ключ уже зарегистрирован; замена заблокирована.\n2/3. Выберите облако.'
+            text = '1/3. The key is already registered; replacement is locked.\n2/3. Choose cloud storage.'
             rows = [[button(label, 'provider', provider)] for provider, label in PROVIDERS.items()]
-            rows.append([button('Только локально (не облако)', 'local')])
+            rows.append([button('Local only (not cloud)', 'local')])
         elif stage in {'check', 'schedule'}:
-            text = '3/3. Проверить настройки, создать первую копию и проверить чтение из облака.'
-            rows = [[button('Проверить и создать копию', 'check')]]
+            text = '3/3. Check settings, create the first backup and verify cloud readback.'
+            rows = [[button('Check and create backup', 'check')]]
             if view['verified']:
-                text = '3/3. Копия проверена. Укажите период строго в формате 24h или 7d.'
+                text = '3/3. Backup verified. Enter the interval exactly as 24h or 7d.'
                 session.pending = 'period'
                 rows = [[button('24h', 'period', '24h'), button('7d', 'period', '7d')]]
         else:
-            text = 'Finix настроен. Период: ' + str(view['interval_hours']) + ' ч. Ключ заблокирован.'
-            rows = [[button('Проверить новую копию', 'check')]]
-        rows.append([button('Отмена', 'cancel')])
+            text = 'Finix is configured. Interval: ' + str(view['interval_hours']) + ' hours. The key is locked.'
+            rows = [[button('Verify a new backup', 'check')]]
+        rows.append([button('Cancel', 'cancel')])
         await self.display(message, session, text, rows)
 
     async def callback(self, update, context):
@@ -182,7 +182,7 @@ class TelegramMenu:
             await self.act(message, session, *action)
         except (core.FinixError, ValueError, OSError, RuntimeError):
             if self.alive:
-                await self.display(message, session, 'Finix: операция не выполнена. Проверьте локальную настройку; /finix для повтора.', [])
+                await self.display(message, session, 'Finix: operation failed. Check local setup; use /finix to retry.', [])
         finally:
             session.busy = False
         raise ApplicationHandlerStop
@@ -193,30 +193,30 @@ class TelegramMenu:
             if session.connection:
                 await self.connect(session, ['cancel', session.connection])
             self.sessions.pop(self.context(message), None)
-            await message.reply_text('Finix: отменено.')
+            await message.reply_text('Finix: cancelled.')
         elif action == 'keypage':
             path = key_page()
             with path.open('rb') as document:
                 await message.reply_document(document, filename='finix-keygen.html',
-                                             caption='Скачайте и откройте локально. Секретный ключ остаётся у вас.')
+                                             caption='Download and open locally. The private key stays with you.')
             await self.render(message, session)
         elif action == 'recipient':
             if session.profile.config().get('recipient'):
                 await self.render(message, session)
                 return
             session.pending = 'recipient'
-            await self.display(message, session, 'Пришлите только публичный age1 адрес следующим сообщением.', [[button('Отмена', 'cancel')]])
+            await self.display(message, session, 'Send only your public age1 address in the next message.', [[button('Cancel', 'cancel')]])
         elif action == 'local':
             await asyncio.to_thread(session.profile.configure, 'storage', 'local')
             session.local_selected = True
             await self.render(message, session)
         elif action == 'provider':
-            text = ('Выберите способ входа. Подтверждение разрешает провайдеру права чтения, изменения и удаления диска. '
-                    'Используется существующая локальная OAuth-конфигурация. Пароль вводите только на сайте; '
-                    'коды, callback URL и токены не отправляйте в чат. Браузер автоматически не открывается.')
+            text = ('Choose a sign-in method. Confirm the provider’s requested permissions. '
+                    'Google uses Finix OAuth: run hermes auth add finix:google in this profile first. Enter passwords only on the provider site; '
+                    'never send codes, callback URLs or tokens in chat. No browser opens automatically.')
             rows = [[button(label, 'start', (value, mode))] for label, mode in
-                    [('На машине Finix', 'local'), ('SSH-туннель', 'tunnel'), ('Браузер на сервере', 'server-browser')]]
-            await self.display(message, session, text, rows + [[button('Отмена', 'cancel')]])
+                    [('On the Finix machine', 'local'), ('SSH tunnel', 'tunnel'), ('Browser on server', 'server-browser')]]
+            await self.display(message, session, text, rows + [[button('Cancel', 'cancel')]])
         elif action == 'start':
             provider, mode = value
             view = await self.connect(session, [provider, mode, 'confirm'])
@@ -230,7 +230,7 @@ class TelegramMenu:
             else:
                 await self.connection_view(message, session, view)
         elif action == 'check':
-            await message.reply_text('Finix: проверка и создание копии выполняются…')
+            await message.reply_text('Finix: checking and creating a backup…')
             await asyncio.to_thread(session.flow.check_and_run)
             if self.alive:
                 await self.render(message, session)
@@ -245,16 +245,16 @@ class TelegramMenu:
 
     async def connection_view(self, message, session, view):
         button = lambda label, action, value='': self.button(session, label, action, value)
-        text = 'Облако: ' + view['status'] + '\n' + view.get('instructions', '')
+        text = 'Cloud: ' + view['status'] + '\n' + view.get('instructions', '')
         url = view.get('url')
         if url and safe_url(view['provider'], url):
             text += '\n' + url
-        rows = [[button('Обновить статус', 'status')]]
+        rows = [[button('Refresh status', 'status')]]
         if view['status'] == 'choice':
             rows += [[button(str(choice['label'])[:100], 'choose', choice['id'])] for choice in view.get('choices', [])]
         if view['status'] == 'verified':
-            rows += [[button('Применить выбранное облако', 'apply')]]
-        await self.display(message, session, text, rows + [[button('Отмена', 'cancel')]])
+            rows += [[button('Apply selected cloud storage', 'apply')]]
+        await self.display(message, session, text, rows + [[button('Cancel', 'cancel')]])
 
     async def clear_pending(self, update, context):
         session = self.session_for(update.effective_message)
@@ -280,7 +280,7 @@ class TelegramMenu:
             text = message.text
             if pending == 'recipient':
                 if not core.RECIPIENT.fullmatch(text):
-                    await message.reply_text('Нужен только публичный age1 адрес. Секреты не принимаются и не сохраняются.')
+                    await message.reply_text('Only a public age1 address is accepted. Secrets are not accepted or stored.')
                     raise ApplicationHandlerStop
                 await asyncio.to_thread(session.profile.recipient, session.profile.profile_id, text, None)
             elif pending == 'period':
@@ -289,7 +289,7 @@ class TelegramMenu:
                 await asyncio.to_thread(session.flow.schedule, text)
             await self.render(message, session)
         except (core.FinixError, ValueError, OSError, RuntimeError):
-            await message.reply_text('Finix: ввод не принят. Период — строго 24h или 7d; ключ — только публичный age1.')
+            await message.reply_text('Finix: input rejected. Interval must be 24h or 7d; key must be public age1 only.')
         finally:
             session.busy = False
         raise ApplicationHandlerStop

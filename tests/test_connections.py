@@ -181,28 +181,66 @@ class ConnectionsTests(unittest.TestCase):
                   'http://user@127.0.0.1:53682/auth?state=safe'):
             self.assertFalse(safe_url('yandex', u))
 
+    def public_google(self, *, signed_in=True, account=None):
+        """Real SDK request API; fake credential-store read + HTTPX MockTransport.
+
+        The installed probe supplies genuine SDK caller attribution. Neither the
+        request API nor OAuth admission is replaced, and no grant is persisted.
+        """
+        from contextlib import ExitStack
+        import httpx
+        import yaml
+        from hermes_cli import plugin_oauth as oauth
+        plugin = self.home / 'plugins' / 'finix'
+        plugin.mkdir(parents=True, mode=0o700, exist_ok=True)
+        manifest = (Path(__file__).parents[1] / 'plugin.yaml').read_bytes()
+        (plugin / 'plugin.yaml').write_bytes(manifest)
+        clients, problems = oauth.parse_oauth_clients(yaml.safe_load(manifest))
+        self.assertEqual(problems, [])
+        fingerprint = clients[0].fingerprint
+        namespace = {}
+        exec(compile('from hermes_cli.plugin_provider_requests import credentialed_provider_request\n'
+                     'def request(method, url, **kwargs):\n'
+                     ' return credentialed_provider_request("google", method, url, **kwargs)\n',
+                     str(plugin / 'probe.py'), 'exec'), namespace)
+        state = {'account': 'synthetic-account', 'calls': []} if account is None else account
+        real_client = httpx.Client
+        def transport(request):
+            self.assertEqual(request.method, 'GET')
+            self.assertEqual(request.url.host, 'www.googleapis.com')
+            self.assertEqual(request.url.path, '/drive/v3/about')
+            self.assertEqual(request.headers['authorization'], 'Bearer SYNTHETIC_OFFLINE_GRANT')
+            state['calls'].append(str(request.url))
+            return httpx.Response(200, json={'user': {'permissionId': state['account']}})
+        def offline_client(*args, **kwargs):
+            return real_client(*args, **kwargs, transport=httpx.MockTransport(transport))
+        def grant(key):
+            self.assertEqual(key, 'finix:google')
+            return {'fingerprint': fingerprint, 'access_token': 'SYNTHETIC_OFFLINE_GRANT'} if signed_in else None
+        stack = ExitStack()
+        stack.enter_context(patch.object(oauth, '_read_grant', grant))
+        stack.enter_context(patch.object(httpx, 'Client', offline_client))
+        stack.enter_context(patch('finix.drive.managed_request', side_effect=namespace['request']))
+        return stack
+
     def test_workspace_existing_profile_reuse_live_probe_no_token_copy(self):
+        import hashlib
         token = self.home / 'google_token.json'
         token.write_text('SYNTHETIC_EXISTING_TOKEN')
-        helper = self.home / 'skills/productivity/google-workspace/scripts/google_api.py'
-        helper.parent.mkdir(parents=True, mode=0o700)
-        helper.write_text('''import os
-from pathlib import Path
-class Service:
- def about(self): return self
- def get(self, **kwargs): return self
- def execute(self):
-  (Path(os.environ['HERMES_HOME']) / 'synthetic-probe').touch()
-  return {'user': {}}
-def build_service(*args): return Service()
-''')
-        self.act('start', provider='workspace', confirmed=True, local_browser=True)
-        self.wait('verified')
-        self.assertTrue((self.home / 'synthetic-probe').is_file())
-        self.act('apply')
+        state = {'account': 'synthetic-account', 'calls': []}
+        with self.public_google(account=state), \
+             patch('finix.connections.subprocess.Popen', side_effect=AssertionError('Google must not spawn')) as spawn:
+            self.act('start', provider='workspace', confirmed=True, local_browser=True)
+            self.wait('verified')
+            self.assertEqual(len(state['calls']), 1)
+            self.act('apply')
+            self.assertEqual(len(state['calls']), 2)
+            spawn.assert_not_called()
         self.assertEqual(self.profile.config()['storage'], 'workspace')
+        self.assertEqual(self.profile.config()['workspace_account'], hashlib.sha256(b'synthetic-account').hexdigest())
         self.assertEqual(token.read_text(), 'SYNTHETIC_EXISTING_TOKEN')
-        self.assertFalse((self.manager.sessions[self.profile.profile_id]['stage'] / 'workspace-token.json').exists())
+        self.assertIsNone(self.manager.sessions[self.profile.profile_id]['stage'])
+        self.assertFalse((self.home / 'auth.json').exists())
         # Applied connection feeds the real profile backup/age/restore pipeline;
         # only the remote Drive transport is synthetic.
         from finix import core
@@ -212,7 +250,10 @@ def build_service(*args): return Service()
         recipient = core.keygen(identity)
         self.profile.recipient(self.profile.profile_id, recipient, None)
         (self.home / 'config.yaml').write_text('synthetic: connected-backup\n')
-        drive = WorkspaceDrive(self.home, self.profile.profile_id, self.profile.root / 'workspace', runner=FakeDrive())
+        fake = FakeDrive()
+        fake.account = 'synthetic-account'
+        drive = WorkspaceDrive(self.home, self.profile.profile_id, self.profile.root / 'workspace',
+                               runner=fake, account_digest=self.profile.config()['workspace_account'])
         with patch.object(Profile, 'workspace', return_value=drive):
             result = self.profile.backup()
         recovered = self.base / 'download.age'
@@ -222,34 +263,42 @@ def build_service(*args): return Service()
         self.assertEqual((destination / 'config.yaml').read_text(), 'synthetic: connected-backup\n')
         self.assertEqual(token.read_text(), 'SYNTHETIC_EXISTING_TOKEN')
 
-    def test_workspace_new_login_requires_helper_and_dependencies_before_spawn(self):
-        (self.home / 'google_client_secret.json').write_text('{}')
-        with patch('finix.workspace_drive.helper_path', return_value=None), \
-             patch('finix.connections.subprocess.Popen', side_effect=AssertionError('spawn before prerequisites')) as spawn:
-            with self.assertRaisesRegex(ConnectionError, 'WORKSPACE_HELPER_REQUIRED'):
+    def test_workspace_new_login_requires_public_grant_before_spawn(self):
+        before = self.profile.config()
+        state = {'account': 'synthetic-account', 'calls': []}
+        with self.public_google(signed_in=False, account=state), \
+             patch('finix.connections.subprocess.Popen', side_effect=AssertionError('Google must not spawn')) as spawn:
+            with self.assertRaisesRegex(ConnectionError, 'GOOGLE_AUTH_SETUP_REQUIRED'):
                 self.act('start', provider='workspace', confirmed=True, local_browser=True)
             spawn.assert_not_called()
-        helper = self.home / 'synthetic-helper.py'; helper.touch()
-        with patch('finix.workspace_drive.helper_path', return_value=helper), \
-             patch('importlib.util.find_spec', return_value=None), \
-             patch('finix.connections.subprocess.Popen', side_effect=AssertionError('spawn before prerequisites')) as spawn:
-            with self.assertRaisesRegex(ConnectionError, 'WORKSPACE_DEPENDENCIES_REQUIRED'):
-                self.act('start', provider='workspace', confirmed=True, local_browser=True)
-            spawn.assert_not_called()
+        self.assertEqual(state['calls'], [])
         self.assertEqual(self.manager.view(self.profile)['session']['status'], 'idle')
+        self.assertEqual(self.profile.config(), before)
+        for name in ('google_token.json', 'google_client_secret.json', 'auth.json'):
+            self.assertFalse((self.home / name).exists())
 
-    def test_workspace_apply_rechecks_helper_before_token_or_settings_write(self):
-        stage = self.base / 'stage'; stage.mkdir()
-        (stage / 'workspace-token.json').write_text('SYNTHETIC_NEW_GRANT')
-        session = {'public': {'provider': 'workspace', 'status': 'verified'},
-                   'stage': stage, 'before': self.profile.config(), 'reuse': False}
-        with patch('finix.workspace_drive.helper_path', return_value=None):
-            with self.assertRaisesRegex(ConnectionError, 'WORKSPACE_HELPER_REQUIRED'):
-                self.manager._apply(self.profile, session)
+    def test_workspace_apply_rechecks_grant_and_account_before_settings_write(self):
+        before = self.profile.config()
+        state = {'account': 'account-A', 'calls': []}
+        with self.public_google(account=state):
+            self.act('start', provider='workspace', confirmed=True, local_browser=True)
+        session = self.manager.sessions[self.profile.profile_id]
+        with self.public_google(signed_in=False), \
+             patch('finix.connections.subprocess.Popen', side_effect=AssertionError('Google must not spawn')) as spawn:
+            with self.assertRaisesRegex(ConnectionError, 'GOOGLE_AUTH_SETUP_REQUIRED'):
+                self.act('apply')
+            spawn.assert_not_called()
+        state['account'] = 'account-B'
+        with self.public_google(account=state):
+            with self.assertRaisesRegex(ConnectionError, 'GOOGLE_ACCOUNT_CHANGED'):
+                self.act('apply')
+        self.assertEqual(session['public']['status'], 'verified')
+        self.assertEqual(self.profile.config(), before)
         self.assertFalse((self.home / 'google_token.json').exists())
+        self.assertFalse((self.home / 'auth.json').exists())
         self.assertEqual(self.profile.config()['storage'], 'local')
 
-    def test_refresh_failure_code_crosses_worker_boundary_without_secrets(self):
+    def test_removed_workspace_worker_route_is_closed_without_secrets(self):
         import io
         from contextlib import redirect_stdout
         from unittest.mock import Mock
@@ -257,18 +306,24 @@ def build_service(*args): return Service()
         output = io.StringIO()
         with patch('sys.argv', ['worker', 'workspace', str(self.home), str(self.base), '']), \
              patch('signal.alarm'), patch('signal.signal'), \
-             patch('finix.connection_worker.connect_workspace', side_effect=ValueError('WORKSPACE_REFRESH_TOKEN_REQUIRED')), \
+             patch('finix.connection_worker.connect_rclone', side_effect=AssertionError('removed Google route')) as connect, \
              redirect_stdout(output):
             self.assertEqual(connection_worker.main(), 1)
-        self.assertEqual(json.loads(output.getvalue()), {'status': 'failed', 'code': 'WORKSPACE_REFRESH_TOKEN_REQUIRED'})
-        stage = self.base / 'failed-stage'; stage.mkdir()
-        process = Mock(stdout=io.BytesIO(output.getvalue().encode()), stdin=io.BytesIO())
-        process.wait.return_value = 1; process.poll.return_value = 1
-        session = {'public': {'provider': 'workspace', 'status': 'working'}, 'process': process, 'stage': stage}
-        self.manager._read(session)
-        self.assertEqual(session['public']['status'], 'failed')
-        self.assertEqual(session['public']['code'], 'WORKSPACE_REFRESH_TOKEN_REQUIRED')
-        self.assertFalse(stage.exists())
+            connect.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue()), {'status': 'failed', 'code': 'RCLONE_PROVIDER_FAILED'})
+        self.assertNotIn('SYNTHETIC', output.getvalue())
+        # Legacy closed remediation events still cross the reader safely, but
+        # no Google token/client-config subprocess produces them anymore.
+        for code in ('RCLONE_PROVIDER_FAILED', 'WORKSPACE_REFRESH_TOKEN_REQUIRED'):
+            stage = self.base / ('failed-stage-' + code); stage.mkdir()
+            event = json.dumps({'status': 'failed', 'code': code}) + '\n'
+            process = Mock(stdout=io.BytesIO(event.encode()), stdin=io.BytesIO())
+            process.wait.return_value = 1; process.poll.return_value = 1
+            session = {'public': {'provider': 'workspace', 'status': 'working'}, 'process': process, 'stage': stage}
+            self.manager._read(session)
+            self.assertEqual(session['public']['status'], 'failed')
+            self.assertEqual(session['public']['code'], code)
+            self.assertFalse(stage.exists())
 
     def test_http_ticket_binding_and_reject_token_fields(self):
         from fastapi import FastAPI
@@ -290,151 +345,36 @@ def build_service(*args): return Service()
             self.assertEqual(client.post('/connection', json=body).status_code, 409)
 
 
-class WorkspaceOAuthContracts(unittest.TestCase):
-    def test_missing_refresh_token_never_verified_or_staged(self):
-        import io
-        from contextlib import redirect_stdout
-        from unittest.mock import Mock
-        from google.oauth2.credentials import Credentials
-        from finix.connection_worker import connect_workspace
-        with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as tmp:
-            home = Path(tmp) / 'profile'; home.mkdir()
-            stage = Path(tmp) / 'stage'; stage.mkdir()
-            payload = {'installed': {'client_id': 'synthetic', 'client_secret': 'synthetic',
-                                    'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
-                                    'token_uri': 'https://oauth2.googleapis.com/token'}}
-            (home / 'google_client_secret.json').write_text(json.dumps(payload))
-            credentials = Credentials('SYNTHETIC_ACCESS', client_id='synthetic',
-                                      client_secret='synthetic', token_uri='https://oauth2.googleapis.com/token')
-            flow = Mock(credentials=credentials)
-            output = io.StringIO()
-            with patch('google_auth_oauthlib.flow.InstalledAppFlow.from_client_config', return_value=flow), \
-                 patch('googleapiclient.discovery.build') as build, redirect_stdout(output):
-                with self.assertRaisesRegex(ValueError, 'WORKSPACE_REFRESH_TOKEN_REQUIRED'):
-                    connect_workspace(home, stage)
-                build.assert_not_called()
-            self.assertFalse((stage / 'workspace-token.json').exists())
-            self.assertNotIn('verified', output.getvalue())
-            self.assertNotIn('SYNTHETIC_ACCESS', output.getvalue())
+class FinixGoogleConnectionContracts(unittest.TestCase):
+    def test_existing_grant_checked_without_skill_or_browser(self):
+        from types import SimpleNamespace
+        profile = SimpleNamespace(profile_id='a'*64, home=Path(os.environ['TMPDIR']), config=lambda: {'storage':'local'})
+        manager = Connections()
+        ticket = manager.view(profile)['ticket']
+        with patch('finix.workspace_drive.WorkspaceRunner.__call__', return_value={'account_id':'mocked-provider'}):
+            view = manager.action(profile, profile_id=profile.profile_id, ticket=ticket,
+                                  action='start', provider='workspace', confirmed=True, local_browser=True)
+        self.assertEqual(view['session']['status'], 'verified')
+        self.assertNotIn('url', view['session'])
+        self.assertEqual(profile.config(), {'storage':'local'})
+        manager.action(profile, profile_id=profile.profile_id, ticket=ticket, action='cancel', session_id=view['session']['id'])
+        self.assertEqual(manager.view(profile)['session']['status'],'cancelled')
 
-    def test_google_state_mismatch_fails_before_token_request(self):
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from oauthlib.oauth2 import MismatchingStateError
-        config = {'installed': {'client_id': 'synthetic', 'client_secret': 'synthetic',
-                                 'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
-                                 'token_uri': 'https://oauth2.googleapis.com/token'}}
-        flow = InstalledAppFlow.from_client_config(config, ['https://www.googleapis.com/auth/drive'])
-        flow.redirect_uri = 'http://127.0.0.1:12345/'
-        flow.authorization_url()
-        with patch('requests.sessions.Session.request', side_effect=AssertionError('must reject before network')):
-            with self.assertRaises(MismatchingStateError):
-                flow.fetch_token(authorization_response='https://127.0.0.1:12345/?state=wrong&code=SYNTHETIC_GRANT')
+    def test_failed_public_grant_check_is_closed_without_settings_mutation(self):
+        from types import SimpleNamespace
+        profile = SimpleNamespace(profile_id='a'*64, home=Path(os.environ['TMPDIR']), config=lambda: {'storage':'local'})
+        manager = Connections()
+        ticket = manager.view(profile)['ticket']
+        with patch('finix.workspace_drive.WorkspaceRunner.__call__', side_effect=RuntimeError('PRIVATE_PROVIDER_SENTINEL')):
+            with self.assertRaisesRegex(ConnectionError,'GOOGLE_AUTH_SETUP_REQUIRED') as failure:
+                manager.action(profile, profile_id=profile.profile_id, ticket=ticket,
+                               action='start', provider='workspace', confirmed=True, local_browser=True)
+        self.assertNotIn('PRIVATE_PROVIDER_SENTINEL',str(failure.exception))
+        self.assertEqual(manager.sessions,{})
+        self.assertEqual(profile.config(),{'storage':'local'})
 
-    def test_real_google_library_loopback_callback_exchange_and_private_staging(self):
-        import contextlib
-        import io
-        import threading
-        from http.server import HTTPServer, BaseHTTPRequestHandler
-        from urllib.parse import parse_qs, urlsplit
-        from unittest.mock import Mock
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from finix.connection_worker import connect_workspace
-
-        seen = []
-        class Issuer(BaseHTTPRequestHandler):
-            def log_message(self, *args): pass
-            def do_POST(self):
-                payload = parse_qs(self.rfile.read(int(self.headers['Content-Length'])).decode())
-                seen.append(payload.get('code') == ['SYNTHETIC_GRANT'])
-                self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers()
-                self.wfile.write(json.dumps({'access_token': 'SYNTHETIC_ACCESS', 'refresh_token': 'SYNTHETIC_REFRESH',
-                                            'token_type': 'Bearer', 'expires_in': 3600,
-                                            'scope': 'https://www.googleapis.com/auth/drive'}).encode())
-        server = HTTPServer(('127.0.0.1', 0), Issuer)
-        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
-        try:
-            with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as tmp:
-                home = Path(tmp) / 'profile'; home.mkdir(mode=0o700)
-                stage = Path(tmp) / 'stage'; stage.mkdir(mode=0o700)
-                payload = {'installed': {'client_id': 'synthetic-client', 'client_secret': 'SYNTHETIC_CLIENT_SECRET',
-                                         'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
-                                         'token_uri': 'https://oauth2.googleapis.com/token',
-                                         'redirect_uris': ['http://localhost']}}
-                (home / 'google_client_secret.json').write_text(json.dumps(payload))
-                original = InstalledAppFlow.from_client_config
-                def fixture(config, scopes):
-                    config = json.loads(json.dumps(config))
-                    config['installed']['token_uri'] = 'http://127.0.0.1:%d/token' % server.server_port
-                    return original(config, scopes)
-                output, errors = io.StringIO(), []
-                def run():
-                    try: connect_workspace(home, stage)
-                    except BaseException as exc: errors.append(type(exc).__name__)
-                with patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': '1'}), \
-                     patch.object(InstalledAppFlow, 'from_client_config', side_effect=fixture), \
-                     patch('googleapiclient.discovery.build', return_value=Mock()), \
-                     contextlib.redirect_stdout(output):
-                    worker = threading.Thread(target=run, daemon=True); worker.start()
-                    deadline = time.monotonic() + 5
-                    while 'FINIX_AUTH ' not in output.getvalue() and time.monotonic() < deadline: time.sleep(.01)
-                    url = output.getvalue().split('FINIX_AUTH ', 1)[1].splitlines()[0]
-                    query = parse_qs(urlsplit(url).query)
-                    self.assertEqual(query.get('prompt'), ['consent'])
-                    self.assertEqual(query.get('access_type'), ['offline'])
-                    callback = query['redirect_uri'][0] + '?state=' + query['state'][0] + '&code=SYNTHETIC_GRANT'
-                    with urlopen(callback, timeout=5) as response: self.assertEqual(response.status, 200)
-                    worker.join(8)
-                    self.assertFalse(worker.is_alive())
-                self.assertEqual(errors, [])
-                self.assertEqual(seen, [True])
-                token = stage / 'workspace-token.json'
-                self.assertEqual(token.stat().st_mode & 0o777, 0o600)
-                self.assertFalse((home / 'google_token.json').exists())
-                from google.oauth2.credentials import Credentials
-                loaded = Credentials.from_authorized_user_file(str(token))
-                self.assertTrue(loaded.valid)
-                self.assertTrue(bool(loaded.refresh_token))
-                # Use the actual installed helper loader against synthetic data,
-                # never read a real profile token or make a refresh request.
-                selected = os.environ.get('FINIX_WORKSPACE_SOURCE')
-                if selected:
-                    import sys
-                    with patch.dict(os.environ, {'HERMES_HOME': str(home)}), \
-                         patch.object(sys, 'path', [str(Path(selected).parent), *sys.path]):
-                        spec = importlib.util.spec_from_file_location('finix_synthetic_loader', selected)
-                        assert spec is not None and spec.loader is not None
-                        module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(module)
-                    with patch.object(module, 'TOKEN_PATH', token), \
-                         patch('requests.sessions.Session.request', side_effect=AssertionError('network forbidden')):
-                        self.assertTrue(module.get_credentials().valid)
-                # New OAuth grant -> apply -> encrypted backup -> readback/restore.
-                helper = home / 'skills/productivity/google-workspace/scripts/google_api.py'
-                helper.parent.mkdir(parents=True)
-                helper.write_text('# Synthetic Workspace transport is injected below.\n')
-                profile, manager = Profile(home), Connections()
-                session = {'public': {'provider': 'workspace', 'status': 'verified'},
-                           'stage': stage, 'before': profile.config(), 'reuse': False}
-                manager._apply(profile, session)
-                self.assertEqual(session['public']['status'], 'applied')
-                from finix import core
-                from finix.workspace_drive import WorkspaceDrive
-                from tests.test_workspace_drive import FakeDrive
-                identity = Path(tmp) / 'recovery.key'
-                profile.recipient(profile.profile_id, core.keygen(identity), None)
-                (home / 'config.yaml').write_text('synthetic: new-oauth-backup\n')
-                drive = WorkspaceDrive(home, profile.profile_id, profile.root / 'workspace', runner=FakeDrive())
-                with patch.object(Profile, 'workspace', return_value=drive):
-                    result = profile.backup()
-                downloaded = Path(tmp) / 'download.age'
-                drive.download(result['workspace'], downloaded)
-                destination = Path(tmp) / 'restored'
-                core.restore(downloaded, identity, destination)
-                self.assertEqual((destination / 'config.yaml').read_text(), 'synthetic: new-oauth-backup\n')
-                for secret in ('SYNTHETIC_ACCESS', 'SYNTHETIC_REFRESH', 'SYNTHETIC_GRANT', 'SYNTHETIC_CLIENT_SECRET'):
-                    self.assertNotIn(secret, output.getvalue())
-        finally:
-            server.shutdown(); server.server_close(); thread.join()
+    def test_google_callback_urls_are_not_a_finix_authorization_route(self):
+        self.assertFalse(safe_url('workspace','https://accounts.google.com/o/oauth2/v2/auth?response_type=code&state=x'))
 
 
 class OneDriveStateContracts(unittest.TestCase):

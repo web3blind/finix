@@ -20,9 +20,9 @@ class FreshCancellation(unittest.TestCase):
         f.transport = fixtures.Transport()
         p = Profile(f.home, default_root=f.home)
         cfg = p.config()
-        cfg.update(storage='workspace', recipient=core.keygen(f.root/'generated-key'), retention=0)
+        cfg.update(storage='workspace', workspace_account=fixtures.ACCOUNT_DIGEST, recipient=core.keygen(f.root/'generated-key'), retention=0)
         core.atomic_json(p.root/'settings.json', cfg)
-        adapter = WorkspaceDrive(p.home, p.profile_id, p.root/'workspace', runner=f.transport)
+        adapter = WorkspaceDrive(p.home, p.profile_id, p.root/'workspace', runner=f.transport, account_digest=fixtures.ACCOUNT_DIGEST)
         return f, p, adapter
 
     def cancelled_transfer(self, boundary):

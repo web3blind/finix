@@ -31,7 +31,6 @@ var english = Object.freeze({
   "Google \u043D\u0435 \u0432\u044B\u0434\u0430\u043B refresh token. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0441 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435\u043C \u0430\u0432\u0442\u043E\u043D\u043E\u043C\u043D\u043E\u0433\u043E \u0434\u043E\u0441\u0442\u0443\u043F\u0430.": "Google did not issue a refresh token. Reconnect with offline access permission.",
   "\u0414\u043B\u044F \u043F\u0435\u0440\u0432\u043E\u0433\u043E \u0432\u0445\u043E\u0434\u0430 Google \u043D\u0443\u0436\u0435\u043D \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 Desktop OAuth client JSON \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F.": "The first Google sign-in requires a local Desktop OAuth client JSON for the selected profile.",
   "\u0412 backend \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0442 \u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E\u0441\u0442\u0438 Google OAuth.": "Google OAuth dependencies are missing from the backend.",
-  "\u0412 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u043F\u043E\u043C\u043E\u0449\u043D\u0438\u043A Google Workspace.": "The Google Workspace helper is missing from the selected profile.",
   "\u0414\u0440\u0443\u0433\u043E\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0443\u0436\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0435\u0433\u043E \u0441\u0442\u0430\u0442\u0443\u0441 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0435\u0433\u043E.": "Another connection is in progress. Refresh its status or cancel it.",
   "\u041F\u0440\u043E\u0444\u0438\u043B\u044C \u0438\u043B\u0438 \u0441\u0435\u0441\u0441\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.": "The profile or session changed. Refresh the connection.",
   "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C. \u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E; \u043D\u0430\u0447\u043D\u0438\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0437\u0430\u043D\u043E\u0432\u043E.": "Settings changed. The current storage is preserved; start connecting again.",
@@ -64,8 +63,6 @@ var english = Object.freeze({
   "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435": "Apply connection",
   "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435": "Cancel connection",
   "\u041F\u043E\u043C\u043E\u0449\u044C: \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 backend \u0438 \u043F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 Google": "Help: remote backend and first Google sign-in",
-  "\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u0434\u043E\u043B\u0436\u0435\u043D \u0434\u043E\u0441\u0442\u0438\u0433\u0430\u0442\u044C loopback backend: \u043D\u0430 \u0442\u043E\u0439 \u0436\u0435 \u043C\u0430\u0448\u0438\u043D\u0435 \u043B\u0438\u0431\u043E \u0447\u0435\u0440\u0435\u0437 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0439 SSH-\u0442\u0443\u043D\u043D\u0435\u043B\u044C. \u041F\u043E\u0440\u0442\u044B: Google Workspace 53683, \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u044B\u0435 53682. \u0414\u043B\u044F \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 /finix connect \u0432 \u043B\u0438\u0447\u043D\u043E\u043C \u0447\u0430\u0442\u0435: \u0440\u0435\u0436\u0438\u043C tunnel \u0434\u0430\u0441\u0442 \u0442\u043E\u0447\u043D\u0443\u044E SSH-\u043A\u043E\u043C\u0430\u043D\u0434\u0443, server-browser \u2014 \u0441\u0441\u044B\u043B\u043A\u0443 \u0434\u043B\u044F \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430 \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435. \u041F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 callback \u043D\u0435 \u043D\u0443\u0436\u0435\u043D \u0438 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0451\u0442\u0441\u044F.": "The browser must reach the backend loopback: on the same machine or through your own SSH tunnel. Ports: Google Workspace 53683, others 53682. For a remote server, use /finix connect in a private chat: tunnel mode provides the exact SSH command; server-browser provides a link for the server browser. No public callback is needed or created.",
-  "Google \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 Workspace \u0430\u043A\u043A\u0430\u0443\u043D\u0442; \u043F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 Desktop OAuth client JSON \u0432\u043B\u0430\u0434\u0435\u043B\u044C\u0446\u0430 (Google Cloud Console) \u0432 google_client_secret.json \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F \u0438 google-auth-oauthlib. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 setup.py --client-secret FILE; \u043D\u0435 \u043F\u0435\u0440\u0435\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0444\u0430\u0439\u043B\u0430 \u0432 \u0447\u0430\u0442. rclone \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0432\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u0435 OAuth \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F.": "Google uses the existing Workspace account; first sign-in requires the owner\u2019s Desktop OAuth client JSON (Google Cloud Console) in google_client_secret.json in the selected profile and google-auth-oauthlib. Use local setup.py --client-secret FILE; never send the file contents in chat. rclone uses built-in OAuth apps.",
   "\u041A\u043B\u044E\u0447 \u043D\u0435 \u043F\u043E\u0434\u0445\u043E\u0434\u0438\u0442.": "The key does not match.",
   "\u0410\u0440\u0445\u0438\u0432 \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0451\u043D.": "The archive is corrupt.",
   "\u041F\u0430\u043F\u043A\u0430 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043D\u0435 \u043F\u0443\u0441\u0442\u0430.": "The destination folder is not empty.",
@@ -189,10 +186,10 @@ function createLocale(ctx) {
     const r = ++revision;
     state.set({ scope: binding, language: null });
     pending = (async () => {
-      let language = "ru";
+      let language = "en";
       try {
         const out = await ctx.rest("/ui-language", { timeoutMs: 1e4 });
-        if (out?.ui_language === "en") language = "en";
+        if (out?.ui_language === "ru") language = "ru";
       } catch {
       }
       if (!disposed && r === revision && binding === snapshot()) {
@@ -227,7 +224,7 @@ var scopedLanguage = () => current?.view() ?? null;
 function useLocalized(pinned = null) {
   const host8 = sdk.useI18n?.();
   if (current) sdk.useValue(current.state);
-  const bound = pinned === "en" || pinned === "ru" ? pinned : current?.view() ?? (typeof sdk.useI18n === "function" ? null : "ru");
+  const bound = pinned === "en" || pinned === "ru" ? pinned : current?.view() ?? (typeof sdk.useI18n === "function" ? null : "en");
   const language = bound === null ? null : host8 && !host8.isLoadingConfig && host8.locale === bound ? host8.locale : bound;
   const text = (v) => Array.isArray(v) ? v.map(text) : translate(v, language);
   const wrap = (fn) => (type, props, key) => {
@@ -235,10 +232,10 @@ function useLocalized(pinned = null) {
     const p = { ...props };
     if (Object.hasOwn(p, "children")) p.children = text(p.children);
     for (const k of ["aria-label", "title", "placeholder"]) if (typeof p[k] === "string") p[k] = translate(p[k], language);
-    if (type === "section") p.lang = language ?? "ru";
+    if (type === "section") p.lang = language ?? "en";
     return fn(type, p, key);
   };
-  return { jsx: wrap(reactJsx), jsxs: wrap(reactJsxs), language: language ?? "ru" };
+  return { jsx: wrap(reactJsx), jsxs: wrap(reactJsxs), language: language ?? "en" };
 }
 
 // desktop/src/plugin.mjs
@@ -8863,10 +8860,8 @@ var remedies = Object.freeze({
   RCLONE_PROVIDER_FAILED: "rclone \u043D\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043B \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u0441\u0435\u0440\u0432\u0438\u0441\u0443. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0435\u0442\u044C \u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u044C \u0441\u0435\u0440\u0432\u0438\u0441\u0430, \u0437\u0430\u0442\u0435\u043C \u043D\u0430\u0447\u043D\u0438\u0442\u0435 \u0437\u0430\u043D\u043E\u0432\u043E.",
   CONNECTION_TIMEOUT: "\u0412\u0440\u0435\u043C\u044F \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0438\u0441\u0442\u0435\u043A\u043B\u043E. \u041D\u0430\u0447\u043D\u0438\u0442\u0435 \u0437\u0430\u043D\u043E\u0432\u043E.",
   CONNECTION_UNSUPPORTED: "\u042D\u0442\u043E\u0442 \u0448\u0430\u0433 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u043C\u0430\u0441\u0442\u0435\u0440\u043E\u043C. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u043D\u044B\u0439 remote \u0432\u0440\u0443\u0447\u043D\u0443\u044E.",
-  WORKSPACE_REFRESH_TOKEN_REQUIRED: "Google \u043D\u0435 \u0432\u044B\u0434\u0430\u043B refresh token. \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0441 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435\u043C \u0430\u0432\u0442\u043E\u043D\u043E\u043C\u043D\u043E\u0433\u043E \u0434\u043E\u0441\u0442\u0443\u043F\u0430.",
-  WORKSPACE_CLIENT_REQUIRED: "\u0414\u043B\u044F \u043F\u0435\u0440\u0432\u043E\u0433\u043E \u0432\u0445\u043E\u0434\u0430 Google \u043D\u0443\u0436\u0435\u043D \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 Desktop OAuth client JSON \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F.",
-  WORKSPACE_DEPENDENCIES_REQUIRED: "\u0412 backend \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0442 \u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E\u0441\u0442\u0438 Google OAuth.",
-  WORKSPACE_HELPER_REQUIRED: "\u0412 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u043F\u043E\u043C\u043E\u0449\u043D\u0438\u043A Google Workspace.",
+  GOOGLE_ACCOUNT_CHANGED: "The Google account changed after verification. Cancel and explicitly check the intended profile account again. Existing storage is unchanged.",
+  GOOGLE_AUTH_SETUP_REQUIRED: "Google sign-in is not verified. Run hermes auth add finix:google in the selected profile, then check again. Legacy Workspace grants are not reused.",
   CONNECTION_BUSY: "\u0414\u0440\u0443\u0433\u043E\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0443\u0436\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0435\u0433\u043E \u0441\u0442\u0430\u0442\u0443\u0441 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0435\u0433\u043E.",
   OWNER_SESSION_CHANGED: "\u041F\u0440\u043E\u0444\u0438\u043B\u044C \u0438\u043B\u0438 \u0441\u0435\u0441\u0441\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.",
   SETTINGS_CHANGED: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C. \u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E; \u043D\u0430\u0447\u043D\u0438\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0437\u0430\u043D\u043E\u0432\u043E."
@@ -9040,7 +9035,7 @@ function Cloud({ cloud, enabled = true }) {
       value: s.provider,
       disabled: s.busy && !s.loading || active2,
       onChange: (e) => a.select(e.currentTarget.value),
-      children: Object.entries({ workspace: "Google Workspace", yandex: "\u042F\u043D\u0434\u0435\u043A\u0441 \u0414\u0438\u0441\u043A", onedrive: "OneDrive", dropbox: "Dropbox" }).map(([value2, label]) => jsx6("option", { value: value2, children: label }, value2))
+      children: Object.entries({ workspace: "Google Drive", yandex: "\u042F\u043D\u0434\u0435\u043A\u0441 \u0414\u0438\u0441\u043A", onedrive: "OneDrive", dropbox: "Dropbox" }).map(([value2, label]) => jsx6("option", { value: value2, children: label }, value2))
     })] }),
     jsxs6("label", { children: [jsx6("input", {
       type: "checkbox",
@@ -9048,7 +9043,7 @@ function Cloud({ cloud, enabled = true }) {
       disabled: s.busy || active2,
       onChange: (e) => a.set({ local: e.currentTarget.checked })
     }), "\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u043D\u0430 \u043C\u0430\u0448\u0438\u043D\u0435 backend \u0438\u043B\u0438 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0439 SSH-\u0442\u0443\u043D\u043D\u0435\u043B\u044C \u043A \u0435\u0433\u043E loopback \u0443\u0436\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D"] }),
-    jsx6("p", { children: "\u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u043C\u043E\u0433\u0443\u0442 \u0432\u043A\u043B\u044E\u0447\u0430\u0442\u044C \u0447\u0442\u0435\u043D\u0438\u0435, \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0438 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0432\u0441\u0435\u0433\u043E \u0434\u0438\u0441\u043A\u0430, \u043D\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0430\u043F\u043A\u0438 Finix. \u0412\u0445\u043E\u0434 \u0441\u0430\u043C \u043F\u043E \u0441\u0435\u0431\u0435 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442 \u043A\u043E\u043F\u0438\u044E." }),
+    jsx6("p", { children: s.provider === "workspace" ? "Google uses only the Finix drive.file grant: files created or explicitly opened by this app, not full-Drive access. This check never starts OAuth or uploads a backup." : "rclone provider permissions may include reading, changing and deleting files across the drive. Signing in does not upload a backup." }),
     jsxs6("label", { children: [jsx6("input", {
       type: "checkbox",
       checked: s.consent,
@@ -9065,8 +9060,8 @@ function Cloud({ cloud, enabled = true }) {
     button("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", () => a.action("cancel"), !active2),
     jsxs6("details", { children: [
       jsx6("summary", { children: "\u041F\u043E\u043C\u043E\u0449\u044C: \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 backend \u0438 \u043F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 Google" }),
-      jsx6("p", { children: "\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u0434\u043E\u043B\u0436\u0435\u043D \u0434\u043E\u0441\u0442\u0438\u0433\u0430\u0442\u044C loopback backend: \u043D\u0430 \u0442\u043E\u0439 \u0436\u0435 \u043C\u0430\u0448\u0438\u043D\u0435 \u043B\u0438\u0431\u043E \u0447\u0435\u0440\u0435\u0437 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0439 SSH-\u0442\u0443\u043D\u043D\u0435\u043B\u044C. \u041F\u043E\u0440\u0442\u044B: Google Workspace 53683, \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u044B\u0435 53682. \u0414\u043B\u044F \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 /finix connect \u0432 \u043B\u0438\u0447\u043D\u043E\u043C \u0447\u0430\u0442\u0435: \u0440\u0435\u0436\u0438\u043C tunnel \u0434\u0430\u0441\u0442 \u0442\u043E\u0447\u043D\u0443\u044E SSH-\u043A\u043E\u043C\u0430\u043D\u0434\u0443, server-browser \u2014 \u0441\u0441\u044B\u043B\u043A\u0443 \u0434\u043B\u044F \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430 \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435. \u041F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 callback \u043D\u0435 \u043D\u0443\u0436\u0435\u043D \u0438 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0451\u0442\u0441\u044F." }),
-      jsx6("p", { children: "Google \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 Workspace \u0430\u043A\u043A\u0430\u0443\u043D\u0442; \u043F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 Desktop OAuth client JSON \u0432\u043B\u0430\u0434\u0435\u043B\u044C\u0446\u0430 (Google Cloud Console) \u0432 google_client_secret.json \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F \u0438 google-auth-oauthlib. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 setup.py --client-secret FILE; \u043D\u0435 \u043F\u0435\u0440\u0435\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0444\u0430\u0439\u043B\u0430 \u0432 \u0447\u0430\u0442. rclone \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0432\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u0435 OAuth \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F." })
+      jsx6("p", { children: "For rclone, the browser must reach backend loopback port 53682 on the same machine or through your own SSH tunnel. No public callback is created." }),
+      jsx6("p", { children: "Google uses only Finix-declared OAuth with drive.file scope. Run hermes auth add finix:google in the selected profile before checking this connection. Hermes owns credentials; no Workspace-skill grant is reused. Legacy backups and settings are preserved and require explicit migration." })
     ] }),
     jsx6("p", { role: "status", "aria-live": "polite", children: s.message })
   ] });
@@ -9807,9 +9802,7 @@ function createDefaultMaintenance(ctx) {
       revoked = true;
       throw Error("root");
     }
-    const source = await rest(r, "/recovery/capabilities");
-    fence(r);
-    if (source?.code_version !== "recovery-v1" || source.local_only !== true || source.profile_id !== anchor.profileId) {
+    if (cap.local_only !== true || cap.profile_id !== anchor.profileId) {
       revoked = true;
       throw Error("source");
     }
@@ -9925,13 +9918,10 @@ function createDefaultMaintenance(ctx) {
         await registry(r);
         const cap = await rest(r, "/recovery/default/capabilities");
         fence(r);
-        if (cap?.code_version !== "default-recovery-v1" || cap.preview_contract !== "default-preview-job-v1" || cap.supported !== true || cap.active_shared_autoruns_supported !== false || typeof cap.apply_enabled !== "boolean" || !hex(cap.serverRootToken)) throw Error("unsupported");
+        if (cap?.code_version !== "default-recovery-v1" || cap.preview_contract !== "default-preview-job-v1" || cap.supported !== true || cap.local_only !== true || !hex(cap.profile_id) || cap.active_shared_autoruns_supported !== false || typeof cap.apply_enabled !== "boolean" || !hex(cap.serverRootToken)) throw Error("unsupported");
         gate = cap.apply_enabled;
         rootToken = cap.serverRootToken;
-        const ordinary = await rest(r, "/recovery/capabilities");
-        fence(r);
-        if (ordinary?.code_version !== "recovery-v1" || ordinary.local_only !== true || !hex(ordinary.profile_id)) throw Error("contract");
-        profileId = ordinary.profile_id;
+        profileId = cap.profile_id;
         const saved = ctx.storage?.get(HINT2, null);
         if (saved?.version === 1 && saved.profile === owner.profile && saved.connection === "local" && saved.profileId === profileId && saved.phase !== "terminal") {
           if (hex(saved.maintenanceId, 32)) {
@@ -10026,9 +10016,7 @@ function createDefaultMaintenance(ctx) {
           revoked = true;
           throw Error("root");
         }
-        const source = await rest(r, "/recovery/capabilities");
-        fence(r);
-        if (source?.code_version !== "recovery-v1" || source.local_only !== true || source.profile_id !== profileId) {
+        if (cap.local_only !== true || cap.profile_id !== profileId) {
           revoked = true;
           throw Error("source");
         }

@@ -116,7 +116,7 @@ class SetupFlow:
         with core.locked(self.profile.directories()):
             self.receipt_path.unlink(missing_ok=True)
             before_cfg = self.profile.config()
-            if before_cfg.get('storage') not in {'local', 'drive', 'workspace', 'connector-drive', 'rclone'}:
+            if before_cfg.get('storage') not in {'local', 'drive', 'workspace', 'rclone'}:
                 raise core.FinixError('Select a supported storage backend before checking')
             before = self._binding(before_cfg)
             yaml_before = _stamp(self.profile.home / 'config.yaml')

@@ -9,10 +9,8 @@ const remedies = Object.freeze({
   RCLONE_PROVIDER_FAILED: 'rclone не завершил подключение к сервису. Проверьте сеть и доступность сервиса, затем начните заново.',
   CONNECTION_TIMEOUT: 'Время подключения истекло. Начните заново.',
   CONNECTION_UNSUPPORTED: 'Этот шаг авторизации не поддерживается мастером. Настройте именованный remote вручную.',
-  WORKSPACE_REFRESH_TOKEN_REQUIRED: 'Google не выдал refresh token. Повторите подключение с разрешением автономного доступа.',
-  WORKSPACE_CLIENT_REQUIRED: 'Для первого входа Google нужен локальный Desktop OAuth client JSON выбранного профиля.',
-  WORKSPACE_DEPENDENCIES_REQUIRED: 'В backend отсутствуют зависимости Google OAuth.',
-  WORKSPACE_HELPER_REQUIRED: 'В выбранном профиле отсутствует помощник Google Workspace.',
+  GOOGLE_ACCOUNT_CHANGED: 'The Google account changed after verification. Cancel and explicitly check the intended profile account again. Existing storage is unchanged.',
+  GOOGLE_AUTH_SETUP_REQUIRED: 'Google sign-in is not verified. Run hermes auth add finix:google in the selected profile, then check again. Legacy Workspace grants are not reused.',
   CONNECTION_BUSY: 'Другое подключение уже выполняется. Обновите его статус или отмените его.',
   OWNER_SESSION_CHANGED: 'Профиль или сессия изменились. Обновите подключение.',
   SETTINGS_CHANGED: 'Настройки изменились. Текущее хранилище сохранено; начните подключение заново.'
@@ -140,11 +138,11 @@ export function Cloud({ cloud, enabled = true }) {
     button('Обновить подключение', a.refresh),
     jsxs('label', { children: ['Облачный сервис', jsx('select', { value: s.provider, disabled: (s.busy && !s.loading) || active,
       onChange: e => a.select(e.currentTarget.value),
-      children: Object.entries({ workspace: 'Google Workspace', yandex: 'Яндекс Диск', onedrive: 'OneDrive', dropbox: 'Dropbox' }).map(([value, label]) => jsx('option', { value, children: label }, value)) })] }),
+      children: Object.entries({ workspace: 'Google Drive', yandex: 'Яндекс Диск', onedrive: 'OneDrive', dropbox: 'Dropbox' }).map(([value, label]) => jsx('option', { value, children: label }, value)) })] }),
 
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.local, disabled: s.busy || active,
       onChange: e => a.set({ local: e.currentTarget.checked }) }), 'Браузер на машине backend или собственный SSH-туннель к его loopback уже настроен'] }),
-    jsx('p', { children: 'Разрешения могут включать чтение, изменение и удаление файлов всего диска, не только папки Finix. Вход сам по себе не загружает копию.' }),
+    jsx('p', { children: s.provider === 'workspace' ? 'Google uses only the Finix drive.file grant: files created or explicitly opened by this app, not full-Drive access. This check never starts OAuth or uploads a backup.' : 'rclone provider permissions may include reading, changing and deleting files across the drive. Signing in does not upload a backup.' }),
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.consent, disabled: s.busy || active,
       onChange: e => a.set({ consent: e.currentTarget.checked }) }), 'Подтверждаю подключение выбранного сервиса и возможные широкие права доступа'] }),
     button('Начать подключение', () => a.action('start'), !s.data || !s.local || !s.consent || active),
@@ -157,8 +155,8 @@ export function Cloud({ cloud, enabled = true }) {
     button('Отменить подключение', () => a.action('cancel'), !active),
     jsxs('details', { children: [
       jsx('summary', { children: 'Помощь: удалённый backend и первый вход Google' }),
-      jsx('p', { children: 'Браузер должен достигать loopback backend: на той же машине либо через собственный SSH-туннель. Порты: Google Workspace 53683, остальные 53682. Для удалённого сервера используйте /finix connect в личном чате: режим tunnel даст точную SSH-команду, server-browser — ссылку для браузера на сервере. Публичный callback не нужен и не создаётся.' }),
-      jsx('p', { children: 'Google использует существующий Workspace аккаунт; первый вход требует Desktop OAuth client JSON владельца (Google Cloud Console) в google_client_secret.json выбранного профиля и google-auth-oauthlib. Используйте локальный setup.py --client-secret FILE; не передавайте содержимое файла в чат. rclone использует встроенные OAuth приложения.' })
+      jsx('p', { children: 'For rclone, the browser must reach backend loopback port 53682 on the same machine or through your own SSH tunnel. No public callback is created.' }),
+      jsx('p', { children: 'Google uses only Finix-declared OAuth with drive.file scope. Run hermes auth add finix:google in the selected profile before checking this connection. Hermes owns credentials; no Workspace-skill grant is reused. Legacy backups and settings are preserved and require explicit migration.' })
     ] }),
     jsx('p', { role: 'status', 'aria-live': 'polite', children: s.message })
   ] });

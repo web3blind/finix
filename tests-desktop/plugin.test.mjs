@@ -463,7 +463,12 @@ test('cloud wizard keeps setup internals collapsed while broad-access consent st
   const visible = nodes.filter(n => n?.type === 'p').map(n => n.props.children).join('\n');
   assert.ok(!visible.includes('Google Cloud Console'));
   assert.ok(!visible.includes('Порты:'));
-  assert.match(visible, /чтение, изменение и удаление файлов всего диска/);
+  assert.match(visible, /Finix drive\.file grant/);
+  assert.match(visible, /not full-Drive access/);
+  await selectCloud(h, 'yandex');
+  const rcloneVisible = cloudControls(h).filter(n => n?.type === 'p').map(n => n.props.children).join('\n');
+  assert.match(rcloneVisible, /reading, changing and deleting files across the drive/);
+  assert.equal(h.calls.filter(([, o]) => o?.method === 'POST').length, 0);
   assert.match(visible, /Текущее хранилище/);
 });
 
@@ -613,7 +618,7 @@ test('provider initialization fences stale reads, failures, scope switches and d
     pending.resolve({ profile_id: 'bound', ticket: 'csrf', session: { status: 'authorize', url: 'http://127.0.0.1/STALE' } });
     await loading;
     assert.equal(cloudButton(h, 'Открыть вход в браузере'), undefined);
-    assert.equal(cloudButton(h, 'Начать подключение').props.disabled, true);
+    assert.equal(cloudButton(h, 'Start connection').props.disabled, true, 'scope change uses English fallback and remains disabled');
     assert.equal(h.calls.filter(([, o]) => o?.method === 'POST').length, 0);
   }
 });
@@ -648,7 +653,7 @@ test('cloud selection errors remain visible and scope changes hide prior authori
   h.switchRoute();
   assert.equal(cloudButton(h, 'Открыть вход в браузере'), undefined);
   assert.ok(!h.text().includes('/STALE'));
-  assert.equal(cloudButton(h, 'Начать подключение').props.disabled, true);
+  assert.equal(cloudButton(h, 'Start connection').props.disabled, true, 'new route cannot inherit consent or the old locale');
 });
 
 test('cloud apply readback must belong to the exact bound profile and session', async () => {
@@ -749,7 +754,7 @@ test('cloud wizard fences backend switches and unload before mutation', async ()
   const oldApply = cloudButton(h, 'Применить подключение').props.onClick;
   h.switchRoute(); await oldApply();
   assert.equal(h.calls.filter(([, o]) => o?.method === 'POST').length, 0);
-  await cloudButton(h, 'Обновить подключение').props.onClick();
+  await cloudButton(h, 'Refresh connection').props.onClick();
   h.dispose(); await oldApply();
   assert.equal(h.calls.filter(([, o]) => o?.method === 'POST').length, 0);
 });

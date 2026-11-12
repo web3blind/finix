@@ -18,7 +18,7 @@ test('existing check refuses fresh foreign source or root before job read or pre
   let changed=false;
   const h=await harness({rest:p=>{
    if(p===`/recovery/jobs/${job}`)return Promise.reject(Error('unavailable'));
-   if(changed&&p===(boundary==='source'?'/recovery/capabilities':'/recovery/default/capabilities'))return boundary==='source'?{code_version:'recovery-v1',local_only:true,profile_id:'0'.repeat(64)}:{code_version:'default-recovery-v1',supported:true,serverRootToken:'0'.repeat(64)};
+   if(changed&&p==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',supported:true,local_only:true,profile_id:boundary==='source'?'0'.repeat(64):profile,serverRootToken:(boundary==='root'?'0':'f').repeat(64)};
   }});
   await h.start();await h.maintenance.actions.poll();changed=true;await h.maintenance.actions.checkExisting();
   assert.equal(h.calls.filter(([p])=>p===`/recovery/jobs/${job}`).length,1);
@@ -40,7 +40,7 @@ test('actual succeeded job field projection reaches first preview through origin
  const actual={id:'be4401b6e2884c0abe66fc7eb4aa29e6',profile_id:'ecc03f1ca6cc3914307ce375a2f0392ead3f3858a6054f4c3fb523654c454e70',state:'succeeded',complete:true,archive_verified:true};
  let fail=true;
  const h=await harness({rest:p=>{
-  if(p==='/recovery/capabilities')return {code_version:'recovery-v1',profile_id:actual.profile_id,local_only:true};
+  if(p==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',preview_contract:'default-preview-job-v1',supported:true,local_only:true,profile_id:actual.profile_id,serverRootToken:'f'.repeat(64),apply_enabled:false,active_shared_autoruns_supported:false};
   if(p==='/recovery/catalog')return {profile_id:actual.profile_id,items:[{id:'c'.repeat(64),complete:true}]};
   if(p==='/recovery/default/prepare-auto')return {...actual,state:'awaiting_key'};
   if(p.endsWith('/key'))return {...actual,state:'running'};

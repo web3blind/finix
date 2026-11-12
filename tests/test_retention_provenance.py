@@ -49,7 +49,7 @@ class DirectRetentionTests(unittest.TestCase):
                     adapter._locked = nullcontext
                     adapter._ledger_locked = Mock(return_value=journal)
                 with self.subTest(adapter=cls.__name__, complete=complete), patch.object(core, 'atomic_json'):
-                    adapter.prune(journal, 1)
+                    (adapter._prune_locked(journal, 1) if cls is WorkspaceDrive else adapter.prune(journal, 1))
                     self.assertEqual(journal, before)
                     adapter.runner.assert_not_called()
 
@@ -118,7 +118,7 @@ class DirectRetentionTests(unittest.TestCase):
     def test_real_adapter_upload_persists_digestbound_provenance_and_direct_prune(self):
         import json
         from test_rclone_storage import MemoryRunner
-        from test_workspace_drive import FakeDrive
+        from test_workspace_drive import FakeDrive, ACCOUNT_DIGEST
         for kind in ('rclone', 'workspace'):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
                 base = Path(tmp)
@@ -132,18 +132,21 @@ class DirectRetentionTests(unittest.TestCase):
                 def adapter():
                     if kind == 'rclone':
                         return RcloneStorage(home, 'a' * 64, state, str(auth / 'config'), 'cloud', 'backups/Finix', runner=fake)
-                    return WorkspaceDrive(home, 'a' * 64, state, runner=fake)
-                digest = cloud_files.describe(path)['sha256']
-                complete = {'sha256': digest, 'complete': True, 'omitted_count': 0}
-                incomplete = dict(complete, complete=False, omitted_count=1)
+                    return WorkspaceDrive(home, 'a' * 64, state, runner=fake, account_digest=ACCOUNT_DIGEST)
+                complete = {'sha256': cloud_files.describe(path)['sha256'], 'complete': True, 'omitted_count': 0}
                 old = adapter().backup_cipher(path, completion=complete)
+                path.write_bytes(path.read_bytes() + b'legacy capture')
                 legacy = adapter().backup_cipher(path)
+                path.write_bytes(path.read_bytes() + b'incomplete capture')
+                incomplete = dict(complete, sha256=cloud_files.describe(path)['sha256'], complete=False, omitted_count=1)
                 latest = adapter().backup_cipher(path, keep=1, completion=incomplete)
                 restarted = adapter()
                 journal = restarted.ledger()
                 self.assertEqual(journal['records'][-1]['completion'], incomplete)
                 restarted.prune(journal, 1)
                 self.assertEqual(len(restarted.ledger()['records']), 3)
+                path.write_bytes(path.read_bytes() + b'complete successor')
+                complete = dict(complete, sha256=cloud_files.describe(path)['sha256'])
                 successor = adapter().backup_cipher(path, keep=1, completion=complete)
                 remaining = adapter().ledger()['records']
                 self.assertEqual({r['id'] for r in remaining}, {legacy['id'], successor['id']})
@@ -154,35 +157,10 @@ class DirectRetentionTests(unittest.TestCase):
                     self.assertTrue(fake.objects[old['id']]['trashed'])
                     self.assertTrue(fake.objects[latest['id']]['trashed'])
 
-    def test_managed_upload_retention_uses_persisted_provenance(self):
-        import json
-        from contextlib import nullcontext
-        from types import SimpleNamespace
-        from finix.connector_drive import ManagedDrive
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            path = base / 'cipher.age'
-            path.write_bytes(b'age-encryption.org/v1\nsynthetic')
-            adapter = object.__new__(ManagedDrive)
-            adapter.owner, adapter.folder = 'a' * 64, 'folder'
-            adapter.account, adapter.alias = 'account', 'alias'
-            adapter.session = nullcontext
-            adapter.discover = Mock()
-            adapter.metadata = Mock()
-            adapter.read_media = Mock()
-            adapter.storage_url = lambda url: url
-            adapter.contract = SimpleNamespace(upload_tool='fake')
-            adapter.client = Mock()
-            adapter.client.stage_file.return_value = {'upload_url': 'fake', 'headers': {}, 'descriptor': {}}
-            adapter.execute = Mock(side_effect=[{'id': 'old'}, {'id': 'new'}])
-            complete = dict(sha256=cloud_files.describe(path)['sha256'], complete=True, omitted_count=0)
-            adapter.upload(path, base / 'state', completion=complete)
-            incomplete = dict(complete, complete=False, omitted_count=1)
-            adapter.upload(path, base / 'state', keep=1, completion=incomplete)
-            journal = json.loads((base / 'state/connector.json').read_text())
-            self.assertEqual(len(journal['records']), 2)
-            self.assertEqual(journal['records'][-1]['completion'], incomplete)
-            self.assertEqual([call.args[0] for call in adapter.execute.call_args_list], ['upload', 'upload'])
+    def test_removed_managed_backend_has_no_retention_or_upload_authority(self):
+        from finix import connector_drive
+        self.assertFalse(hasattr(connector_drive,'ManagedDrive'))
+        self.assertFalse(hasattr(connector_drive,'sdk_client'))
 
     def test_complete_successor_still_protects_unknown_ledger_records(self):
         for cls in (RcloneStorage, WorkspaceDrive):
@@ -198,7 +176,7 @@ class DirectRetentionTests(unittest.TestCase):
                 adapter._locked = nullcontext
                 adapter._ledger_locked = Mock(return_value=journal)
             with self.subTest(adapter=cls.__name__), patch.object(core, 'atomic_json'):
-                adapter.prune(journal, 1)
+                (adapter._prune_locked(journal, 1) if cls is WorkspaceDrive else adapter.prune(journal, 1))
                 self.assertEqual(journal, before)
                 adapter.runner.assert_not_called()
 

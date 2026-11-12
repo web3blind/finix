@@ -16,7 +16,7 @@ const posts=h=>h.calls.filter(([,o])=>o?.method==='POST').length;
 test('foreign physical root or logical source refuses before exact status; lock survives',async()=>{
  for(const field of ['root','source']){let changed=false;const h=await owned({rest:path=>{
   if(changed&&field==='root'&&path==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',supported:true,serverRootToken:'1'.repeat(64)};
-  if(changed&&field==='source'&&path==='/recovery/capabilities')return {code_version:'recovery-v1',local_only:true,profile_id:'1'.repeat(64)};
+  if(changed&&field==='source'&&path==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',supported:true,serverRootToken:'f'.repeat(64),local_only:true,profile_id:'1'.repeat(64)};
  }});const n=h.calls.length,post=posts(h);changed=true;h.epoch();await h.maintenance.actions.poll();await h.maintenance.actions.load();await h.maintenance.actions.apply(preview());
  assert.equal(h.calls.slice(n).some(([p])=>p.startsWith('/recovery/default/status/')),false);assert.equal(posts(h),post);assert.equal(h.maintenance.state.get().busy,true);assert.equal(h.maintenance.state.get().polling,false);}
 });

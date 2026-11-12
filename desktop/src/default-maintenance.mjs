@@ -38,8 +38,7 @@ export function createDefaultMaintenance(ctx){
   await registry(r);const cap=await rest(r,'/recovery/default/capabilities');fence(r);
   if(cap?.code_version!=='default-recovery-v1'||cap.supported!==true||!hex(cap.serverRootToken))throw Error('owner');
   if(cap.serverRootToken!==anchor.rootToken){revoked=true;throw Error('root');}
-  const source=await rest(r,'/recovery/capabilities');fence(r);
-  if(source?.code_version!=='recovery-v1'||source.local_only!==true||source.profile_id!==anchor.profileId){revoked=true;throw Error('source');}
+  if(cap.local_only!==true||cap.profile_id!==anchor.profileId){revoked=true;throw Error('source');}
   reconnect=false;
  }
  function rest(r,path,options){fence(r);return ctx.rest(path,options);}
@@ -102,8 +101,7 @@ export function createDefaultMaintenance(ctx){
  const actions={
   load:async()=>{if(disposed||revoked||applySent||loading||state.get().ready||state.get().busy||preview)return null;const r=revision;loading=true;try{
    await registry(r);const cap=await rest(r,'/recovery/default/capabilities');fence(r);
-   if(cap?.code_version!=='default-recovery-v1'||cap.preview_contract!=='default-preview-job-v1'||cap.supported!==true||cap.active_shared_autoruns_supported!==false||typeof cap.apply_enabled!=='boolean'||!hex(cap.serverRootToken))throw Error('unsupported');gate=cap.apply_enabled;rootToken=cap.serverRootToken;
-   const ordinary=await rest(r,'/recovery/capabilities');fence(r);if(ordinary?.code_version!=='recovery-v1'||ordinary.local_only!==true||!hex(ordinary.profile_id))throw Error('contract');profileId=ordinary.profile_id;
+   if(cap?.code_version!=='default-recovery-v1'||cap.preview_contract!=='default-preview-job-v1'||cap.supported!==true||cap.local_only!==true||!hex(cap.profile_id)||cap.active_shared_autoruns_supported!==false||typeof cap.apply_enabled!=='boolean'||!hex(cap.serverRootToken))throw Error('unsupported');gate=cap.apply_enabled;rootToken=cap.serverRootToken;profileId=cap.profile_id;
    const saved=ctx.storage?.get(HINT,null);
    // Global storage is an untrusted read-only hint; never hydrate consent or key authority.
    if(saved?.version===1&&saved.profile===owner.profile&&saved.connection==='local'&&saved.profileId===profileId&&saved.phase!=='terminal'){
@@ -125,8 +123,7 @@ export function createDefaultMaintenance(ctx){
   checkExisting:async()=>{if(disposed||revoked||polling||!state.get().checkExisting||!job||!keySent||previewSent||maintenanceId||applySent||cancelPending)return null;const r=revision;polling=true;publish({checkExisting:false});try{
    await registry(r);const cap=await rest(r,'/recovery/default/capabilities');fence(r);
    if(cap?.code_version!=='default-recovery-v1'||cap.supported!==true||cap.serverRootToken!==rootToken){revoked=true;throw Error('root');}
-   const source=await rest(r,'/recovery/capabilities');fence(r);
-   if(source?.code_version!=='recovery-v1'||source.local_only!==true||source.profile_id!==profileId){revoked=true;throw Error('source');}
+   if(cap.local_only!==true||cap.profile_id!==profileId){revoked=true;throw Error('source');}
    publish({polling:true,message:'Checking the exact existing preparation; no key or decryption request will be repeated.'});
   }catch{if(r===revision)publish({polling:false,checkExisting:!revoked&&equal(owner,snapshot())&&local(owner),message:'Existing preparation could not be authenticated for this exact source and physical root. No mutation was sent.'});return null;}finally{if(r===revision)polling=false;}
   return actions.poll();},

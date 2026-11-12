@@ -18,7 +18,7 @@ export async function harness(o={}){
  const entry=new vm.SourceTextModule(source,{context});const mods={'@hermes/plugin-sdk':sdk,'react/jsx-runtime':{jsx,jsxs:jsx},react:{useEffect(){}},'./i18n.mjs':{useLocalized:()=>({jsx,jsxs:jsx})}};
  await entry.link(n=>{const m=mods[n];assert.ok(m,n);return new vm.SyntheticModule(Object.keys(m),function(){for(const[k,v]of Object.entries(m))this.setExport(k,v);},{context});});await entry.evaluate();
  const maintenance=entry.namespace.createDefaultMaintenance({storage:o.storage,onDispose:f=>disposers.push(f),rest:async(p,opts)=>{calls.push([p,opts]);const value=o.rest?.(p,opts);if(value!==undefined)return await value;
- if(p==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',preview_contract:'default-preview-job-v1',supported:true,apply_enabled:o.reviewGate===true,active_shared_autoruns_supported:false,serverRootToken:'f'.repeat(64)};
+ if(p==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',preview_contract:'default-preview-job-v1',supported:true,apply_enabled:o.reviewGate===true,active_shared_autoruns_supported:false,serverRootToken:'f'.repeat(64),profile_id:profileId,local_only:true};
  if(p==='/recovery/capabilities')return {code_version:'recovery-v1',profile_id:profileId,local_only:true};
  if(p==='/recovery/catalog')return {profile_id:profileId,items:[{id:candidate,label:'Backup',complete:true}]};
  if(p==='/recovery/default/prepare-auto')return current;
