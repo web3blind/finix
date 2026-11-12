@@ -629,7 +629,7 @@ class ColdController:
             else: cold._copy(origin,target)
         for path in sorted(source.glob('*.py')):
             pin_copy(path,package/path.name)
-        for name in ('__init__.py','plugin.yaml'):
+        for name in ('__init__.py','plugin.yaml','dashboard/plugin_api.py'):
             pin_copy(source.parent/name,package.parent/name)
         worker=package/'default_recovery_worker.py'
         from .workspace_drive import trusted_runtime
