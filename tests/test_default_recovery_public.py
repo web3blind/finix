@@ -12,6 +12,7 @@ from finix import core
 
 @unittest.skipUnless(os.environ.get('FINIX_PUBLIC_TEST_ROOT'), 'Use the isolated evidence runner; never use a personal SDK root')
 class PublicTests(unittest.TestCase):
+    @patch('finix.default_recovery_api.DEFAULT_APPLY_REVIEWED', False)
     def test_prepare_is_durable_and_never_registers(self):
         from finix import default_recovery_api as api
         root = core.private_dir(Path(os.environ['FINIX_PUBLIC_TEST_ROOT']))
@@ -84,7 +85,7 @@ class PublicTests(unittest.TestCase):
         from finix.plugin_cli import setup_parser
         parser=argparse.ArgumentParser()
         setup_parser(parser)
-        args=parser.parse_args(['recovery','default-prepare','--copy-id','x','--identity','C:/fixture/key','--consent-prepare'])
+        args=parser.parse_args(['recovery','default-prepare','--request-id','b'*32,'--copy-id','x','--identity','C:/fixture/key','--consent-prepare'])
         self.assertEqual(args.recovery_action,'default-prepare')
         args=parser.parse_args(['recovery','default-apply','b'*32,'--confirmation','d'*64,'--confirm'])
         self.assertTrue(args.confirm)
@@ -94,6 +95,7 @@ class PublicTests(unittest.TestCase):
         for suffix in ('capabilities','prepare-auto','prepare','apply','reopen','status/{identifier}'):
             self.assertIn('/recovery/default/'+suffix,paths)
 
+    @patch('finix.default_recovery_api.DEFAULT_APPLY_REVIEWED', False)
     def test_review_gate_blocks_apply_without_mutation(self):
         from finix import default_recovery_api as api
         with self.assertRaises(api.RecoveryError) as caught:
@@ -112,6 +114,7 @@ class PublicTests(unittest.TestCase):
             self.assertIn('finix/'+name+'.py',native)
             self.assertIn('finix/'+name+'.py',wheel)
 
+    @patch('finix.default_recovery_api.DEFAULT_APPLY_REVIEWED', False)
     def test_http_closed_schema_and_local_scope(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -122,7 +125,7 @@ class PublicTests(unittest.TestCase):
         app=FastAPI()
         app.include_router(create_router(lambda:profile))
         with TestClient(app,client=('127.0.0.1',1234)) as client:
-            response=client.post('/recovery/default/prepare',json={'profile_id':profile.profile_id,'recovery_job':'b'*32,'consent_prepare':False})
+            response=client.post('/recovery/default/prepare',json={'profile_id':profile.profile_id,'recovery_job':'b'*32,'consent_prepare':False,'preview_contract':'default-preview-job-v1'})
             self.assertEqual(response.json()['detail'],'CONSENT_REQUIRED')
             response=client.post('/recovery/default/apply',json={'profile_id':profile.profile_id,'id':'b'*32,'confirmation':'d'*64,'consent_apply':True,'path':str(root)})
             self.assertEqual(response.status_code,422)

@@ -10,22 +10,35 @@ notices and licenses are preserved in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTIC
 
 ## Current verification status
 
-- The publication demo is Linux-only. A real Linux encrypted backup and complete
-  readback have been verified. This does not prove full live default restoration.
-- Native Windows decryption/archive verification succeeded, but the actual Desktop
-  cold-preview request timed out before a plan or Apply. No completed Desktop
-  replacement, restored-history or restored-note claim is made.
-- Default recovery is enabled in this reviewed code, but remains experimental and
-  limited to the guarded inert/default-only ownership contract. Feature gates,
-  role checks, consent, fail-closed ownership checks and safety fences remain on.
-- Unknown preview acknowledgements require manual reopen/reconciliation, not
-  automatic replay. Interrupted legacy operations remain blocked; do not discard
-  retained source, pending state or recovery artifacts to force a retry.
-- Linux cloud restoration has not passed. Neither a universal compatibility claim
-  nor all-features-green claim is made. Keep independent backups and test offline.
+- **Linux local physical-default recovery is functionally verified** on an isolated,
+  synthetic real-default root using the exact reviewed native package. One fresh
+  preparation and one Apply reached a new READY owner. The stock session picker
+  returned the original three sessions and history returned six messages; the
+  saved note was restored and SQLite integrity was `ok`. Old-only memories/skills
+  were removed, shared resources remained unchanged, and the existing ciphertext
+  was reused without recapture or a package-manager clone.
+- Durable bounded preparation is implemented in the registered CLI and shipped
+  Desktop protocol. Exact-job polling, cancellation and lost-acknowledgement
+  reconciliation do not replay preparation or Apply. This protocol's component
+  tests are not native Windows Desktop acceptance.
+- Native Windows archive decryption was verified previously; its historical
+  Desktop cold preview timed out before Plan/Apply. The new native Windows UI,
+  physical-default Apply, restored-history and restored-note workflow remains
+  **pending**, not proven fixed by the Linux result.
+- Default recovery remains experimental and restricted to guarded inert/default-only
+  ownership, explicit root/plan-bound consent and fail-closed safety fences.
+  Interrupted legacy operations remain blocked; never discard retained state to
+  force a retry. Unknown acknowledgements require exact-job reconciliation.
+- Private-cloud acceptance is separate: this is **local recovery proof**, not a
+  new cloud-download/readback or cloud-restoration result. Ordinary POSIX source
+  hardlink/unsafe-ancestor admission hardening is also separately pending; the
+  controlled fixture did not use unsafe source entries. This is not a whole-plugin
+  security certification or universal SDK compatibility claim. Keep independent
+  backups and test offline.
 
-Native integration targets Hermes plugin SDK **0.23.0**. This is a required SDK
-contract, not evidence of compatibility with every Hermes build or OS.
+Native integration depends on the host SDK contracts described in the linked
+installation and SDK documents. This milestone does not establish support for
+all SDK versions.
 See [publication status](docs/PUBLICATION-STATUS.md) for the current limits.
 
 ## Install and use
@@ -66,7 +79,9 @@ The Desktop warning appears before choosing a fresh key where the backend knows
 this geometry. No extra controls or SDK changes are required. Unknown frontend
 routing geometry is still a host-capability limitation, not permission for a
 private bridge or an unsafe fallback. Physical default Apply is enabled only when the reviewed ownership,
-consent and inert/default-only gates admit it; live end-to-end acceptance is not complete.
+consent and inert/default-only gates admit it. Linux local physical-default Apply
+has passed the isolated synthetic workflow described above; native Windows
+Desktop Apply remains unverified.
 
 ## Verification boundaries
 

@@ -9740,7 +9740,7 @@ function validPreview(v) {
 }
 function createDefaultMaintenance(ctx) {
   const state = sdk6.atom(INITIAL()), instance2 = crypto.randomUUID();
-  let keyGeneration = 0, owner = snapshot3(), revision = 0, disposed = false, file = null, buffer = null, loading = false, polling = false, job = null, maintenanceId = null, preview = null, previewSent = false, keySent = false, applySent = false, cancelPending = false, profileId = null, gate = false, rootToken = null, registryIdentity = null, anchor = null, reconnect = false, revoked = false;
+  let keyGeneration = 0, owner = snapshot3(), revision = 0, disposed = false, file = null, buffer = null, loading = false, polling = false, job = null, maintenanceId = null, preview = null, previewSent = false, keySent = false, applySent = false, cancelPending = false, previewReadOnly = false, profileId = null, gate = false, rootToken = null, registryIdentity = null, anchor = null, reconnect = false, revoked = false;
   const publish = (patch) => {
     if (!disposed) state.set({ ...state.get(), ...patch });
   };
@@ -9820,7 +9820,7 @@ function createDefaultMaintenance(ctx) {
     return ctx.rest(path, options);
   }
   function hint(phase2) {
-    ctx.storage?.set(HINT2, { version: 1, profile: owner.profile, connection: "local", profileId, phase: phase2, job, maintenanceId });
+    ctx.storage?.set(HINT2, { version: 1, profile: owner.profile, connection: "local", profileId, phase: phase2, job, maintenanceId, rootToken });
   }
   function uncertain(r) {
     if (disposed || r !== revision) return;
@@ -9847,15 +9847,44 @@ function createDefaultMaintenance(ctx) {
     if (previewSent) return;
     previewSent = true;
     hint("preview-pending");
-    const p = await rest(r, "/recovery/default/prepare", { method: "POST", body: { profile_id: profileId, recovery_job: job, consent_prepare: true } });
+    const p = await rest(r, "/recovery/default/prepare", { method: "POST", body: { profile_id: profileId, recovery_job: job, consent_prepare: true, preview_contract: "default-preview-job-v1" } });
     fence(r);
-    validPreview(p);
+    consumePreview(r, p);
+  }
+  function consumePreview(r, v) {
+    fence(r);
+    if (!keys(v, ["contract", "id", "state", "error", "result", "cancellable"]) || v.contract !== "default-preview-job-v1" || v.id !== job || !["running", "succeeded", "failed", "cancelled", "interrupted"].includes(v.state) || typeof v.cancellable !== "boolean") throw Error("preview-job");
+    if (v.state === "running") {
+      if (v.result !== null || v.error !== null) throw Error("preview-job");
+      publish({ busy: true, polling: true, cancellable: !previewReadOnly && !cancelPending && v.cancellable, message: "Sealing the exact physical-default preview in private staging\u2026" });
+      return;
+    }
+    if (v.state !== "succeeded") {
+      if (v.result !== null || !["PREVIEW_DEADLINE", "PREVIEW_CANCELLED", "PREVIEW_INTERRUPTED", "DEFAULT_RECOVERY_FAILED", "STALE_PROFILE", "BUSY", "INCOMPLETE_ACK_REQUIRED", "OWNER_NOT_VERIFIED", "DEFAULT_AUTORUN_NOT_SUPPORTED", "SIBLING_AUTORUN_NOT_SUPPORTED", "SDK_VERSION_NOT_SUPPORTED", "LOCAL_OWNER_REQUIRED", "INVALID_CAPABILITY", "INVALID_CANDIDATE", "INVALID_IDENTITY", "DECRYPT_FAILED", "JOB_NOT_PREPARED", "NOT_FOUND", "ROOT_EPOCH_CHANGED", "WRONG_DEFAULT_ROOT", "REOPEN_LIVE_OWNER_UNVERIFIED", "DEFAULT_RECOVERY_REVIEW_REQUIRED", "CONSENT_REQUIRED"].includes(v.error)) throw Error("preview-job");
+      hint("preview-terminal");
+      publish({ busy: false, polling: false, ready: false, cancellable: false, message: `Preview preparation stopped (${v.error}). The physical default was not replaced; retained state requires reconciliation before another preparation.` });
+      return;
+    }
+    if (v.error !== null || v.cancellable !== false) throw Error("preview-job");
+    const p = validPreview(v.result);
     if (p.preview.root_binding !== rootToken) throw Error("root");
+    if (previewReadOnly) {
+      maintenanceId = p.id;
+      applySent = true;
+      hint("preview-read-only");
+      publish({ busy: false, polling: false, cancellable: false, message: "Sealed preview retained. Reopened status grants no new Apply consent." });
+      return;
+    }
     preview = JSON.parse(JSON.stringify(p));
     maintenanceId = preview.id;
     anchor = Object.freeze({ maintenanceId, planDigest: preview.preview.plan_digest, rootToken, profileId, registryIdentity, profile: owner.profile, source: owner.source, connection: owner.connection });
     hint("preview");
-    publish({ preview: JSON.parse(JSON.stringify(preview)), busy: false, polling: false, ready: false, message: gate && preview.apply_enabled ? "Review this exact sealed physical-default maintenance plan." : "Prepared preview only. Physical-default Apply is unavailable pending independent review." });
+    publish({ preview: JSON.parse(JSON.stringify(preview)), busy: false, polling: false, cancellable: false, ready: false, message: gate && preview.apply_enabled ? "Review this exact sealed physical-default maintenance plan." : "Prepared preview only. Physical-default Apply is unavailable pending independent review." });
+  }
+  async function readPreview(r) {
+    const v = await rest(r, `/recovery/default/preview/${job}`);
+    fence(r);
+    consumePreview(r, v);
   }
   async function readMaintenance(r) {
     const v = await rest(r, `/recovery/default/status/${maintenanceId}`);
@@ -9896,7 +9925,7 @@ function createDefaultMaintenance(ctx) {
         await registry(r);
         const cap = await rest(r, "/recovery/default/capabilities");
         fence(r);
-        if (cap?.code_version !== "default-recovery-v1" || cap.supported !== true || cap.active_shared_autoruns_supported !== false || typeof cap.apply_enabled !== "boolean" || !hex(cap.serverRootToken)) throw Error("unsupported");
+        if (cap?.code_version !== "default-recovery-v1" || cap.preview_contract !== "default-preview-job-v1" || cap.supported !== true || cap.active_shared_autoruns_supported !== false || typeof cap.apply_enabled !== "boolean" || !hex(cap.serverRootToken)) throw Error("unsupported");
         gate = cap.apply_enabled;
         rootToken = cap.serverRootToken;
         const ordinary = await rest(r, "/recovery/capabilities");
@@ -9915,7 +9944,11 @@ function createDefaultMaintenance(ctx) {
           if (hex(saved.job, 32)) {
             job = saved.job;
             previewSent = true;
-            publish({ busy: true, polling: true, message: "Reattached for exact-job status only. New preparation and Apply require manual reconciliation." });
+            previewReadOnly = true;
+            if (saved.rootToken === rootToken && ["preview-pending", "preview-terminal"].includes(saved.phase)) {
+              publish({ busy: true, polling: true, cancellable: false, message: "Reattached for exact preview status only; no new preparation or Apply consent." });
+              await readPreview(r);
+            } else publish({ busy: true, polling: false, message: "Previous preparation requires exact-operation reconciliation. No creation or key request will be repeated." });
             return null;
           }
           publish({ busy: true, polling: false, message: "Previous preparation acknowledgement is unknown. Reconcile the original operation before starting another." });
@@ -10011,13 +10044,16 @@ function createDefaultMaintenance(ctx) {
     poll: async () => {
       if (disposed || revoked || polling || !state.get().busy || !state.get().polling) return null;
       const r = revision;
-      let readingJob = false;
+      let readingJob = false, readingPreview = false;
       polling = true;
       try {
         await registry(r);
         if (reconnect) await authenticate(r);
         if (maintenanceId) await readMaintenance(r);
-        else if (job) {
+        else if (previewSent && job) {
+          readingPreview = true;
+          await readPreview(r);
+        } else if (job) {
           readingJob = true;
           const v = await rest(r, `/recovery/jobs/${job}`);
           readingJob = false;
@@ -10029,7 +10065,7 @@ function createDefaultMaintenance(ctx) {
         if (r === revision) {
           reconnect = false;
           const checkExisting = readingJob && !revoked && equal3(owner, snapshot3()) && local2(owner) && keySent && !previewSent && !maintenanceId && !applySent && !cancelPending;
-          publish({ polling: false, checkExisting, message: checkExisting ? "The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated." : "Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried." });
+          publish({ polling: previewSent && !readingPreview && !maintenanceId && !applySent, checkExisting, message: checkExisting ? "The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated." : "Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried." });
         }
       } finally {
         if (r === revision) polling = false;
@@ -10054,16 +10090,17 @@ function createDefaultMaintenance(ctx) {
       }
     },
     cancel: async () => {
-      if (disposed || !state.get().busy || !state.get().cancellable || !job || previewSent || maintenanceId || cancelPending) return;
+      if (disposed || !state.get().busy || !state.get().cancellable || !job || maintenanceId || cancelPending || previewReadOnly) return;
       const r = revision;
       cancelPending = true;
       wipe();
       publish({ cancellable: false });
       try {
         await registry(r);
-        const v = await rest(r, `/recovery/jobs/${job}/cancel`, { method: "POST" });
+        const v = await rest(r, previewSent ? `/recovery/default/preview/${job}/cancel` : `/recovery/jobs/${job}/cancel`, previewSent ? { method: "POST", body: { profile_id: profileId } } : { method: "POST" });
         fence(r);
-        await consume(r, v);
+        if (previewSent) consumePreview(r, v);
+        else await consume(r, v);
       } catch {
         uncertain(r);
       }
@@ -10129,7 +10166,7 @@ function DefaultMaintenance({ maintenance }) {
     s.checkExisting && jsx4(sdk6.Button, { type: "button", onClick: a.checkExisting, children: "Check existing preparation" }),
     jsx4("p", { role: "status", "aria-live": "polite", children: s.message }),
     s.busy && jsx4("progress", { "aria-label": "Default maintenance progress" }),
-    s.busy && jsx4(sdk6.Button, { type: "button", disabled: !s.cancellable, onClick: a.cancel, children: s.cancellable ? "Cancel decryption preparation" : "This maintenance phase cannot be cancelled" })
+    s.busy && jsx4(sdk6.Button, { type: "button", disabled: !s.cancellable, onClick: a.cancel, children: s.cancellable ? "Cancel preparation" : "This maintenance phase cannot be cancelled" })
   ] });
 }
 

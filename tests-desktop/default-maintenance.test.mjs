@@ -7,24 +7,24 @@ const URL_SOURCE=new URL('../desktop/src/default-maintenance.mjs',import.meta.ur
 const id='b'.repeat(32),profileId='a'.repeat(64),candidate='c'.repeat(64);
 export const preview=()=>({id,state:'prepared',confirmation:'d'.repeat(64),downtime:true,rollback:true,active_shared_autoruns_supported:false,preservation:{storage_format:'opaque-container-v2',policy:'runtime-attempt-preserve-v1',consent_notice:'ignored arbitrary server text',retention:'explicit-cleanup-only',storage_cost:'complete old copies + complete current copies and native originals',keepSharedResources:true},preview:{contract:'default-maintenance-preview-v1',plan_digest:'e'.repeat(64),root_binding:'f'.repeat(64),scope:'replace-real-default',replacement_policy:'profile-context-v1',replacement_roots:['memories','skills'],affected_files:5,removed_files:2,kept_shared_members:3,kept_inventory:'opaque-subtrees-not-cloned',inert_only:true},apply_enabled:false});
 export async function harness(o={}){
- let source;try{source=await readFile(URL_SOURCE,'utf8');}catch{assert.fail('Missing production default-maintenance client');}
+ let source;try{source=await readFile(o.bundle?new URL('../desktop/plugin.js',import.meta.url):URL_SOURCE,'utf8');if(o.bundle)source+='\nexport {createDefaultMaintenance,DefaultMaintenance};';}catch{assert.fail('Missing production default-maintenance client');}
  const atom=v=>{const ls=[];return {get:()=>v,set:x=>{v=x;ls.forEach(f=>f());},subscribe:f=>{ls.push(f);return ()=>ls.splice(ls.indexOf(f),1);}};};
  const profile=atom('default'),connectionId=atom('local'),gateway=atom('ready');let epoch=2;
  const calls=[],disposers=[],nodes=[];let current={id:'9'.repeat(32),profile_id:profileId,state:'awaiting_key',complete:true};
  const sdk={atom,useValue:s=>s.get(),useGatewayActivationEpoch(){},useQuery:o.query??(()=>{}),Button:'button',gatewayActivationEpoch:()=>epoch,host:{state:{profile,connectionId,gateway},activeConnectionId:()=>connectionId.get(),connections:async()=>[{id:'local',kind:'local'}]}};
  if(o.sdkRoutes)sdk.host.profileRoutes=async()=>o.sdkRoutes;
  if(o.sdkRequest)sdk.host.requestProfile=async(route,method,args)=>{calls.push(['sdk:'+method,args]);return o.sdkRequest(route,method,args);};
- const jsx=(type,props)=>({type,props});const context=vm.createContext({Uint8Array,ArrayBuffer,Number,Date,JSON,crypto:webcrypto});
+ const jsx=(type,props)=>({type,props});const context=vm.createContext({TextEncoder,TextDecoder,setTimeout,clearTimeout,Uint8Array,ArrayBuffer,Number,Date,JSON,crypto:webcrypto});
  const entry=new vm.SourceTextModule(source,{context});const mods={'@hermes/plugin-sdk':sdk,'react/jsx-runtime':{jsx,jsxs:jsx},react:{useEffect(){}},'./i18n.mjs':{useLocalized:()=>({jsx,jsxs:jsx})}};
  await entry.link(n=>{const m=mods[n];assert.ok(m,n);return new vm.SyntheticModule(Object.keys(m),function(){for(const[k,v]of Object.entries(m))this.setExport(k,v);},{context});});await entry.evaluate();
  const maintenance=entry.namespace.createDefaultMaintenance({storage:o.storage,onDispose:f=>disposers.push(f),rest:async(p,opts)=>{calls.push([p,opts]);const value=o.rest?.(p,opts);if(value!==undefined)return await value;
- if(p==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',supported:true,apply_enabled:o.reviewGate===true,active_shared_autoruns_supported:false,serverRootToken:'f'.repeat(64)};
+ if(p==='/recovery/default/capabilities')return {code_version:'default-recovery-v1',preview_contract:'default-preview-job-v1',supported:true,apply_enabled:o.reviewGate===true,active_shared_autoruns_supported:false,serverRootToken:'f'.repeat(64)};
  if(p==='/recovery/capabilities')return {code_version:'recovery-v1',profile_id:profileId,local_only:true};
  if(p==='/recovery/catalog')return {profile_id:profileId,items:[{id:candidate,label:'Backup',complete:true}]};
  if(p==='/recovery/default/prepare-auto')return current;
  if(p.endsWith('/key'))return current={...current,state:'running'};
  if(p.startsWith('/recovery/jobs/'))return current;
- if(p==='/recovery/default/prepare')return o.preview??preview();
+ if(p==='/recovery/default/prepare'||p.startsWith('/recovery/default/preview/'))return {contract:'default-preview-job-v1',id:p==='/recovery/default/prepare'?opts.body.recovery_job:p.split('/').at(-1),state:'succeeded',error:null,result:o.preview??preview(),cancellable:false};
  if(p==='/recovery/default/apply')return {id,state:'acknowledged',error:null};
  if(p.startsWith('/recovery/default/status/'))return {id,state:'acknowledged',error:null};
  throw Error(p);

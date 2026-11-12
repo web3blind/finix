@@ -38,7 +38,11 @@ def setup_parser(parser):
     default_prepare = recovery_ops.add_parser('default-prepare', help='Decrypt and seal true-default maintenance; does not stop anything')
     default_prepare.add_argument('--copy-id', required=True)
     default_prepare.add_argument('--identity', required=True, help='Local identity FILE, never key contents')
+    default_prepare.add_argument('--request-id', required=True, help='Fresh 32 lowercase hex intent; lost ACK permits exact preview status only')
     default_prepare.add_argument('--consent-prepare', action='store_true')
+    for action in ('default-preview','default-preview-cancel'):
+        command=recovery_ops.add_parser(action, help='Read or cancel the exact durable preview preparation; never decrypt again')
+        command.add_argument('id')
     default_apply = recovery_ops.add_parser('default-apply', help='Separately confirm downtime and launch detached maintenance')
     default_apply.add_argument('id')
     default_apply.add_argument('--confirmation', required=True)
@@ -155,7 +159,11 @@ def _default_recovery(profile, args):
         api = DefaultRecoveryAPI()
         authority(profile)
         action = args.recovery_action
-        if action == 'default-status':
+        if action in ('default-preview','default-preview-cancel'):
+            from .default_preview_jobs import PreviewJobs
+            owner=PreviewJobs()
+            answer=owner.status(profile,args.id) if action=='default-preview' else owner.cancel(profile,args.id)
+        elif action == 'default-status':
             answer = api.status(profile,args.id)
         elif action == 'default-apply':
             answer = api.apply(profile,args.id,args.confirmation,consent=args.confirm)
@@ -164,22 +172,8 @@ def _default_recovery(profile, args):
         else:
             if args.consent_prepare is not True:
                 raise RecoveryError('CONSENT_REQUIRED')
-            from .recovery_http import explicit_path, trusted_file, MAX_KEY, binding
-            import os
-            identity = explicit_path(args.identity)
-            with trusted_file(identity) as fd:
-                if not 0 < os.fstat(fd).st_size <= MAX_KEY:
-                    raise RecoveryError('INVALID_IDENTITY')
-            service = new_service(profile)
-            service.catalog(profile.profile_id,binding(profile))
-            destination=service.allocate_destination(profile.profile_id,binding(profile))
-            job=service.start(args.copy_id,identity=identity,destination=destination,
-                              profile_id=profile.profile_id,activation=binding(profile))
-            state=service.wait(job)
-            if state['status'] != 'succeeded':
-                raise RecoveryError('DECRYPT_FAILED')
-            answer=api.prepare(profile,service,job,consent=True)
-            service.cleanup_managed_result(job)
+            from .default_preview_cli import start
+            answer=start(profile,args.request_id,args.copy_id,args.identity)
         _emit(answer)
         return 0
     except Exception as exc:

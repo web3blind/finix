@@ -72,6 +72,16 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(result['state'],'reconciliation_required')
 
     def test_actual_generated_age_http_payload_is_consumed_by_production_controller(self):
+        from unittest.mock import patch
+        with patch.object(api, 'DEFAULT_APPLY_REVIEWED', False):
+            self._actual_generated_age_http_payload(False)
+
+    def test_enabled_generated_age_preview_preserves_apply_authority(self):
+        from unittest.mock import patch
+        with patch.object(api, 'DEFAULT_APPLY_REVIEWED', True):
+            self._actual_generated_age_http_payload(True)
+
+    def _actual_generated_age_http_payload(self, enabled):
         import os
         import time
         from pathlib import Path
@@ -89,9 +99,9 @@ class PreviewTests(unittest.TestCase):
         core.private_dir(root/'memories')
         (root/'memories/old.md').write_text('Synthetic old memory')
         profile=Profile(root,default_root=root)
-        key=scope/'generated-maintenance-identity'
+        key=scope/('generated-maintenance-identity-'+str(enabled))
         recipient=core.keygen(key)
-        core.backup(root,profile.root/'copies',profile.root/'index',recipient,
+        captured=core.backup(root,profile.root/'copies',profile.root/'index',recipient,
                     sqlite_temp_dir=core.private_dir(root/'cache/finix/sqlite-temp'))
         app=FastAPI();router=create_router(lambda:profile);app.include_router(router)
         # Real exact service, authority, age, HTTP parsers, cold plan and projection.
@@ -101,7 +111,7 @@ class PreviewTests(unittest.TestCase):
         try:
             with TestClient(app,client=('127.0.0.1',1234)) as client, patch.object(api.lifecycle,'prepare_live',side_effect=prepare),patch.object(api.lifecycle,'ColdController',return_value=controller):
                 response=client.get('/recovery/catalog');self.assertEqual(response.status_code,200,response.text)
-                row=response.json()['items'][0]
+                row=next(item for item in response.json()['items'] if item['sha256']==captured['sha256'])
                 response=client.post('/recovery/default/prepare-auto',json={'profile_id':profile.profile_id,'candidate_id':row['id'],'consent_restore':True})
                 self.assertEqual(response.status_code,200,response.text);job=response.json()['id']
                 with key.open('rb') as stream:
@@ -114,13 +124,23 @@ class PreviewTests(unittest.TestCase):
                     time.sleep(.025)
                 self.assertEqual(response.json()['state'],'succeeded',response.text)
                 self.assertIs(type(router.recovery_adapter.jobs[job]['service']),__import__('finix.recovery',fromlist=['RecoveryService']).RecoveryService)
-                response=client.post('/recovery/default/prepare',json={'profile_id':profile.profile_id,'recovery_job':job,'consent_prepare':True})
-                self.assertEqual(response.status_code,200,response.text);payload=response.json()
-                self.assertFalse(payload['apply_enabled'])
+                response=client.post('/recovery/default/prepare',json={'profile_id':profile.profile_id,'recovery_job':job,'consent_prepare':True,'preview_contract':'default-preview-job-v1'})
+                self.assertEqual(response.status_code,200,response.text)
+                self.assertEqual(response.json()['contract'],'default-preview-job-v1')
+                for _ in range(200):
+                    response=client.get('/recovery/default/preview/'+job)
+                    self.assertEqual(response.status_code,200,response.text)
+                    if response.json()['state']!='running':break
+                    time.sleep(.025)
+                self.assertEqual(response.json()['state'],'succeeded',response.text)
+                payload=response.json()['result']
+                (scope/('actual-http-preview-envelope-'+str(enabled)+'.json')).write_text(json.dumps(response.json(),indent=2))
+                self.assertEqual(payload['apply_enabled'],enabled)
                 self.assertNotIn(str(root),response.text)
                 with patch.object(api.lifecycle,'preflight'),patch.object(api.lifecycle,'identify',return_value={'modeled':True}),patch.object(api.lifecycle,'_exact',return_value=True):
                     current=client.get('/recovery/default/capabilities')
                 self.assertEqual(current.status_code,200,current.text)
+                self.assertEqual(current.json()['apply_enabled'],enabled)
                 self.assertEqual(current.json()['serverRootToken'],payload['preview']['root_binding'])
                 (scope/'actual-http-capabilities.json').write_text(json.dumps(current.json(),indent=2))
                 self.assertEqual(payload['preservation']['storage_format'],'opaque-container-v2')
@@ -129,8 +149,10 @@ class PreviewTests(unittest.TestCase):
                 # The guarded runner forbids non-Python/age children. Execute the
                 # production JS golden consumer against this exact file afterward.
                 self.assertEqual(payload['preview']['scope'],'replace-real-default')
-                response=client.post('/recovery/default/apply',json={'profile_id':profile.profile_id,'id':payload['id'],'confirmation':payload['confirmation'],'consent_apply':True})
-                self.assertEqual(response.json()['detail'],'DEFAULT_RECOVERY_REVIEW_REQUIRED')
+                # Enabled is not permission to bypass explicit Apply consent.
+                # No daemon mutation is modeled or dispatched in this test.
+                response=client.post('/recovery/default/apply',json={'profile_id':profile.profile_id,'id':payload['id'],'confirmation':payload['confirmation'],'consent_apply':not enabled})
+                self.assertEqual(response.json()['detail'],'CONSENT_REQUIRED' if enabled else 'DEFAULT_RECOVERY_REVIEW_REQUIRED')
                 response=client.post('/recovery/default/apply',json={'profile_id':profile.profile_id,'id':payload['id'],'confirmation':payload['confirmation'],'consent_apply':True,'path':'forbidden'})
                 self.assertEqual(response.status_code,422)
         finally:

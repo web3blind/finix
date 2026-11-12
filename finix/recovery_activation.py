@@ -26,9 +26,15 @@ LIFECYCLE_PINS = {
 def profile_digest(target, retained=None):
     with (ExitStack() if retained is None else nullcontext(retained)) as stack:
         result={}
+        from .preview_budget import check
         for name,path in _members(target,stack):
+            check()
             with core.regular_input(path) as fd, os.fdopen(os.dup(fd),'rb') as stream:
-                result[name]=hashlib.file_digest(stream,'sha256').hexdigest()
+                digest=hashlib.sha256()
+                while chunk:=stream.read(1024*1024):
+                    check()
+                    digest.update(chunk)
+                result[name]=digest.hexdigest()
         return result
 
 

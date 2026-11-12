@@ -19,7 +19,7 @@ function validPreview(v){
  return v;
 }
 export function createDefaultMaintenance(ctx){
- const state=sdk.atom(INITIAL()),instance=crypto.randomUUID();let keyGeneration=0,owner=snapshot(),revision=0,disposed=false,file=null,buffer=null,loading=false,polling=false,job=null,maintenanceId=null,preview=null,previewSent=false,keySent=false,applySent=false,cancelPending=false,profileId=null,gate=false,rootToken=null,registryIdentity=null,anchor=null,reconnect=false,revoked=false;
+ const state=sdk.atom(INITIAL()),instance=crypto.randomUUID();let keyGeneration=0,owner=snapshot(),revision=0,disposed=false,file=null,buffer=null,loading=false,polling=false,job=null,maintenanceId=null,preview=null,previewSent=false,keySent=false,applySent=false,cancelPending=false,previewReadOnly=false,profileId=null,gate=false,rootToken=null,registryIdentity=null,anchor=null,reconnect=false,revoked=false;
  const publish=patch=>{if(!disposed)state.set({...state.get(),...patch});};
  function wipe(){keyGeneration++;file=null;if(buffer)new Uint8Array(buffer).fill(0);buffer=null;publish({key:false});}
  function reset(){
@@ -43,7 +43,7 @@ export function createDefaultMaintenance(ctx){
   reconnect=false;
  }
  function rest(r,path,options){fence(r);return ctx.rest(path,options);}
- function hint(phase){ctx.storage?.set(HINT,{version:1,profile:owner.profile,connection:'local',profileId,phase,job,maintenanceId});}
+ function hint(phase){ctx.storage?.set(HINT,{version:1,profile:owner.profile,connection:'local',profileId,phase,job,maintenanceId,rootToken});}
  function uncertain(r){if(disposed||r!==revision)return;wipe();publish({busy:true,polling:!!(job||maintenanceId),cancellable:false,message:'Acknowledgement uncertain. Only the exact existing job will be read; another maintenance operation is blocked.'});}
  function decrypt(v){if(!v||!hex(v.id,32)||v.id!==job||v.profile_id!==profileId||!['awaiting_key','running','succeeded','failed','cancelled'].includes(v.state))throw Error('job');return v;}
  async function consume(r,v){
@@ -55,11 +55,28 @@ export function createDefaultMaintenance(ctx){
   if(v.complete!==true)throw Error('incomplete');
   if(previewSent)return; // An uncertain preview ACK must never mint another plan.
   previewSent=true;hint('preview-pending');
-  const p=await rest(r,'/recovery/default/prepare',{method:'POST',body:{profile_id:profileId,recovery_job:job,consent_prepare:true}});fence(r);validPreview(p);
-  // Own a detached immutable projection: callers cannot mutate a rendered plan.
-  if(p.preview.root_binding!==rootToken)throw Error('root');preview=JSON.parse(JSON.stringify(p));maintenanceId=preview.id;anchor=Object.freeze({maintenanceId,planDigest:preview.preview.plan_digest,rootToken,profileId,registryIdentity,profile:owner.profile,source:owner.source,connection:owner.connection});hint('preview');
-  publish({preview:JSON.parse(JSON.stringify(preview)),busy:false,polling:false,ready:false,message:gate&&preview.apply_enabled?'Review this exact sealed physical-default maintenance plan.':'Prepared preview only. Physical-default Apply is unavailable pending independent review.'});
+  const p=await rest(r,'/recovery/default/prepare',{method:'POST',body:{profile_id:profileId,recovery_job:job,consent_prepare:true,preview_contract:'default-preview-job-v1'}});fence(r);consumePreview(r,p);
  }
+ function consumePreview(r,v){
+  fence(r);
+  if(!keys(v,['contract','id','state','error','result','cancellable'])||v.contract!=='default-preview-job-v1'||v.id!==job||!['running','succeeded','failed','cancelled','interrupted'].includes(v.state)||typeof v.cancellable!=='boolean')throw Error('preview-job');
+  if(v.state==='running'){
+   if(v.result!==null||v.error!==null)throw Error('preview-job');
+   publish({busy:true,polling:true,cancellable:!previewReadOnly&&!cancelPending&&v.cancellable,message:'Sealing the exact physical-default preview in private staging…'});return;
+  }
+  if(v.state!=='succeeded'){
+   if(v.result!==null||!['PREVIEW_DEADLINE','PREVIEW_CANCELLED','PREVIEW_INTERRUPTED','DEFAULT_RECOVERY_FAILED','STALE_PROFILE','BUSY','INCOMPLETE_ACK_REQUIRED','OWNER_NOT_VERIFIED','DEFAULT_AUTORUN_NOT_SUPPORTED','SIBLING_AUTORUN_NOT_SUPPORTED','SDK_VERSION_NOT_SUPPORTED','LOCAL_OWNER_REQUIRED','INVALID_CAPABILITY','INVALID_CANDIDATE','INVALID_IDENTITY','DECRYPT_FAILED','JOB_NOT_PREPARED','NOT_FOUND','ROOT_EPOCH_CHANGED','WRONG_DEFAULT_ROOT','REOPEN_LIVE_OWNER_UNVERIFIED','DEFAULT_RECOVERY_REVIEW_REQUIRED','CONSENT_REQUIRED'].includes(v.error))throw Error('preview-job');
+   hint('preview-terminal');publish({busy:false,polling:false,ready:false,cancellable:false,message:`Preview preparation stopped (${v.error}). The physical default was not replaced; retained state requires reconciliation before another preparation.`});return;
+  }
+  if(v.error!==null||v.cancellable!==false)throw Error('preview-job');
+  const p=validPreview(v.result);
+  if(p.preview.root_binding!==rootToken)throw Error('root');
+  if(previewReadOnly){maintenanceId=p.id;applySent=true;hint('preview-read-only');publish({busy:false,polling:false,cancellable:false,message:'Sealed preview retained. Reopened status grants no new Apply consent.'});return;}
+  // Own a detached immutable projection: callers cannot mutate a rendered plan.
+  preview=JSON.parse(JSON.stringify(p));maintenanceId=preview.id;anchor=Object.freeze({maintenanceId,planDigest:preview.preview.plan_digest,rootToken,profileId,registryIdentity,profile:owner.profile,source:owner.source,connection:owner.connection});hint('preview');
+  publish({preview:JSON.parse(JSON.stringify(preview)),busy:false,polling:false,cancellable:false,ready:false,message:gate&&preview.apply_enabled?'Review this exact sealed physical-default maintenance plan.':'Prepared preview only. Physical-default Apply is unavailable pending independent review.'});
+ }
+ async function readPreview(r){const v=await rest(r,`/recovery/default/preview/${job}`);fence(r);consumePreview(r,v);}
  async function readMaintenance(r){
   const v=await rest(r,`/recovery/default/status/${maintenanceId}`);fence(r);
   if(!keys(v,['id','state','error'])||v.id!==maintenanceId||!states.has(v.state)||![null,'DEFAULT_RECOVERY_FAILED'].includes(v.error))throw Error('status');
@@ -85,13 +102,13 @@ export function createDefaultMaintenance(ctx){
  const actions={
   load:async()=>{if(disposed||revoked||applySent||loading||state.get().ready||state.get().busy||preview)return null;const r=revision;loading=true;try{
    await registry(r);const cap=await rest(r,'/recovery/default/capabilities');fence(r);
-   if(cap?.code_version!=='default-recovery-v1'||cap.supported!==true||cap.active_shared_autoruns_supported!==false||typeof cap.apply_enabled!=='boolean'||!hex(cap.serverRootToken))throw Error('unsupported');gate=cap.apply_enabled;rootToken=cap.serverRootToken;
+   if(cap?.code_version!=='default-recovery-v1'||cap.preview_contract!=='default-preview-job-v1'||cap.supported!==true||cap.active_shared_autoruns_supported!==false||typeof cap.apply_enabled!=='boolean'||!hex(cap.serverRootToken))throw Error('unsupported');gate=cap.apply_enabled;rootToken=cap.serverRootToken;
    const ordinary=await rest(r,'/recovery/capabilities');fence(r);if(ordinary?.code_version!=='recovery-v1'||ordinary.local_only!==true||!hex(ordinary.profile_id))throw Error('contract');profileId=ordinary.profile_id;
    const saved=ctx.storage?.get(HINT,null);
    // Global storage is an untrusted read-only hint; never hydrate consent or key authority.
    if(saved?.version===1&&saved.profile===owner.profile&&saved.connection==='local'&&saved.profileId===profileId&&saved.phase!=='terminal'){
     if(hex(saved.maintenanceId,32)){maintenanceId=saved.maintenanceId;applySent=true;publish({busy:true,polling:true});await readMaintenance(r);return null;}
-    if(hex(saved.job,32)){job=saved.job;previewSent=true;publish({busy:true,polling:true,message:'Reattached for exact-job status only. New preparation and Apply require manual reconciliation.'});return null;}
+    if(hex(saved.job,32)){job=saved.job;previewSent=true;previewReadOnly=true;if(saved.rootToken===rootToken&&['preview-pending','preview-terminal'].includes(saved.phase)){publish({busy:true,polling:true,cancellable:false,message:'Reattached for exact preview status only; no new preparation or Apply consent.'});await readPreview(r);}else publish({busy:true,polling:false,message:'Previous preparation requires exact-operation reconciliation. No creation or key request will be repeated.'});return null;}
     publish({busy:true,polling:false,message:'Previous preparation acknowledgement is unknown. Reconcile the original operation before starting another.'});return null;
    }
    const catalog=await rest(r,'/recovery/catalog');fence(r);if(catalog?.profile_id!==profileId||!Array.isArray(catalog.items))throw Error('catalog');
@@ -113,9 +130,9 @@ export function createDefaultMaintenance(ctx){
    publish({polling:true,message:'Checking the exact existing preparation; no key or decryption request will be repeated.'});
   }catch{if(r===revision)publish({polling:false,checkExisting:!revoked&&equal(owner,snapshot())&&local(owner),message:'Existing preparation could not be authenticated for this exact source and physical root. No mutation was sent.'});return null;}finally{if(r===revision)polling=false;}
   return actions.poll();},
-  poll:async()=>{if(disposed||revoked||polling||!state.get().busy||!state.get().polling)return null;const r=revision;let readingJob=false;polling=true;try{await registry(r);if(reconnect)await authenticate(r);if(maintenanceId)await readMaintenance(r);else if(job){readingJob=true;const v=await rest(r,`/recovery/jobs/${job}`);readingJob=false;fence(r);await consume(r,v);}}catch{uncertain(r);if(r===revision){reconnect=false;const checkExisting=readingJob&&!revoked&&equal(owner,snapshot())&&local(owner)&&keySent&&!previewSent&&!maintenanceId&&!applySent&&!cancelPending;publish({polling:false,checkExisting,message:checkExisting?'The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated.':'Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried.'});}}finally{if(r===revision)polling=false;}return null;},
+  poll:async()=>{if(disposed||revoked||polling||!state.get().busy||!state.get().polling)return null;const r=revision;let readingJob=false,readingPreview=false;polling=true;try{await registry(r);if(reconnect)await authenticate(r);if(maintenanceId)await readMaintenance(r);else if(previewSent&&job){readingPreview=true;await readPreview(r);}else if(job){readingJob=true;const v=await rest(r,`/recovery/jobs/${job}`);readingJob=false;fence(r);await consume(r,v);}}catch{uncertain(r);if(r===revision){reconnect=false;const checkExisting=readingJob&&!revoked&&equal(owner,snapshot())&&local(owner)&&keySent&&!previewSent&&!maintenanceId&&!applySent&&!cancelPending;publish({polling:previewSent&&!readingPreview&&!maintenanceId&&!applySent,checkExisting,message:checkExisting?'The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated.':'Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried.'});}}finally{if(r===revision)polling=false;}return null;},
   apply:async rendered=>{const s=state.get();if(disposed||s.busy||applySent||!gate||!preview?.apply_enabled||!rendered||JSON.stringify(rendered)!==JSON.stringify(preview)||JSON.stringify(s.preview)!==JSON.stringify(preview))return;const r=revision;applySent=true;wipe();publish({busy:true,polling:true,cancellable:false,message:'Confirming this exact physical-default maintenance plan…'});hint('apply-pending');try{await registry(r);await rest(r,'/recovery/default/apply',{method:'POST',body:{profile_id:profileId,id:preview.id,confirmation:preview.confirmation,consent_apply:true}});fence(r);await readMaintenance(r);}catch{uncertain(r);}},
-  cancel:async()=>{if(disposed||!state.get().busy||!state.get().cancellable||!job||previewSent||maintenanceId||cancelPending)return;const r=revision;cancelPending=true;wipe();publish({cancellable:false});try{await registry(r);const v=await rest(r,`/recovery/jobs/${job}/cancel`,{method:'POST'});fence(r);await consume(r,v);}catch{uncertain(r);}},
+  cancel:async()=>{if(disposed||!state.get().busy||!state.get().cancellable||!job||maintenanceId||cancelPending||previewReadOnly)return;const r=revision;cancelPending=true;wipe();publish({cancellable:false});try{await registry(r);const v=await rest(r,previewSent?`/recovery/default/preview/${job}/cancel`:`/recovery/jobs/${job}/cancel`,previewSent?{method:'POST',body:{profile_id:profileId}}:{method:'POST'});fence(r);if(previewSent)consumePreview(r,v);else await consume(r,v);}catch{uncertain(r);}},
   clear:()=>wipe()
  };
  const subs=[sdk.host.state.profile,sdk.host.state.connectionId,sdk.host.state.gateway].map(s=>s?.subscribe?.(()=>{if(!equal(owner,snapshot()))reset();})).filter(Boolean);
@@ -144,6 +161,6 @@ export function DefaultMaintenance({maintenance}){
    jsx('p',{children:'Recovered cron, messaging, hooks, MCP, external secrets and executable plugins remain parked. Only the exact pinned current trusted Finix control plane is exempt; archived plugin code is not enabled for status.'}),
    jsx(sdk.Button,{type:'button',disabled:s.busy||!s.applyEnabled,onClick:()=>a.apply(s.preview),children:s.confirmationConsumed?'Maintenance confirmation already submitted':s.applyEnabled?'Confirm maintenance: replace this physical default':'Physical-default Apply unavailable — independent review required'})]}),
   s.checkExisting&&jsx(sdk.Button,{type:'button',onClick:a.checkExisting,children:'Check existing preparation'}),
-  jsx('p',{role:'status','aria-live':'polite',children:s.message}),s.busy&&jsx('progress',{'aria-label':'Default maintenance progress'}),s.busy&&jsx(sdk.Button,{type:'button',disabled:!s.cancellable,onClick:a.cancel,children:s.cancellable?'Cancel decryption preparation':'This maintenance phase cannot be cancelled'})
+  jsx('p',{role:'status','aria-live':'polite',children:s.message}),s.busy&&jsx('progress',{'aria-label':'Default maintenance progress'}),s.busy&&jsx(sdk.Button,{type:'button',disabled:!s.cancellable,onClick:a.cancel,children:s.cancellable?'Cancel preparation':'This maintenance phase cannot be cancelled'})
  ]});
 }

@@ -13,6 +13,7 @@ import re
 import uuid
 import weakref
 from . import core
+from .preview_budget import check as _preview_check
 from .recovery_import import _members, RUNTIME_ROOTS, RUNTIME_FILES
 from .recovery_activation import profile_digest
 
@@ -54,6 +55,7 @@ def _kept_inventory(root, entries):
     # this metadata inventory, never their uninspected recursive contents.
     result={}
     for path in sorted(root.iterdir()):
+        _preview_check()
         if path.name in PROFILE_REPLACEMENT_ROOTS or path.name in entries: continue
         info=path.lstat()
         if (stat.S_ISREG(info.st_mode) and path.name.casefold() not in RUNTIME_FILES
@@ -75,6 +77,7 @@ def _leaf_fd(fd):
     digest=hashlib.sha256(); size=0
     os.lseek(fd,0,os.SEEK_SET)
     while chunk:=os.read(fd,1024*1024):
+        _preview_check()
         digest.update(chunk);size+=len(chunk)
     after=os.fstat(fd)
     if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns,1)!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns,after.st_nlink) or size!=before.st_size:
@@ -167,6 +170,7 @@ def _sqlite_generation(path, sqlite_temp_dir):
             with streaming.sqlite_payload(fd,parent,path.name,sqlite_temp_dir,None,None) as (stream,size):
                 count=0
                 while chunk:=stream.read(1024*1024):
+                    _preview_check()
                     digest.update(chunk);count+=len(chunk)
                 if count!=size: raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
             final=os.fstat(fd)
@@ -284,6 +288,7 @@ def _inventory(root,stack):
     _private(root)
     result={}
     for name,path in _members(root,stack):
+        _preview_check()
         if not core.safe_name(name) or ':' in name: raise RecoveryError('UNSAFE_PATH')
         with core.regular_input(path) as fd:
             if os.fstat(fd).st_nlink!=1: raise RecoveryError('UNSAFE_LINK')
@@ -291,9 +296,11 @@ def _inventory(root,stack):
     return result
 
 def _copy(source,destination):
+    _preview_check()
     core.private_dir(destination.parent)
     with core.regular_input(source) as src,core.regular_output(destination) as dst:
         while chunk:=os.read(src,1024*1024):
+            _preview_check()
             view=memoryview(chunk)
             while view:
                 written=os.write(dst,view);view=view[written:]
@@ -483,12 +490,14 @@ def prepare(verified_import_capability,canonical_default_root,*,journal_root,int
         for p in [journal_root,directory]: _private(p)
         payload=core.private_dir(directory/'payload')
         for name,(path,digest) in selected.items():
+            _preview_check()
             _copy(path,payload/name)
             if core.digest_file(payload/name)!=digest: raise RecoveryError('SOURCE_CHANGED')
         target_owned=_owned_inventory(root,stack)
         entries={n:d for n,(p,d) in selected.items()}
         from .sqlite_family import prepare_policy
         sqlite_families=prepare_policy(root,entries,directory)
+        _preview_check()
         kept=_kept_inventory(root,entries)
         plan=dict(version=3,id=job,root=str(root),root_identity=_identity(root),
             source=str(source),source_identity=cap['identity'],source_digest=cap['digest'],

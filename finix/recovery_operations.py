@@ -128,6 +128,12 @@ class RecoveryOperations:
             def worker():
                 try:
                     with file_lease(lease):
+                        # PREVIEW dispatch reserves ownership before its child
+                        # claims this kernel lease. Refuse before committing a
+                        # competing ordinary operation; exact replay stays above.
+                        from types import SimpleNamespace
+                        from .default_preview_jobs import PreviewJobs
+                        PreviewJobs().assert_available(SimpleNamespace(home=service.profile,profile_id=service.profile_id))
                         acquired.append(True);ready.set();proceed.wait()
                         if slot.get('committed'):
                             self._execute(service,owned)

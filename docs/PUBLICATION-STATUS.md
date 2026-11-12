@@ -4,13 +4,39 @@ This status supersedes older release-gate prose where it describes the default
 feature as disabled. The reviewed runtime enables the guarded default feature;
 this documentation change does not alter runtime gates or role checks.
 
-A Linux backup and full readback are verified. Do not equate archive verification
-with a successful full live-root replacement. Native Windows archive decryption
-passed, but Desktop cold preview timed out at 30 seconds without Plan/Apply or
-restored history. Desktop is incomplete; the publication video is Linux-only.
-Linux cloud restore has not passed. No complete restore or universal compatibility
-claim is authorized by this status. Interrupted legacy operations remain blocked.
-Manual reopen/reconciliation may be required after an unknown acknowledgement.
+## Verified Linux local milestone
+
+The exact reviewed native package completed physical-default recovery on an
+isolated synthetic Linux real-default root. One fresh preparation and one Apply
+reached a new READY owner. The actual stock session picker returned three original
+sessions, stock history returned six original messages, the saved note was
+restored, and SQLite integrity was `ok`. Old-only memories and skills were removed;
+shared resources and sibling data remained unchanged. The existing encrypted
+backup was reused without recapture or a package-manager clone. This is genuine
+local workflow evidence, not merely archive verification or a named-profile test.
+
+Durable bounded preparation is implemented in the registered CLI and shipped
+Desktop protocol, including exact-job polling, cancellation intent and uncertain
+acknowledgement reconciliation. The matched client and backend ship together.
+Preparation does not authorize Apply: fresh root/plan/epoch-bound consent and
+native ownership checks remain required. Interrupted legacy operations remain
+blocked. Never discard retained state or repeat Apply to recover a lost indicator.
+
+## Still separate or pending
+
+- Native Windows archive decryption passed previously, but its historical Desktop
+  cold preview timed out before Plan/Apply. New native Windows Desktop UI,
+  physical-default Apply, restored history and saved-note acceptance are pending.
+  Protocol/component tests and Linux success do not prove that workflow.
+- Private-cloud download/readback and cloud-restoration acceptance are separate;
+  this local milestone supplies no new cloud proof.
+- Ordinary POSIX source hardlink/unsafe-ancestor admission hardening remains a
+  separate pending baseline task. No unsafe source fixture was used for this
+  controlled local workflow. This is not whole-plugin security certification.
+- No all-SDK-version, all-platform, full Windows/cloud readiness, completed video
+  or AI-turn-readiness claim follows from these results. The accepted cooperative
+  same-OS-user target condition in README still applies; it is not atomic defense
+  against hostile concurrent target replacement. Keep independent backups.
 
 ## Risk disclosure
 

@@ -29,6 +29,8 @@ CRON_BYTES = 4 * 1024 * 1024
 
 
 def check_cancel(cancel):
+    from .preview_budget import check
+    check()
     from .core import FinixError
     if cancel is not None and (cancel() if callable(cancel) else cancel.is_set()):
         raise FinixError('Operation cancelled')
@@ -177,6 +179,8 @@ def _sqlite_backup(source, destination, cancel=None, progress=None, memory_limit
     destination.execute('pragma cache_size=-2048')
     destination.execute('pragma temp_store=MEMORY')
     def on_progress(status, remaining, total):
+        from .preview_budget import check as check_preview_budget
+        check_preview_budget()
         check_cancel(cancel)
         if memory_limit is not None and total * page_size > memory_limit:
             raise FinixError('SQLite grew beyond RAM optimization; use the production disk snapshot API')

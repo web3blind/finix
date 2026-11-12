@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import uuid
 from . import core, default_recovery as cold, default_recovery_lifecycle as lifecycle
+from .preview_budget import bounded
 RecoveryError = cold.RecoveryError
 
 
@@ -44,7 +45,8 @@ def public_error(exc):
                'OWNER_NOT_VERIFIED','REOPEN_LIVE_OWNER_UNVERIFIED','BUSY',
                'INVALID_CAPABILITY','INVALID_CANDIDATE','INVALID_IDENTITY',
                'DECRYPT_FAILED','INCOMPLETE_ACK_REQUIRED','JOB_NOT_PREPARED',
-               'DEFAULT_RECOVERY_REVIEW_REQUIRED'}
+               'DEFAULT_RECOVERY_REVIEW_REQUIRED','PREVIEW_DEADLINE',
+               'PREVIEW_CANCELLED','PREVIEW_INTERRUPTED','PREVIEW_ACK_UNCERTAIN'}
     code = getattr(exc,'code',None)
     return code if code in allowed else 'DEFAULT_RECOVERY_FAILED'
 
@@ -140,6 +142,7 @@ class DefaultRecoveryAPI:
     def _base(self, root):
         return root/'cache/finix/default-api'
 
+    @bounded
     def prepare(self, profile, service, job, *, consent=False):
         if consent is not True:
             raise RecoveryError('CONSENT_REQUIRED')

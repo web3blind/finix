@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 
 
 @contextmanager
-def operation_lock(profile):
+def operation_lock(profile,*,backend_lease=True,preview_job=None):
     from .backup_jobs import file_lease, state_lease
     from contextlib import ExitStack
     root=core.private_dir(profile.home/'cache/finix/recovery-operations')
@@ -35,7 +35,11 @@ def operation_lock(profile):
             except FileNotFoundError:state=None
             if state and state.get('state') not in ('succeeded','cancelled','failed'):
                 fail('BUSY')
-        retained.enter_context(core.locked(profile.directories()))
+        if preview_job is None:
+            from .default_preview_jobs import PreviewJobs
+            PreviewJobs().assert_available(profile)
+        if backend_lease:
+            retained.enter_context(core.locked(profile.directories()))
     except (OSError, core.FinixError):
         retained.close()
         fail('BUSY')
@@ -779,7 +783,7 @@ def create_router(current_profile):
         except Exception as exc:
             refusal=public_error(exc)
         # Read the single reviewed gate dynamically; never capture a second flag.
-        return dict(code_version='default-recovery-v1',supported=refusal is None,refusal=refusal,
+        return dict(code_version='default-recovery-v1',preview_contract='default-preview-job-v1',supported=refusal is None,refusal=refusal,
                     serverRootToken=current_root_token,
                     apply_enabled=maintenance.DEFAULT_APPLY_REVIEWED,active_shared_autoruns_supported=False,
                     explanation='Active shared autoruns, supervisors and sibling-serving multiplexers are unsupported; refusal occurs before shutdown.')
@@ -798,20 +802,41 @@ def create_router(current_profile):
     async def default_prepare(request: Request,response: Response):
         profile=guard(request,response)
         with default_errors():
-            body=await default_body(request,profile,{'recovery_job','consent_prepare'})
+            body=await default_body(request,profile,{'recovery_job','consent_prepare','preview_contract'})
             from .default_recovery_api import identifier as valid_id
+            from .default_preview_jobs import PreviewJobs, CONTRACT
             valid_id(body['recovery_job'])
+            if body['preview_contract'] != CONTRACT:
+                fail('INVALID_REQUEST',422)
             if body['consent_prepare'] is not True:
                 fail('CONSENT_REQUIRED')
             def execute():
-                with state_lock(adapter),operation_lock(profile):
+                # The durable owner holds operation_lock, not the adapter state
+                # mutex. Retain the exact service reference under a short lock.
+                with state_lock(adapter):
                     job=adapter.lookup(profile,body['recovery_job'])
                     if not job['service_id'] or adapter.view(job)['state'] != 'succeeded':
                         fail('CONFIG_NOT_READY')
                     if adapter.view(job)['complete'] is not True:
                         fail('INCOMPLETE_ACK_REQUIRED')
-                    return default_api.prepare(profile,job['service'],job['service_id'],consent=True)
-            return await run_in_threadpool(execute)
+                    service, service_id = job['service'], job['service_id']
+                return default_api.prepare(profile,service,service_id,consent=True)
+            return await run_in_threadpool(PreviewJobs().begin,profile,body['recovery_job'],execute)
+
+    @router.get('/default/preview/{identifier}')
+    def default_preview(identifier: str,request: Request,response: Response):
+        profile=guard(request,response)
+        with default_errors():
+            from .default_preview_jobs import PreviewJobs
+            return PreviewJobs().status(profile,identifier)
+
+    @router.post('/default/preview/{identifier}/cancel')
+    async def default_preview_cancel(identifier: str,request: Request,response: Response):
+        profile=guard(request,response)
+        with default_errors():
+            await default_body(request,profile,set())
+            from .default_preview_jobs import PreviewJobs
+            return await run_in_threadpool(PreviewJobs().cancel,profile,identifier)
 
     @router.post('/default/apply')
     async def default_apply(request: Request,response: Response):

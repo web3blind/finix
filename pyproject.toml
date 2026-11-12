@@ -30,6 +30,7 @@ include = ["finix*"]
   "finix/connection_worker.py", "finix/connections.py", "finix/connector_drive.py", "finix/core.py",
   "finix/default_recovery.py", "finix/sqlite_family.py", "finix/default_recovery_lifecycle.py",
   "finix/default_recovery_worker.py", "finix/default_recovery_api.py",
+  "finix/preview_budget.py", "finix/default_preview_jobs.py", "finix/default_preview_cli.py", "finix/default_preview_worker.py",
   "finix/portable_history.py", "finix/recovery_operations.py", "finix/recovery_pipeline.py",
   "finix/recovery_shared_host.py", "finix/runtime_attempt.py", "finix/custody_payload.py",
   "finix/drive.py", "finix/extra_sources.py", "finix/integration.py", "finix/plugin_cli.py",
@@ -41,5 +42,5 @@ include = ["finix*"]
 "share/finix/dashboard" = ["dashboard/manifest.json", "dashboard/plugin_api.py", "dashboard/index.js"]
 "share/finix/desktop" = ["desktop/plugin.js", "desktop/SDK-CONTRACT.md"]
 "share/finix/desktop/src" = ["desktop/src/default-maintenance.mjs", "desktop/src/i18n.mjs", "desktop/src/messages.mjs", "desktop/src/cloud.mjs", "desktop/src/plugin.mjs", "desktop/src/recovery.mjs", "desktop/src/recovery-operation.mjs", "desktop/src/setup.mjs"]
-"share/finix/docs" = ["docs/setup-flow.md", "docs/INSTALL-LINUX.md", "docs/INSTALL-WINDOWS.md", "docs/SAFETY.md", "docs/RELEASE.md", "docs/recovery-import.md", "docs/RESTORE.md", "docs/BACKUP-JOBS.md", "docs/BACKUP-JOBS-UI.md"]
+"share/finix/docs" = ["docs/setup-flow.md", "docs/INSTALL-LINUX.md", "docs/INSTALL-WINDOWS.md", "docs/SAFETY.md", "docs/RELEASE.md", "docs/recovery-import.md", "docs/default-maintenance-workflow.md", "docs/RESTORE.md", "docs/BACKUP-JOBS.md", "docs/BACKUP-JOBS-UI.md"]
 "share/finix/dist" = ["dist/keygen.html"]
