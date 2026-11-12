@@ -22,6 +22,23 @@ Preparation does not authorize Apply: fresh root/plan/epoch-bound consent and
 native ownership checks remain required. Interrupted legacy operations remain
 blocked. Never discard retained state or repeat Apply to recover a lost indicator.
 
+## Reviewed POSIX CURRENT source admission
+
+CURRENT code now requires trusted source ownership, no non-owner write permission
+on source files or package directories, and retained no-follow ancestry while reading bounded regular
+files. Hardlinks with no non-owner write permission remain compatible;
+non-owner-writable inodes and unsafe
+ancestry are refused. The guard and its focused tests were independently reviewed
+and exercised on native Linux, including cross-user write attempts, root-owned
+code compatibility and bounded descriptor use. Native Windows regression tests
+preserve its unchanged admission branch; skipped POSIX cases prove no Windows
+POSIX protection.
+
+This is a separately tested source-boundary increment, not a second full Apply.
+The Linux functional workflow above used the earlier reviewed native package,
+without this guard; its unchanged functional evidence is retained, not relabelled
+as a new end-to-end run. This is not whole-plugin security certification.
+
 ## Still separate or pending
 
 - Native Windows archive decryption passed previously, but its historical Desktop
@@ -30,9 +47,6 @@ blocked. Never discard retained state or repeat Apply to recover a lost indicato
   Protocol/component tests and Linux success do not prove that workflow.
 - Private-cloud download/readback and cloud-restoration acceptance are separate;
   this local milestone supplies no new cloud proof.
-- Ordinary POSIX source hardlink/unsafe-ancestor admission hardening remains a
-  separate pending baseline task. No unsafe source fixture was used for this
-  controlled local workflow. This is not whole-plugin security certification.
 - No all-SDK-version, all-platform, full Windows/cloud readiness, completed video
   or AI-turn-readiness claim follows from these results. The accepted cooperative
   same-OS-user target condition in README still applies; it is not atomic defense

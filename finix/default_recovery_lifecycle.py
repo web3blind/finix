@@ -491,7 +491,48 @@ def _current_finix(root):
         # The shipped dashboard manifest names this exact SDK bootstrap adapter.
         # Pin its bytes like the other CURRENT code; no archived plugin gains trust.
         names=['__init__.py','plugin.yaml','dashboard/plugin_api.py']+['finix/'+p.name for p in sorted((base/'finix').glob('*.py'))]
-        return {name:core.digest_file(base/name) for name in names}
+        if os.name == 'nt':
+            # Keep the native regular-file/ACL/hash admission unchanged.
+            return {name:core.digest_file(base/name) for name in names}
+        import stat
+        from .recovery import _PosixAnchor
+        with ExitStack() as guards:
+            anchor = _PosixAnchor(guards, base)
+            # Retain only the bounded base chain; per-file parents close after
+            # each read, rather than accumulating one chain per package member.
+            retained = {Path('/'): anchor.fds[0]}
+            prefix = Path('/')
+            for part, fd in zip(base.parts[1:], anchor.fds[1:]):
+                prefix /= part
+                retained[prefix] = fd
+            result = {}
+            for name in names:
+                with ExitStack() as leaf_guards:
+                    parent = _PosixAnchor(leaf_guards, (base/name).parent,
+                                          retained=dict(retained))
+                    # Sticky shared ancestors may be safe above the package,
+                    # but no writable directory inside trusted code is safe.
+                    if any(os.fstat(fd).st_mode & 0o022
+                           for fd in parent.fds[len(anchor.fds)-1:]):
+                        raise RecoveryError('CURRENT_FINIX_CHANGED')
+                    with core.regular_input(parent.path_fd/Path(name).name) as fd:
+                        info = os.fstat(fd)
+                        # Root-installed wheels are trusted too; do not require
+                        # the dashboard user's UID for system-installed code.
+                        # Other-UID writes through any hardlink are excluded by
+                        # the inode's owner/mode, not by link count alone.
+                        if (not stat.S_ISREG(info.st_mode)
+                                or info.st_uid not in {0, os.geteuid()}
+                                or info.st_mode & 0o022):
+                            raise RecoveryError('CURRENT_FINIX_CHANGED')
+                        data = core.read_regular(fd, 4*1024*1024)
+                        if core.fingerprint(info) != core.fingerprint(
+                                os.stat(Path(name).name, dir_fd=parent.fd, follow_symlinks=False)):
+                            raise RecoveryError('CURRENT_FINIX_CHANGED')
+                    parent.check()
+                    result[name] = hashlib.sha256(data).hexdigest()
+            anchor.check()
+            return result
     actual=inventory(installed)
     if actual!=inventory(current): raise RecoveryError('CURRENT_FINIX_CHANGED')
     # Reject all extra executable files in the installed trusted package.

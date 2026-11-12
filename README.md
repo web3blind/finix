@@ -29,12 +29,17 @@ notices and licenses are preserved in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTIC
   ownership, explicit root/plan-bound consent and fail-closed safety fences.
   Interrupted legacy operations remain blocked; never discard retained state to
   force a retry. Unknown acknowledgements require exact-job reconciliation.
+- POSIX CURRENT source admission now validates source ownership, absence of
+  non-owner write permission and retained ancestry before hashing bounded regular files. The
+  two-file guard/test change was independently reviewed and tested on native Linux,
+  including cross-user write attempts and safe read-only hardlink compatibility.
+  Native Windows regression tests preserve its existing admission; POSIX cases
+  are skipped there, not evidence of Windows POSIX protection. This guard was not
+  part of the earlier functional package and has not had a second full Apply.
 - Private-cloud acceptance is separate: this is **local recovery proof**, not a
-  new cloud-download/readback or cloud-restoration result. Ordinary POSIX source
-  hardlink/unsafe-ancestor admission hardening is also separately pending; the
-  controlled fixture did not use unsafe source entries. This is not a whole-plugin
-  security certification or universal SDK compatibility claim. Keep independent
-  backups and test offline.
+  new cloud-download/readback or cloud-restoration result. This is not a
+  whole-plugin security certification or universal SDK compatibility claim.
+  Keep independent backups and test offline.
 
 Native integration depends on the host SDK contracts described in the linked
 installation and SDK documents. This milestone does not establish support for
