@@ -355,6 +355,131 @@ def _job(root,job):
     return _base(root)/job
 
 
+def _cache_code_matches(actual, expected):
+    """Compare a bounded CPython marshal-v4/v5 code stream, without loading it.
+
+    Only compile-produced immutable forms are recognized. References resolve to
+    canonical integer IDs, never Python code objects. Sharing/intern flags are
+    representation details: retaining an earlier compilation changes them even
+    on identical source. Interning node IDs also bounds work on shared DAGs.
+    """
+    import sys
+    if sys.implementation.name != 'cpython' or not (3, 11) <= sys.version_info[:2] <= (3, 14):
+        return False
+    if max(len(actual), len(expected)) > 16*1024*1024: return False
+    nodes = {}
+    def intern(key):
+        if key not in nodes: nodes[key] = len(nodes)
+        return nodes[key]
+    def scan(data, budget):
+        offset = 0; steps = 0; refs = []
+        def take(size):
+            nonlocal offset
+            if size < 0 or size > len(data)-offset: raise ValueError()
+            value = data[offset:offset+size]; offset += size
+            return value
+        def number(): return int.from_bytes(take(4), 'little', signed=True)
+        def item(depth=0):
+            nonlocal steps
+            steps += 1
+            if depth > 128 or steps > budget: raise ValueError()
+            tag = take(1)[0]; kind = chr(tag & 127)
+            if kind == 'r':
+                if tag & 128: raise ValueError()
+                index = number()
+                if not 0 <= index < len(refs) or refs[index] is None: raise ValueError()
+                return refs[index]
+            slot = len(refs) if tag & 128 else None
+            if slot is not None: refs.append(None)
+            if kind in 'NFT.':
+                if tag & 128: raise ValueError()
+                key = (kind,)
+            elif kind == 'i': key = (kind, take(4))
+            elif kind == 'l':
+                size = number(); key = (kind, size, take(abs(size)*2))
+            elif kind in 'gy': key = (kind, take(8 if kind == 'g' else 16))
+            elif kind == 's': key = (kind, take(number()))
+            elif kind in 'utaAzZ':
+                raw = take(take(1)[0] if kind in 'zZ' else number())
+                key = ('text', raw.decode('ascii' if kind in 'aAzZ' else 'utf8', errors='surrogatepass'))
+            elif kind in '()>':
+                size = take(1)[0] if kind == ')' else number()
+                if size < 0 or size > budget-steps: raise ValueError()
+                children = tuple(item(depth+1) for _ in range(size))
+                if kind == '>':
+                    unique = frozenset(children)
+                    if len(unique) != size: raise ValueError()
+                    key = ('set', unique)
+                else: key = ('tuple', children)
+            elif kind == 'c':
+                header = take(20)  # 3.11-3.14: five fixed-width compiler fields.
+                fields = tuple(item(depth+1) for _ in range(8))
+                line = take(4)
+                tail = (item(depth+1), item(depth+1))
+                key = ('code', header, fields, line, tail)
+            elif kind == ':' and sys.version_info[:2] >= (3, 14):
+                key = ('slice', tuple(item(depth+1) for _ in range(3)))
+            else: raise ValueError()
+            result = intern(key)
+            if slot is not None: refs[slot] = result
+            return result
+        result = item()
+        if offset != len(data): raise ValueError()
+        return result, steps
+    try:
+        trusted, count = scan(expected, len(expected))
+        candidate, _ = scan(actual, count*2+128)
+        return candidate == trusted
+    except (ValueError, UnicodeError, IndexError, RecursionError):
+        return False
+
+
+def _source_cache_matches(path, installed, source_pins):
+    """Admit only bounded source-equivalent conventional timestamp caches."""
+    import marshal
+    import stat
+    import struct
+    import sys
+    def admitted(fd):
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1: return False
+        if os.name == 'nt':
+            import msvcrt
+            from .windows_native import trusted_handle
+            return trusted_handle(msvcrt.get_osfhandle(fd))
+        return info.st_uid == os.geteuid() and not info.st_mode & 0o022
+    try:
+        source = Path(importlib.util.source_from_cache(str(path)))
+        relative = source.relative_to(installed).as_posix()
+        if (relative not in source_pins or source.suffix != '.py'
+                or Path(importlib.util.cache_from_source(str(source))) != path): return False
+        with ExitStack() as guards:
+            if os.name == 'nt':
+                from . import windows_native as win
+                anchor = guards.enter_context(win.directory(path.parent))
+                if not all(win.trusted_handle(h, ancestor=True) for h in anchor.handles): return False
+            else:
+                from .recovery import _PosixAnchor
+                _PosixAnchor(guards, path.parent, owned_from=installed)
+            with core.regular_input(source) as fd:
+                if not admitted(fd): return False
+                info = os.fstat(fd); data = core.read_regular(fd, 4*1024*1024)
+            if hashlib.sha256(data).hexdigest() != source_pins[relative]: return False
+            with core.regular_input(path) as fd:
+                if not admitted(fd): return False
+                cached = core.read_regular(fd, 16*1024*1024)
+        header = (importlib.util.MAGIC_NUMBER + b'\x00'*4
+                  + struct.pack('<II', int(info.st_mtime)&0xffffffff, len(data)&0xffffffff))
+        if cached[:16] != header: return False
+        compiled = compile(data, str(source), 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+        # Serialize trusted compiler output only. Never pass cached bytes to
+        # marshal.load(s), exec, CodeType, or an import loader.
+        expected = marshal.dumps(compiled)
+        return _cache_code_matches(cached[16:], expected)
+    except Exception:
+        return False
+
+
 def _current_finix(root):
     """Digest only the currently loaded, already enabled control-plane package."""
     if _config(root).get('plugins',{}).get('enabled')!=['finix']:
@@ -371,7 +496,11 @@ def _current_finix(root):
     if actual!=inventory(current): raise RecoveryError('CURRENT_FINIX_CHANGED')
     # Reject all extra executable files in the installed trusted package.
     for path in installed.rglob('*'):
+        # rglob deliberately does not descend into POSIX directory symlinks.
+        if path.name == '__pycache__' and path.is_symlink():
+            raise RecoveryError('CURRENT_FINIX_CHANGED')
         if path.is_file() and path.suffix in ('.py','.pyc','.pyd','.so','.dll') and path.relative_to(installed).as_posix() not in actual:
+            if path.suffix == '.pyc' and _source_cache_matches(path, installed, actual): continue
             raise RecoveryError('CURRENT_FINIX_CHANGED')
     return actual
 
