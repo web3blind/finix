@@ -5,8 +5,11 @@ import os
 from pathlib import Path
 import shlex
 import time
+from threading import RLock
 
 from . import core
+
+_windows_binding_lock = RLock()
 
 
 def _home_binding(home):
@@ -51,7 +54,9 @@ def _windows_binding_anchors(home):
 
 
 def _windows_profile_binding(home):
-    with _windows_binding_anchors(home) as (canonical, identity, parent):
+    # Concurrent readers share short resolution; the native cross-process
+    # mutex and every ownership/identity check remain in the selected path.
+    with _windows_binding_lock, _windows_binding_anchors(home) as (canonical, identity, parent):
         return _windows_profile_binding_selected(home, canonical, identity, parent)
 
 

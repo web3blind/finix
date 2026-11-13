@@ -10160,7 +10160,7 @@ function DefaultMaintenance({ maintenance }) {
       e.currentTarget.value = "";
       return a.key(f);
     } })] }),
-    !p && jsx4(sdk6.Button, { type: "button", disabled: !s.ready || s.busy || !s.key || !s.candidate, onClick: () => a.prepare({ candidate: s.candidate }), children: "Prepare physical-default maintenance preview" }),
+    !p && jsx4(sdk6.Button, { type: "button", disabled: s.busy || s.ready && (!s.key || !s.candidate), onClick: () => s.ready ? a.prepare({ candidate: s.candidate }) : a.load(), children: s.ready ? "Prepare physical-default maintenance preview" : "Check maintenance availability" }),
     p && jsxs4("section", { "aria-label": "Sealed maintenance preview", children: [
       jsx4("h2", { children: "Review this exact maintenance plan" }),
       jsx4("p", { children: `Plan ${p.plan_digest} \xB7 physical-root binding ${p.root_binding}` }),
