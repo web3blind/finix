@@ -56,6 +56,15 @@ RUNTIME_EXCLUSIONS = frozenset({
 # formats the positive os.getpid() as a decimal integer. Anchor the complete
 # root-relative path: neither arbitrary .sock files nor state/ are disposable.
 RUNTIME_LOOP_TICK = re.compile(r'state/gateway[.]loop-tick[.][1-9][0-9]*[.]sock')
+# SDK pm.environments.install_key = SHA256[:16]; pm.packages/pm.runtime
+# generation names and runtime_state.lease_directory leaves = uuid4().hex.
+# These empty, kernel-locked process-lifetime pins are pruned after exit.
+# Exclude only exact leaves, not .leases directories or installation/tool data;
+# traversal must still validate every included ancestor without following links.
+RUNTIME_PM_LEASE = re.compile(
+    r'installs/[0-9a-f]{16}/(?:environments|pm-runtime/generations)/'
+    r'[0-9a-f]{32}/[.]leases/[0-9a-f]{32}'
+)
 RECIPIENT = re.compile(r'age1[023456789acdefghjklmnpqrstuvwxyz]{58}')
 
 
@@ -77,6 +86,7 @@ def excluded(name):
     parts = PurePosixPath(name.lower() if os.name == 'nt' else name).parts
     return bool(parts) and (str(PurePosixPath(*parts)) in RUNTIME_EXCLUSIONS
                             or RUNTIME_LOOP_TICK.fullmatch(str(PurePosixPath(*parts))) is not None
+                            or RUNTIME_PM_LEASE.fullmatch(str(PurePosixPath(*parts))) is not None
                             or parts[0] in ROOT_EXCLUSIONS
                             or any(p in TREE_EXCLUSIONS for p in parts))
 

@@ -448,6 +448,45 @@ def snapshot_regular(path):
         yield fd
 
 
+@contextmanager
+def source_snapshot_regular(path):
+    """Source bytes only: a hardlink is never generic input/execute authority.
+
+    The stat selects an opener, not admission. The exceptional handle is opened
+    exclusively relative to pinned no-reparse ancestors, and its owner/DACL
+    (shared by every alias) plus ancestor security are checked before reading.
+    SQLite must retain its separate single-link, path-based transaction gate.
+    Ordinary capture still owns bounded copying and fingerprint stability.
+    """
+    import msvcrt
+    from . import core
+    path = local_path(path)
+    if path.lstat().st_nlink == 1:
+        with snapshot_regular(path) as fd:
+            yield fd
+        return
+    with directory(path.parent) as parent:
+        handle = relative_open(parent.handle, path.name, share_write=False)
+        fd = None
+        try:
+            info = information(handle)
+            if info.attributes & (0x400 | 0x10) or info.links < 1:
+                raise OSError('Source must be a non-reparse regular file')
+            if (not trusted_handle(handle) or not trusted_handle(parent.handle)
+                    or not all(trusted_handle(h, ancestor=True) for h in parent.handles[:-1])):
+                raise OSError('Source hardlink or ancestor has an untrusted owner or ACL')
+            fd = msvcrt.open_osfhandle(handle, os.O_BINARY | os.O_RDONLY)
+            handle = None
+            if core.peek(fd, 16) == b'SQLite format 3\x00':
+                raise OSError('Hardlinked SQLite sources are forbidden')
+            yield fd
+        finally:
+            if fd is not None:
+                os.close(fd)
+            if handle is not None:
+                close(handle)
+
+
 def scan(anchor, guard=None):
     from . import core
     result = {}
@@ -475,7 +514,7 @@ def scan(anchor, guard=None):
                     if info.st_file_attributes & 0x400:
                         raise core.FinixError('Included source contains a reparse point')
                     if not info.st_file_attributes & 0x10:
-                        with snapshot_regular(entry) as fd:
+                        with source_snapshot_regular(entry) as fd:
                             result[relative] = core.discovered_source(fd, pinned, entry.name, relative=relative)
                 except FileNotFoundError:
                     # Only an already discovered, stable, genuinely readable
@@ -504,7 +543,9 @@ def source_file(anchor, name, expected):
     from . import core
     admit_name(name)
     path = anchor.path.joinpath(*name.split('/'))
-    opener = regular if getattr(expected, 'sqlite', False) else snapshot_regular
+    opener = (regular if getattr(expected, 'sqlite', False) else
+              snapshot_regular if getattr(expected, 'opaque', None) is not None else
+              source_snapshot_regular)
     with directory(path.parent) as parent, opener(path) as fd:
         with core.validated_source(fd, parent, path.name, expected):
             yield fd, parent, path.name
