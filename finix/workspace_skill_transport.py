@@ -357,13 +357,13 @@ class WorkspaceSkillRunner:
     this is bounded by the child OS memory budget, not a network pre-body cap.
     No uploads are retried here. The existing durable journal owns reconciliation.
     """
-    def __init__(self, home, *, account_pin=None, enabled=True, timeout=300):
+    def __init__(self, home, *, account_pin=None, enabled=True, timeout=None):
         self.home = core.checked_path(home)
         if enabled is not True:
             raise SetupNeeded('EXPLICIT_SELECTION_REQUIRED')
         if account_pin is not None and not re.fullmatch(r'[a-f0-9]{64}', account_pin):
             raise SetupNeeded('INVALID_ACCOUNT_PIN')
-        if not 0 < timeout <= 1800:
+        if timeout is not None and not 0 < timeout:
             raise ValueError('Invalid skill worker deadline')
         self.account_pin, self.timeout = account_pin, timeout
         self._selection = (str(self.home), account_pin)
@@ -470,10 +470,10 @@ class WorkspaceSkillRunner:
             process.stdin.write(payload)
             process.stdin.close()
             out, count, remaining = bytearray(), 0, 2
-            deadline = time.monotonic() + self.timeout
+            deadline = None if self.timeout is None else time.monotonic() + self.timeout
             while remaining:
                 check_cancel(cancel)
-                if time.monotonic() >= deadline:
+                if deadline is not None and time.monotonic() >= deadline:
                     raise SetupNeeded('DEADLINE_EXCEEDED')
                 try:
                     stdout, chunk = events.get(timeout=.05)

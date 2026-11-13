@@ -223,7 +223,7 @@ class _TransferOutput:
 
 
 class RcloneRunner:
-    def __init__(self, home, config, *, binary=None, timeout=120, transfer_timeout=86400):
+    def __init__(self, home, config, *, binary=None, timeout=120, transfer_timeout=None):
         self.home, self.config = core.checked_path(home), str(config)
         if binary is None and os.name == 'nt':
             from .windows_native import find_tool
@@ -293,7 +293,8 @@ class RcloneRunner:
                         yield key.data, chunk
 
     def _consume(self, process, operation, output, expected_size, progress, cancel, events, cleanup):
-        deadline = time.monotonic() + (self.transfer_timeout if operation in {'cat', 'copyto'} else self.timeout)
+        duration = self.transfer_timeout if operation in {'cat', 'copyto'} else self.timeout
+        deadline = float('inf') if duration is None else time.monotonic() + duration
         stopped, cleanup_lock = threading.Event(), threading.Lock()
         cancelled, cleaned = [], False
 
@@ -325,7 +326,7 @@ class RcloneRunner:
                     raise cancelled[0]
                 check_cancel(cancel)
                 stream.feed(stdout, chunk)
-            process.wait(timeout=max(.01, deadline - time.monotonic()))
+            process.wait(timeout=None if duration is None else max(.01, deadline - time.monotonic()))
             if cancelled:
                 raise cancelled[0]
             check_cancel(cancel)

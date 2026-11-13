@@ -171,7 +171,7 @@ class PreviewJobs:
                 return self._read(profile,root,path)['cancel']
         result=None;error=None;terminal='failed'
         try:
-            with preview_budget.scope(seconds=float('inf'),cancelled=cancelled):
+            with preview_budget.scope(cancelled=cancelled):
                 result=work()
                 preview_budget.check()
                 with state_lease(base/'state.lock'):

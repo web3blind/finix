@@ -381,6 +381,20 @@ raise SystemExit(worker.main(service_factory=factory))
             self.assertEqual(result['result']['marker'], 'selected')
             self.assertTrue(runner.last_reaped)
 
+    def test_default_worker_survives_elapsed_clock_without_progress(self):
+        import itertools
+        import sys
+        from unittest.mock import patch
+        module = importlib.import_module('finix.workspace_skill_transport')
+        with private_stage() as home:
+            entry = home/'slow_fixture.py'
+            entry.write_text("import sys,time,json\nsys.stdin.readline()\ntime.sleep(.15)\nprint(json.dumps({'result':{'complete':True}}))\n")
+            runner = module.WorkspaceSkillRunner(home)
+            with patch.object(module, 'WORKER', entry), patch('time.monotonic', side_effect=itertools.count(0, 86400)):
+                result = runner._child({'operation':'identity'}, None, runtime=[sys.executable, '-I', '-B'])
+            self.assertTrue(result['result']['complete'])
+            self.assertTrue(runner.last_reaped)
+
     def test_runtime_guard_failure_does_not_suggest_sdk_oauth(self):
         from unittest.mock import patch
         from finix.workspace_drive import WorkspaceError

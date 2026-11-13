@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import uuid
 from . import core, default_recovery as cold, default_recovery_lifecycle as lifecycle
-from .preview_budget import bounded
+from .preview_budget import cancellable
 RecoveryError = cold.RecoveryError
 
 
@@ -142,7 +142,7 @@ class DefaultRecoveryAPI:
     def _base(self, root):
         return root/'cache/finix/default-api'
 
-    @bounded
+    @cancellable
     def prepare(self, profile, service, job, *, consent=False):
         if consent is not True:
             raise RecoveryError('CONSENT_REQUIRED')

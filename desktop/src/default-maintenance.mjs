@@ -54,9 +54,9 @@ export function createDefaultMaintenance(ctx){
   if(v.complete!==true)throw Error('incomplete');
   if(previewSent)return; // An uncertain preview ACK must never mint another plan.
   previewSent=true;hint('preview-pending');
-  const p=await rest(r,'/recovery/default/prepare',{method:'POST',body:{profile_id:profileId,recovery_job:job,consent_prepare:true,preview_contract:'default-preview-job-v1'}});fence(r);consumePreview(r,p);
+  const p=await rest(r,'/recovery/default/prepare',{method:'POST',body:{profile_id:profileId,recovery_job:job,consent_prepare:true,preview_contract:'default-preview-job-v1'}});fence(r);await consumePreview(r,p);
  }
- function consumePreview(r,v){
+ async function consumePreview(r,v){
   fence(r);
   if(!keys(v,['contract','id','state','error','result','cancellable'])||v.contract!=='default-preview-job-v1'||v.id!==job||!['running','succeeded','failed','cancelled','interrupted'].includes(v.state)||typeof v.cancellable!=='boolean')throw Error('preview-job');
   if(v.state==='running'){
@@ -65,6 +65,16 @@ export function createDefaultMaintenance(ctx){
   }
   if(v.state!=='succeeded'){
    if(v.result!==null||!['PREVIEW_DEADLINE','PREVIEW_CANCELLED','PREVIEW_INTERRUPTED','DEFAULT_RECOVERY_FAILED','STALE_PROFILE','BUSY','INCOMPLETE_ACK_REQUIRED','OWNER_NOT_VERIFIED','DEFAULT_AUTORUN_NOT_SUPPORTED','SIBLING_AUTORUN_NOT_SUPPORTED','SDK_VERSION_NOT_SUPPORTED','LOCAL_OWNER_REQUIRED','INVALID_CAPABILITY','INVALID_CANDIDATE','INVALID_IDENTITY','DECRYPT_FAILED','JOB_NOT_PREPARED','NOT_FOUND','ROOT_EPOCH_CHANGED','WRONG_DEFAULT_ROOT','REOPEN_LIVE_OWNER_UNVERIFIED','DEFAULT_RECOVERY_REVIEW_REQUIRED','CONSENT_REQUIRED'].includes(v.error))throw Error('preview-job');
+   if(v.state==='failed'&&v.error==='PREVIEW_DEADLINE'&&v.cancellable===false&&!applySent){
+    // Old versions stopped preparation by time. Keep that failed request and
+    // staging intact; offer ordinary fresh intent, never replay or adopt it.
+    const savedHint=JSON.stringify(ctx.storage?.get(HINT,null));
+    const catalog=await rest(r,'/recovery/catalog');fence(r);
+    if(savedHint!==JSON.stringify(ctx.storage?.get(HINT,null))||catalog?.profile_id!==profileId||!Array.isArray(catalog.items))throw Error('scope');
+    const items=catalog.items.filter(x=>hex(x.id)&&x.complete===true).map(x=>({id:x.id,complete:true}));
+    wipe();job=null;maintenanceId=null;previewSent=false;keySent=false;previewReadOnly=false;cancelPending=false;
+    publish({...INITIAL(),ready:true,items,candidate:items[0]?.id??null,message:'The previous preparation stopped at an old time limit. Its records and staging are preserved. Select a backup and key, then Prepare a new preview. Nothing restarts automatically.'});return;
+   }
    hint('preview-terminal');publish({busy:false,polling:false,ready:false,cancellable:false,message:`Preview preparation stopped (${v.error}). The physical default was not replaced; retained state requires reconciliation before another preparation.`});return;
   }
   if(v.error!==null||v.cancellable!==false)throw Error('preview-job');
@@ -75,7 +85,7 @@ export function createDefaultMaintenance(ctx){
   preview=JSON.parse(JSON.stringify(p));maintenanceId=preview.id;anchor=Object.freeze({maintenanceId,planDigest:preview.preview.plan_digest,rootToken,profileId,registryIdentity,profile:owner.profile,source:owner.source,connection:owner.connection});hint('preview');
   publish({preview:JSON.parse(JSON.stringify(preview)),busy:false,polling:false,cancellable:false,ready:false,message:gate&&preview.apply_enabled?'Review this exact sealed physical-default maintenance plan.':'Prepared preview only. Physical-default Apply is unavailable pending independent review.'});
  }
- async function readPreview(r){const v=await rest(r,`/recovery/default/preview/${job}`);fence(r);consumePreview(r,v);}
+ async function readPreview(r){const v=await rest(r,`/recovery/default/preview/${job}`);fence(r);await consumePreview(r,v);}
  async function readMaintenance(r){
   const v=await rest(r,`/recovery/default/status/${maintenanceId}`);fence(r);
   if(!keys(v,['id','state','error'])||v.id!==maintenanceId||!states.has(v.state)||![null,'DEFAULT_RECOVERY_FAILED'].includes(v.error))throw Error('status');
@@ -129,7 +139,7 @@ export function createDefaultMaintenance(ctx){
   return actions.poll();},
   poll:async()=>{if(disposed||revoked||polling||!state.get().busy||!state.get().polling)return null;const r=revision;let readingJob=false,readingPreview=false;polling=true;try{await registry(r);if(reconnect)await authenticate(r);if(maintenanceId)await readMaintenance(r);else if(previewSent&&job){readingPreview=true;await readPreview(r);}else if(job){readingJob=true;const v=await rest(r,`/recovery/jobs/${job}`);readingJob=false;fence(r);await consume(r,v);}}catch{uncertain(r);if(r===revision){reconnect=false;const checkExisting=readingJob&&!revoked&&equal(owner,snapshot())&&local(owner)&&keySent&&!previewSent&&!maintenanceId&&!applySent&&!cancelPending;publish({polling:previewSent&&!readingPreview&&!maintenanceId&&!applySent,checkExisting,message:checkExisting?'The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated.':'Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried.'});}}finally{if(r===revision)polling=false;}return null;},
   apply:async rendered=>{const s=state.get();if(disposed||s.busy||applySent||!gate||!preview?.apply_enabled||!rendered||JSON.stringify(rendered)!==JSON.stringify(preview)||JSON.stringify(s.preview)!==JSON.stringify(preview))return;const r=revision;applySent=true;wipe();publish({busy:true,polling:true,cancellable:false,message:'Confirming this exact physical-default maintenance plan…'});hint('apply-pending');try{await registry(r);await rest(r,'/recovery/default/apply',{method:'POST',body:{profile_id:profileId,id:preview.id,confirmation:preview.confirmation,consent_apply:true}});fence(r);await readMaintenance(r);}catch{uncertain(r);}},
-  cancel:async()=>{if(disposed||!state.get().busy||!state.get().cancellable||!job||maintenanceId||cancelPending||previewReadOnly)return;const r=revision;cancelPending=true;wipe();publish({cancellable:false});try{await registry(r);const v=await rest(r,previewSent?`/recovery/default/preview/${job}/cancel`:`/recovery/jobs/${job}/cancel`,previewSent?{method:'POST',body:{profile_id:profileId}}:{method:'POST'});fence(r);if(previewSent)consumePreview(r,v);else await consume(r,v);}catch{uncertain(r);}},
+  cancel:async()=>{if(disposed||!state.get().busy||!state.get().cancellable||!job||maintenanceId||cancelPending||previewReadOnly)return;const r=revision;cancelPending=true;wipe();publish({cancellable:false});try{await registry(r);const v=await rest(r,previewSent?`/recovery/default/preview/${job}/cancel`:`/recovery/jobs/${job}/cancel`,previewSent?{method:'POST',body:{profile_id:profileId}}:{method:'POST'});fence(r);if(previewSent)await consumePreview(r,v);else await consume(r,v);}catch{uncertain(r);}},
   clear:()=>wipe()
  };
  const subs=[sdk.host.state.profile,sdk.host.state.connectionId,sdk.host.state.gateway].map(s=>s?.subscribe?.(()=>{if(!equal(owner,snapshot()))reset();})).filter(Boolean);

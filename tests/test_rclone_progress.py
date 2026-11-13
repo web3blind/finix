@@ -33,7 +33,7 @@ class ProgressTests(unittest.TestCase):
 
     def run_child(self, script, operation='copyto', **kwargs):
         self.script.write_text(script)
-        runner = RcloneRunner(self.root, self.config, binary=str(self.binary), transfer_timeout=5)
+        runner = RcloneRunner(self.root, self.config, binary=str(self.binary), transfer_timeout=kwargs.pop('transfer_timeout', 5))
         if os.name == 'nt':
             from finix import windows_native as win
             original = win.popen
@@ -67,6 +67,12 @@ for n in (25, 50, 100):
         self.assertIn('--stats=1s', self.argv)
         self.assertIn('--stats-log-level=ERROR', self.argv)
         self.assertIn('--use-json-log', self.argv)
+
+    def test_transfer_without_deadline_waits_for_real_child(self):
+        import itertools
+        with patch('finix.rclone_storage.time.monotonic', side_effect=itertools.count(0, 86400)):
+            self.run_child('import time; time.sleep(.15)', transfer_timeout=None)
+        self.assertEqual(self.events[-1]['percent'], 100)
 
     def test_cancel_silent_child_is_prompt(self):
         start = time.monotonic()
