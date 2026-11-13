@@ -65,15 +65,15 @@ export function createDefaultMaintenance(ctx){
   }
   if(v.state!=='succeeded'){
    if(v.result!==null||!['PREVIEW_DEADLINE','PREVIEW_CANCELLED','PREVIEW_INTERRUPTED','DEFAULT_RECOVERY_FAILED','STALE_PROFILE','BUSY','INCOMPLETE_ACK_REQUIRED','OWNER_NOT_VERIFIED','DEFAULT_AUTORUN_NOT_SUPPORTED','SIBLING_AUTORUN_NOT_SUPPORTED','SDK_VERSION_NOT_SUPPORTED','LOCAL_OWNER_REQUIRED','INVALID_CAPABILITY','INVALID_CANDIDATE','INVALID_IDENTITY','DECRYPT_FAILED','JOB_NOT_PREPARED','NOT_FOUND','ROOT_EPOCH_CHANGED','WRONG_DEFAULT_ROOT','REOPEN_LIVE_OWNER_UNVERIFIED','DEFAULT_RECOVERY_REVIEW_REQUIRED','CONSENT_REQUIRED'].includes(v.error))throw Error('preview-job');
-   if(v.state==='failed'&&v.error==='PREVIEW_DEADLINE'&&v.cancellable===false&&!applySent){
-    // Old versions stopped preparation by time. Keep that failed request and
-    // staging intact; offer ordinary fresh intent, never replay or adopt it.
+   if(v.state==='failed'&&['PREVIEW_DEADLINE','DEFAULT_RECOVERY_FAILED'].includes(v.error)&&v.cancellable===false&&!applySent){
+    // Keep a known terminal failed preparation and its staging intact.
+    // Offer fresh explicit intent, never replay or adopt the prior request.
     const savedHint=JSON.stringify(ctx.storage?.get(HINT,null));
     const catalog=await rest(r,'/recovery/catalog');fence(r);
     if(savedHint!==JSON.stringify(ctx.storage?.get(HINT,null))||catalog?.profile_id!==profileId||!Array.isArray(catalog.items))throw Error('scope');
     const items=catalog.items.filter(x=>hex(x.id)&&x.complete===true).map(x=>({id:x.id,complete:true}));
     wipe();job=null;maintenanceId=null;previewSent=false;keySent=false;previewReadOnly=false;cancelPending=false;
-    publish({...INITIAL(),ready:true,items,candidate:items[0]?.id??null,message:'The previous preparation stopped at an old time limit. Its records and staging are preserved. Select a backup and key, then Prepare a new preview. Nothing restarts automatically.'});return;
+    publish({...INITIAL(),ready:true,items,candidate:items[0]?.id??null,message:'The previous preparation failed. Its records and staging are preserved. Select a backup and key, then Prepare a new preview. Nothing restarts automatically.'});return;
    }
    hint('preview-terminal');publish({busy:false,polling:false,ready:false,cancellable:false,message:`Preview preparation stopped (${v.error}). The physical default was not replaced; retained state requires reconciliation before another preparation.`});return;
   }

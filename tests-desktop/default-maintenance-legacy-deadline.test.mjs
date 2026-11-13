@@ -12,8 +12,8 @@ function setup(error='PREVIEW_DEADLINE',root='f'.repeat(64)){
   if(p===`/recovery/jobs/${fresh}/key`)return {id:fresh,profile_id:profileId,state:'running'};
  },file:{size:8,arrayBuffer:async()=>{reads++;return new ArrayBuffer(8);}},reads:()=>reads};
 }
-test('known historical deadline permits fresh selection without retirement or automatic work',async()=>{
- const f=setup(),h=await harness(f);await h.maintenance.actions.load();
+for(const error of ['PREVIEW_DEADLINE','DEFAULT_RECOVERY_FAILED']) test(`known terminal ${error} permits fresh selection without automatic work`,async()=>{
+ const f=setup(error),h=await harness(f);await h.maintenance.actions.load();
  assert.equal(h.maintenance.state.get().ready,true);
  assert.deepEqual(f.values.get(HINT),f.saved,'original hint remains until a fresh explicit request');
  assert.equal(h.calls.some(([,o])=>o?.method==='POST'),false);assert.equal(f.reads(),0);

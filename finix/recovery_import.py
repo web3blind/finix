@@ -43,7 +43,7 @@ RUNTIME_ROOTS = frozenset({'installs', 'tools', 'cache', 'models', 'runtimes', '
     'bin', 'node_modules', '.hermes-runtime', '.venv', 'venv'})
 RUNTIME_FILES = frozenset(value.casefold() for value in {'gateway.pid', 'gateway.lock', 'gateway.parked', 'cron.pid',
     'processes.json', 'gateway_state.json', 'auth.lock', 'shared/nous_auth.lock',
-    'shell-hooks-allowlist.json', 'active_profile', 'cron/.tick.lock',
+    'shell-hooks-allowlist.json', 'active_profile', 'cron/.tick.lock', 'kanban/.dispatcher.lock',
     'cron/ticker_heartbeat', 'cron/ticker_last_success',
     'bot-desktop/launcher.pid', 'bot-desktop/env', 'bot-desktop/rfb.sock',
     'bot-desktop/lease.json', 'bot-desktop/lease.lock',
