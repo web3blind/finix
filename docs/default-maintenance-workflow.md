@@ -20,6 +20,10 @@ After an accepted confirmation acknowledgement, Desktop stops its status polling
 
 Deferred verification failures remain readable terminal `refused` outcomes, including through the detached worker entrypoint; they cannot stop the source or become a new Apply capability.
 
+SQLite producer identities use explicit stable roles: the SDK dashboard loads Finix under a synthetic module namespace, while the detached worker uses the ordinary package name. Equal trusted source must produce equal descriptors across those loaders; changed producer source, helper bytes, interpreter identity or SQLite data still fails verification. Earlier namespace-dependent prepared plans are not upgraded into new consent.
+
+Cooperative preparation checks poll the protected durable cancellation state at a short 100 ms cadence instead of reopening it for every hashing block. This is not an operation timeout or idle limit. Before a successful preview is published, the worker still takes a fresh state lease and unconditionally checks durable cancellation and source activation; cancellation accepted after a cached false read cannot become success.
+
 On Windows, CURRENT cache admission also recognizes the SDK loader's `normcase()` spelling of a trusted source filename, but only when it denotes the same native file. Expected bytecode is still freshly compiled from hash-pinned source; cache headers, full structural code comparison, ancestor trust and foreign-filename rejection remain enforced. Cached bytecode is never deserialized into executable code or imported by the verifier. POSIX filename matching is unchanged.
 
 Recovered executable integrations remain parked. The existing exact digest-pinned exemption is only for the current trusted Finix control plane, not archived plugins. Finix does not enable archived plugins to prove status. Active shared autoruns, supervisors and sibling-serving multiplexers remain unsupported. Maintenance does not rename the entire Hermes root, stop unrelated owners, promote sibling profiles or replace shared installations.

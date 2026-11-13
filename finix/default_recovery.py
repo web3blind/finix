@@ -141,15 +141,23 @@ def _sqlite_generation(path, sqlite_temp_dir):
     from gateway.runtime_ownership import exclusive_maintenance,live_runtime_owner
     path=core.checked_path(path)
     if path.name!='state.db': raise RecoveryError('UNSUPPORTED_SQLITE_TARGET')
-    producers=[streaming._connect_source,streaming._sqlite_backup,
-               streaming.sqlite_payload,streaming.sqlite_stage,
-               sqlite_family.physical,sqlite_family._wal_metadata,sqlite_family._admitted_leaf,
-               exclusive_maintenance,live_runtime_owner]
+    # The SDK dashboard gives this package a loader-specific module prefix.
+    # Pin producer roles and source bytes, not that ephemeral import spelling.
+    producers={
+        'finix.streaming._connect_source':streaming._connect_source,
+        'finix.streaming._sqlite_backup':streaming._sqlite_backup,
+        'finix.streaming.sqlite_payload':streaming.sqlite_payload,
+        'finix.streaming.sqlite_stage':streaming.sqlite_stage,
+        'finix.sqlite_family.physical':sqlite_family.physical,
+        'finix.sqlite_family._wal_metadata':sqlite_family._wal_metadata,
+        'finix.sqlite_family._admitted_leaf':sqlite_family._admitted_leaf,
+        'gateway.runtime_ownership.exclusive_maintenance':exclusive_maintenance,
+        'gateway.runtime_ownership.live_runtime_owner':live_runtime_owner}
     if os.name=='nt':
         from . import windows_native as win
-        producers.append(win.connect_source)
-    pins={fn.__module__+'.'+fn.__name__:hashlib.sha256(inspect.getsource(fn).encode()).hexdigest()
-          for fn in producers}
+        producers['finix.windows_native.connect_source']=win.connect_source
+    pins={name:hashlib.sha256(inspect.getsource(fn).encode()).hexdigest()
+          for name,fn in producers.items()}
     def scope():
         from .sqlite_family import physical
         return physical(path)

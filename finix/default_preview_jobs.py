@@ -166,9 +166,18 @@ class PreviewJobs:
     def _execute(self, profile, job, work, retained):
         from .default_recovery_api import cold, activation, public_error, RecoveryError
         root, base, path = self._paths(profile, job)
+        import time
+        last_read=None;cancel_seen=False
         def cancelled():
-            with state_lease(base/'state.lock'):
-                return self._read(profile,root,path)['cancel']
+            nonlocal last_read,cancel_seen
+            now=time.monotonic()
+            # Poll cadence only, never an operation deadline. Reopening the
+            # protected state for every hash block dominates native Windows I/O.
+            if not cancel_seen and (last_read is None or now-last_read>=.1):
+                with state_lease(base/'state.lock'):
+                    cancel_seen=self._read(profile,root,path)['cancel']
+                last_read=now
+            return cancel_seen
         result=None;error=None;terminal='failed'
         try:
             with preview_budget.scope(cancelled=cancelled):

@@ -135,4 +135,46 @@ class PreviewJobTests(unittest.TestCase):
             self.assertEqual(result['state'],'cancelled');self.assertIsNone(result['result'])
 
 
+    def test_hot_checks_do_not_reread_state_and_late_cancel_still_wins(self):
+        from contextlib import nullcontext
+        from finix import preview_budget
+        manager=self.manager();pending=[];counts=[];clock=[100.0]
+        class DeferredThread:
+            def __init__(self,*,target,**kwargs):pending.append(target)
+            def start(self):pass
+        def work():
+            for _ in range(200):preview_budget.check()
+            counts.append(read.call_count)
+            # Another owner cancels after the cached false read, with no clock
+            # advance. The unconditional final lease must reject success.
+            self.manager().cancel(self.profile,'5'*32)
+            return {'sealed':True}
+        with patch('finix.recovery_http.operation_lock',side_effect=lambda *a,**k:nullcontext()),patch('finix.default_preview_jobs.threading.Thread',DeferredThread):
+            manager.begin(self.profile,'5'*32,work)
+        with patch.object(manager,'_read',wraps=manager._read) as read,patch('time.monotonic',side_effect=lambda:clock[0]):
+            pending[0]()
+        result=manager.status(self.profile,'5'*32)
+        self.assertEqual(result['state'],'cancelled');self.assertIsNone(result['result'])
+        self.assertLessEqual(counts[0],2)
+
+    def test_durable_cancel_is_observed_at_next_short_poll(self):
+        from contextlib import nullcontext
+        from finix import preview_budget
+        manager=self.manager();pending=[];clock=[100.0]
+        class DeferredThread:
+            def __init__(self,*,target,**kwargs):pending.append(target)
+            def start(self):pass
+        def work():
+            preview_budget.check()
+            self.manager().cancel(self.profile,'6'*32)
+            clock[0]+=1
+            preview_budget.check()
+            self.fail('durable cancellation was not observed')
+        with patch('finix.recovery_http.operation_lock',side_effect=lambda *a,**k:nullcontext()),patch('finix.default_preview_jobs.threading.Thread',DeferredThread):
+            manager.begin(self.profile,'6'*32,work)
+        with patch('time.monotonic',side_effect=lambda:clock[0]):pending[0]()
+        result=manager.status(self.profile,'6'*32)
+        self.assertEqual(result['state'],'cancelled');self.assertIsNone(result['result'])
+
+
 if __name__=='__main__':unittest.main()
