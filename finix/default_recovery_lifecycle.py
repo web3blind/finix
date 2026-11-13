@@ -540,6 +540,10 @@ def _current_finix(root):
     if actual!=inventory(current): raise RecoveryError('CURRENT_FINIX_CHANGED')
     # Reject all extra executable files in the installed trusted package.
     for path in installed.rglob('*'):
+        # Source distributions also ship tests and release scripts. They are
+        # never part of the CURRENT control-plane exemption copied below.
+        if path.relative_to(installed).parts[0] in {'tests', 'scripts'}:
+            continue
         # rglob deliberately does not descend into POSIX directory symlinks.
         if path.name == '__pycache__' and path.is_symlink():
             raise RecoveryError('CURRENT_FINIX_CHANGED')
