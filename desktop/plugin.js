@@ -10053,14 +10053,13 @@ function createDefaultMaintenance(ctx) {
     poll: async () => {
       if (disposed || revoked || polling || !state.get().busy || !state.get().polling) return null;
       const r = revision;
-      let readingJob = false, readingPreview = false;
+      let readingJob = false;
       polling = true;
       try {
         await registry(r);
         if (reconnect) await authenticate(r);
         if (maintenanceId) await readMaintenance(r);
         else if (previewSent && job) {
-          readingPreview = true;
           await readPreview(r);
         } else if (job) {
           readingJob = true;
@@ -10074,7 +10073,7 @@ function createDefaultMaintenance(ctx) {
         if (r === revision) {
           reconnect = false;
           const checkExisting = readingJob && !revoked && equal3(owner, snapshot3()) && local2(owner) && keySent && !previewSent && !maintenanceId && !applySent && !cancelPending;
-          publish({ polling: previewSent && !readingPreview && !maintenanceId && !applySent, checkExisting, message: checkExisting ? "The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated." : "Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried." });
+          publish({ polling: previewSent && !maintenanceId && !applySent, checkExisting, message: checkExisting ? "The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated." : "Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried." });
         }
       } finally {
         if (r === revision) polling = false;
