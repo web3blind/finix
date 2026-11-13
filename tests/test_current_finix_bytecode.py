@@ -132,6 +132,20 @@ class CurrentBytecodeTests(unittest.TestCase):
         self.cache.write_bytes(original)
         self.assertEqual(life._current_finix(self.root), self.pins)
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows loader filename spelling')
+    def test_windows_loader_case_spelling_requires_same_native_source(self):
+        import marshal
+        from unittest.mock import patch
+        filename = os.path.normcase(str(self.source))
+        self.assertNotEqual(filename, str(self.source))
+        original = self.cache.read_bytes()
+        code = compile(self.source.read_bytes(), filename, 'exec', dont_inherit=True,
+                       optimize=sys.flags.optimize)
+        self.cache.write_bytes(original[:16] + marshal.dumps(code))
+        self.assertEqual(life._current_finix(self.root), self.pins)
+        with patch('os.path.samefile', return_value=False):
+            self.refused()
+
     def test_cache_byte_bound_refused(self):
         with self.cache.open('r+b') as stream:
             stream.truncate(16*1024*1024+1)

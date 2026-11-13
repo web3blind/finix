@@ -37,7 +37,7 @@ def main():
         from finix import default_recovery as cold
         directory=_job(root,job)
         status=_read_status(directory)
-        if status.get('state') not in ('ready','rolled_back_ready','rollback_not_ready','manual_required','reconciliation_required'):
+        if status.get('state') not in ('ready','rolled_back_ready','rollback_not_ready','manual_required','reconciliation_required','refused'):
             prior=status.get('state')
             _write_status(directory,{'state':'refused' if prior in ('registered','acknowledged') else 'interrupted',
                                                 'error':error.code if isinstance(error,cold.RecoveryError) else 'CONTROLLER_FAILED'})

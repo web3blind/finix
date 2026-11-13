@@ -478,7 +478,17 @@ def _source_cache_matches(path, installed, source_pins):
         # Serialize trusted compiler output only. Never pass cached bytes to
         # marshal.load(s), exec, CodeType, or an import loader.
         expected = marshal.dumps(compiled)
-        return _cache_code_matches(cached[16:], expected)
+        if _cache_code_matches(cached[16:], expected): return True
+        if os.name == 'nt':
+            # The SDK/import loader may compile the same native source using
+            # normcase(). Derive this spelling from trusted source, never from
+            # cache metadata, and require the identical native file.
+            filename = os.path.normcase(str(source))
+            if filename != str(source) and os.path.samefile(source, filename):
+                expected = marshal.dumps(compile(data, filename, 'exec',
+                                                dont_inherit=True, optimize=sys.flags.optimize))
+                return _cache_code_matches(cached[16:], expected)
+        return False
     except Exception:
         return False
 
@@ -618,7 +628,8 @@ class ColdController:
         if confirmation!=self.confirmation(engine): raise RecoveryError('CONSENT_REQUIRED')
         consent=confirmation['consent']
         plan=engine._plan()
-        _verify_engine(engine)
+        # The acknowledged worker verifies source/payload before any drain.
+        # Do not repeat the bulk census on the synchronous HTTP ACK path.
         if engine.status()['state']!='prepared': raise RecoveryError('JOB_NOT_PREPARED')
         if Path(plan['root'])!=self.root: raise RecoveryError('WRONG_DEFAULT_ROOT')
         exemption=engine.directory/'current-finix.json'
@@ -778,13 +789,18 @@ def run_job(root,job):
                   owned_runtime_pids=sorted(old.native.runtime_pids) if old.native else [old.child.pid])
             return
         acknowledge()
-        trusted=record.get('trusted_finix')
-        if trusted is not None and trusted!={'digest':_current_finix(root),'plan_digest':engine.plan_digest}:
-            raise RecoveryError('CURRENT_FINIX_CHANGED')
-        if preflight(root,trusted_finix=trusted is not None)!=record['snapshot']: raise RecoveryError('AUTORUN_CHANGED')
-        with writer_fence(root): pass
-        _verify_engine(engine)
-        if identify(root)!=record['owner']: raise RecoveryError('ROOT_EPOCH_CHANGED')
+        try:
+            trusted=record.get('trusted_finix')
+            if trusted is not None and trusted!={'digest':_current_finix(root),'plan_digest':engine.plan_digest}:
+                raise RecoveryError('CURRENT_FINIX_CHANGED')
+            if preflight(root,trusted_finix=trusted is not None)!=record['snapshot']: raise RecoveryError('AUTORUN_CHANGED')
+            with writer_fence(root): pass
+            _verify_engine(engine)
+            if identify(root)!=record['owner']: raise RecoveryError('ROOT_EPOCH_CHANGED')
+        except BaseException as failure:
+            cause=failure.code if isinstance(failure,RecoveryError) else type(failure).__name__
+            state('refused',error=cause)
+            raise
         state('draining')
         drain(root,record['owner'])
         state('stopped')

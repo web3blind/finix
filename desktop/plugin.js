@@ -10086,12 +10086,18 @@ function createDefaultMaintenance(ctx) {
       const r = revision;
       applySent = true;
       wipe();
-      publish({ busy: true, polling: true, cancellable: false, message: "Confirming this exact physical-default maintenance plan\u2026" });
+      publish({ busy: true, polling: false, cancellable: false, message: "Confirming this exact physical-default maintenance plan\u2026" });
       hint("apply-pending");
       try {
         await registry(r);
-        await rest(r, "/recovery/default/apply", { method: "POST", body: { profile_id: profileId, id: preview.id, confirmation: preview.confirmation, consent_apply: true } });
+        const ack = await rest(r, "/recovery/default/apply", { method: "POST", body: { profile_id: profileId, id: preview.id, confirmation: preview.confirmation, consent_apply: true } });
         fence(r);
+        if (!keys(ack, ["id", "state", "error"]) || ack.id !== maintenanceId || !states.has(ack.state) || ![null, "DEFAULT_RECOVERY_FAILED"].includes(ack.error)) throw Error("apply-ack");
+        if (["registered", "acknowledged", "draining", "stopped", "publishing", "published_offline"].includes(ack.state) && ack.error === null) {
+          publish({ polling: false, message: "Maintenance accepted. Closing this Desktop window to prevent automatic backend revival. Reopen Hermes to check the retained result." });
+          globalThis.close();
+          return;
+        }
         await readMaintenance(r);
       } catch {
         uncertain(r);
@@ -10165,7 +10171,7 @@ function DefaultMaintenance({ maintenance }) {
       jsx4("p", { children: `Plan ${p.plan_digest} \xB7 physical-root binding ${p.root_binding}` }),
       jsx4("p", { children: `Replace profile-owned memories and skills, including removal of old-only items: ${p.affected_files} existing members; ${p.removed_files} removals. Other planned incoming profile data is published under the sealed plan.` }),
       jsx4("p", { children: `Keep shared host resources, installations, control plane and sibling profiles. ${p.kept_shared_members} retained top-level members are inventoried; opaque subtrees are not recursively verified or cloned.` }),
-      jsx4("p", { children: "Downtime: applying authorizes a scoped stop of the verified idle default owner and a restart. Active work must be idle before proceeding. Active shared autoruns, supervisors and sibling-serving multiplexers are unsupported; only the admitted inert scope is supported." }),
+      jsx4("p", { children: "Downtime: applying authorizes a scoped stop of the verified idle default owner and a restart. This Desktop window closes after acknowledgement to prevent automatic backend revival; reopen Hermes to check the result. Active work must be idle before proceeding. Active shared autoruns, supervisors and sibling-serving multiplexers are unsupported; only the admitted inert scope is supported." }),
       jsx4("p", { children: "Rollback preserves OLD data. A failed new startup may write data before readiness; allowed late-write variants are preserved as inert custody before OLD is restored. Unknown variants or uncertain stop/ownership require manual preservation, not forced rollback." }),
       jsx4("p", { children: "Storage cost: complete OLD copies, complete current copies and native originals. Custody is included in future backups and retained indefinitely until a separately authorized cleanup. There is no automatic retention expiry." }),
       jsx4("p", { children: "Recovered cron, messaging, hooks, MCP, external secrets and executable plugins remain parked. Only the exact pinned current trusted Finix control plane is exempt; archived plugin code is not enabled for status." }),
