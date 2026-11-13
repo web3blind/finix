@@ -72,7 +72,10 @@ def _inert(config, trusted_finix=False):
     skills=config.get('skills',{})
     if type(skills) is not dict or set(skills)-{'auto_load'} or skills.get('auto_load',[])!=[]: return False
     plugins=config.get('plugins',{})
-    if type(plugins) is not dict or set(plugins)-{'enabled'}: return False
+    if type(plugins) is not dict or set(plugins)-{'enabled','disabled'}: return False
+    # Stock PM PluginSelection emits an empty deny-list even on enable. Only
+    # exact-empty metadata is inert; it grants no executable plugin authority.
+    if 'disabled' in plugins and (type(plugins['disabled']) is not list or plugins['disabled']): return False
     if plugins.get('enabled',[]) not in ([],['finix'] if trusted_finix else []): return False
     cron=config.get('cron',{})
     if type(cron) is not dict or set(cron)-{'provider'} or cron.get('provider','') not in ('','builtin','in-process','inprocess'): return False
