@@ -61,13 +61,17 @@ See [publication status](docs/PUBLICATION-STATUS.md) for the current limits.
 - [Desktop SDK contract](desktop/SDK-CONTRACT.md)
 - [Test restore, new-profile import and explicit activation](docs/RESTORE.md)
 
-Python **3.11–3.14**, **PyYAML >=6,<7**, and separately installed `age` and
-`age-keygen` are required. Pip installs PyYAML as a runtime dependency.
-Optional rclone is not bundled. Google Drive uses only the declared Finix
-OAuth client and Hermes' public credentialed request API; no Google Workspace
-skill token or separate Google Python client libraries are used. Nothing downloads
-executables at runtime. Test in a separate virtual environment, not a running
-Hermes installation.
+Python **3.11–3.14**, the declared Python dependencies, and separately installed
+`age` and `age-keygen` are required. Optional rclone is not bundled. The default
+Google Drive transport uses the declared Finix OAuth client and Hermes' public
+credentialed request API. An explicitly selected alternative uses the compatible
+[Google Workspace skill as authorization/API transport](docs/google-workspace-skill.md);
+Finix still owns encryption, journals, full downloaded-byte verification and restore.
+It neither reads nor copies the skill's credentials. Google client libraries for
+this optional transport are declared in the package and native plugin manifests.
+The skill alternative is a separate compatibility contract, not fulfillment of the
+original Finix-OAuth-only review requirement. Nothing downloads executables at
+runtime. Test in a separate virtual environment, not a running Hermes installation.
 
 Desktop setup: save and verify the recovery file locally; register only its public
 recipient; connect and explicitly apply cloud storage; check the first backup;

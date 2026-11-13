@@ -6,8 +6,10 @@ from urllib.parse import parse_qs, urlsplit
 from .connections import Connections, ConnectionError, PROVIDERS, connections, safe_url
 
 MODES = {'local', 'tunnel', 'server-browser'}
-HELP = ('connect SERVICE local|tunnel|server-browser confirm; SERVICE: workspace|yandex|onedrive|dropbox. '
-        'Confirm the requested provider permissions. Google sign-in: hermes auth add finix:google. '
+HELP = ('connect SERVICE local|tunnel|server-browser confirm; SERVICE: workspace|workspace-skill|yandex|onedrive|dropbox. '
+        'Confirm the requested provider permissions. workspace uses hermes auth add finix:google. '
+        'workspace-skill requires the compatible Google Workspace skill already authorized in this same profile; '
+        'Finix uses the skill API without reading or copying credentials. '
         'Then: connect status ID | choose ID NUMBER | apply ID | cancel ID. '
         'Enter passwords only at the provider; never send codes, callback URLs, tokens or JSON in chat. '
         'Sessions expire after five minutes; apply is explicit and only available after verification.')

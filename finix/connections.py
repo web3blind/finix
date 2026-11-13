@@ -22,8 +22,9 @@ from urllib.parse import urlsplit, parse_qs
 from . import core
 from .rclone_storage import child_env, relative_root
 
-PROVIDERS = {'workspace': 'Google Drive', 'yandex': 'Yandex Disk',
-             'onedrive': 'OneDrive', 'dropbox': 'Dropbox'}
+PROVIDERS = {'workspace': 'Google Drive',
+             'workspace-skill': 'Google Drive (Google Workspace skill)',
+             'yandex': 'Yandex Disk', 'onedrive': 'OneDrive', 'dropbox': 'Dropbox'}
 TTL = 300
 
 
@@ -31,6 +32,21 @@ class ConnectionError(core.FinixError):
     def __init__(self, code):
         self.code = code
         super().__init__('Finix connection: ' + code)
+
+
+def _google_runner(provider, home):
+    if provider == 'workspace-skill':
+        from .workspace_skill_transport import WorkspaceSkillRunner
+        return WorkspaceSkillRunner(home)
+    if provider == 'workspace':
+        from .workspace_drive import WorkspaceRunner
+        return WorkspaceRunner(home)
+    raise ConnectionError('UNKNOWN_PROVIDER')
+
+
+def _google_setup_code(provider):
+    return ('GOOGLE_WORKSPACE_SKILL_SETUP_REQUIRED' if provider == 'workspace-skill'
+            else 'GOOGLE_AUTH_SETUP_REQUIRED')
 
 
 def safe_url(provider, url):
@@ -45,8 +61,8 @@ def safe_url(provider, url):
     query = parse_qs(u.query, keep_blank_values=True)
     if any(k in query for k in ('code', 'access_token', 'refresh_token', 'id_token')):
         return False
-    if provider == 'workspace':
-        return False  # Hermes owns Google authorization; Finix never exposes a callback.
+    if provider in {'workspace', 'workspace-skill'}:
+        return False  # The selected credential owner handles Google authorization.
     return (u.scheme == 'http' and u.netloc == '127.0.0.1:53682' and u.path == '/auth'
             and set(query) == {'state'} and len(query['state']) == 1
             and re.fullmatch(r'[A-Za-z0-9_~.%-]{1,512}', query['state'][0]) is not None)
@@ -122,14 +138,13 @@ class Connections:
         if any(s['public']['status'] in {'working', 'authorize', 'choice', 'verified'}
                for s in self.sessions.values()):
             raise ConnectionError('CONNECTION_BUSY')
-        if provider == 'workspace':
-            from .workspace_drive import WorkspaceRunner
+        if provider in {'workspace', 'workspace-skill'}:
             try:
-                account = WorkspaceRunner(profile.home)('identity')['account_id']
+                account = _google_runner(provider, profile.home)('identity')['account_id']
                 if not isinstance(account, str) or not account:
                     raise ValueError
             except Exception:
-                raise ConnectionError('GOOGLE_AUTH_SETUP_REQUIRED') from None
+                raise ConnectionError(_google_setup_code(provider)) from None
             ident = secrets.token_hex(16)
             self.sessions[profile.profile_id] = {
                 'public': {'id': ident, 'provider': provider, 'status': 'verified', 'folder': folder, 'expires_in': TTL},
@@ -270,13 +285,12 @@ class Connections:
         shutil.rmtree(s['stage'], ignore_errors=True)
 
     def _apply(self, profile, s):
-        if s['public']['provider'] == 'workspace':
-            from .workspace_drive import WorkspaceRunner
+        if s['public']['provider'] in {'workspace', 'workspace-skill'}:
             try:
-                account = WorkspaceRunner(profile.home)('identity')['account_id']
+                account = _google_runner(s['public']['provider'], profile.home)('identity')['account_id']
                 digest = hashlib.sha256(account.encode()).hexdigest()
             except Exception:
-                raise ConnectionError('GOOGLE_AUTH_SETUP_REQUIRED') from None
+                raise ConnectionError(_google_setup_code(s['public']['provider'])) from None
             if not hmac.compare_digest(digest, s.get('account_digest', '')):
                 raise ConnectionError('GOOGLE_ACCOUNT_CHANGED')
         from .backup_jobs import BackupJobs, state_lease, file_lease
@@ -296,8 +310,9 @@ class Connections:
             if owned and job.get('binding') != before_binding:
                 if not jobs._transition(profile, job, before_binding):
                     raise ConnectionError('SETTINGS_CHANGED')
-            if s['public']['provider'] == 'workspace':
+            if s['public']['provider'] in {'workspace', 'workspace-skill'}:
                 cfg['storage'] = 'workspace'
+                cfg['workspace_transport'] = ('skill' if s['public']['provider'] == 'workspace-skill' else 'finix')
                 cfg['workspace_account'] = digest
             else:
                 from .rclone_storage import config_path

@@ -111,7 +111,12 @@ def sha(data):
 def check_license(entries):
     """Require the author's approved MIT grant, not merely an SPDX claim."""
     try:
-        if sha(entries['LICENSE']) != '9115d8e9c32d890495f56a5f71cd4c26098b4d22811139f867dbca3f63eb7867':
+        # Exact approved text in either Git LF or Windows checkout CRLF form.
+        # Accept only these two byte hashes; never rewrite release payload bytes.
+        if sha(entries['LICENSE']) not in {
+            '9115d8e9c32d890495f56a5f71cd4c26098b4d22811139f867dbca3f63eb7867',
+            '8e4add75e585a74ffcf6372f623749f7869ade543e3196f184e2ecb431fe8962',
+        }:
             raise ValueError('Approved MIT LICENSE differs')
         project = tomllib.loads(entries['pyproject.toml'].decode())['project']
         package = json.loads(entries['package.json'])

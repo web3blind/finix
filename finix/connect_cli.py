@@ -106,7 +106,8 @@ class _StdinReader:
 
 def add_parser(commands):
     parser = commands.add_parser('connect', help='Interactive cloud connection; credentials stay in the owning worker')
-    parser.add_argument('service', choices=('workspace', 'yandex', 'onedrive', 'dropbox'))
+    from .connections import PROVIDERS
+    parser.add_argument('service', choices=tuple(PROVIDERS))
     parser.add_argument('--home', required=True, help='Explicit existing owning Hermes profile directory')
     parser.add_argument('--mode', required=True, choices=sorted(MODES))
     parser.add_argument('--confirm', action='store_true', help='Consent to potentially broad cloud read/write/delete scopes')

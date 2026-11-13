@@ -56,8 +56,11 @@ def register_cloud(service,profile):
         saved = read_journal(path)
         if saved is None:
             return
-        if saved.get('credential_authority') != 'finix:google':
-            return  # Legacy Workspace authority is not a Finix OAuth grant.
+        transport = cfg.get('workspace_transport', 'finix')
+        authority = {'finix': 'finix:google', 'skill': 'google-workspace-skill:drive'}.get(transport)
+        if (authority is None or saved.get('credential_authority') != authority
+                or getattr(adapter, 'credential_authority', 'finix:google') != authority):
+            return  # Different transports never adopt each other's journals.
         selected_account = cfg.get('workspace_account')
         if not selected_account or saved.get('account') != selected_account:
             return  # An old journal cannot select or replace the applied account.
@@ -72,6 +75,7 @@ def register_cloud(service,profile):
         def selected():
             current = profile.config()
             if (current.get('storage') != 'workspace'
+                    or current.get('workspace_transport', 'finix') != transport
                     or current.get('workspace_account') != selected_account
                     or adapter._binding() != expected['binding']):
                 raise RecoveryError('INVALID_SOURCE')

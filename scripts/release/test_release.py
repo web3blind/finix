@@ -21,6 +21,19 @@ class ReleaseTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 a.check_license(invalid)
 
+    def test_approved_license_line_endings_are_explicit_and_not_rewritten(self):
+        import json
+        root = Path(__file__).resolve().parents[2]
+        entries = a.select(root, json.loads((root / 'scripts/release/allowlist.json').read_text()))
+        canonical = entries['LICENSE'].replace(b'\r\n', b'\n')
+        for license_bytes in (canonical, canonical.replace(b'\n', b'\r\n')):
+            candidate = dict(entries, LICENSE=license_bytes)
+            before = dict(candidate)
+            a.check_license(candidate)
+            self.assertEqual(candidate, before)
+        with self.assertRaises(ValueError):
+            a.check_license(dict(entries, LICENSE=canonical + b' '))
+
     def test_build_materializes_without_modifying_reviewed_inputs(self):
         import importlib.util
         from unittest.mock import patch
@@ -51,6 +64,26 @@ class ReleaseTests(unittest.TestCase):
                     self.assertEqual(native[name], entries[name], name)
         self.assertNotIn('scripts/release/build.py', native)
         self.assertNotIn('package-lock.json', native)
+
+    def test_archived_native_payload_contains_every_declared_data_file(self):
+        import json
+        import tomllib
+        import zipfile
+        root = Path(__file__).resolve().parents[2]
+        entries = a.select(root, json.loads((root / 'scripts/release/allowlist.json').read_text()))
+        native = a.native_payload(entries)
+        metadata = tomllib.loads(entries['pyproject.toml'].decode())
+        required = {name for files in metadata['tool']['setuptools']['data-files'].values()
+                    for name in files if '*' not in name}
+        self.assertFalse(required - set(native), 'Release selection dropped declared wheel inputs')
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'native.zip'
+            a.archive(archive, native)
+            a.inspect_archive(archive)
+            with zipfile.ZipFile(archive) as package:
+                self.assertFalse(required - set(package.namelist()))
+                for name in required:
+                    self.assertEqual(package.read(name), entries[name], name)
 
     def test_fresh_native_payload_declares_wheel_runtime_requirements(self):
         import json

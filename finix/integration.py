@@ -243,9 +243,17 @@ class Profile:
             return json.loads(core.read_regular(fd, 65536))
 
     def workspace(self):
+        cfg = self.config()
+        transport = cfg.get('workspace_transport', 'finix')
+        if transport == 'skill':
+            from .workspace_skill_transport import WorkspaceSkillDrive
+            return WorkspaceSkillDrive(self.home, self.profile_id, self.root / 'workspace-skill',
+                                       account_digest=cfg.get('workspace_account'))
+        if transport != 'finix':
+            raise core.FinixError('Unsupported Google Drive authorization transport')
         from .workspace_drive import WorkspaceDrive
         return WorkspaceDrive(self.home, self.profile_id, self.root / 'workspace',
-                              account_digest=self.config().get('workspace_account'))
+                              account_digest=cfg.get('workspace_account'))
 
     def rclone(self, cfg=None):
         from .rclone_storage import RcloneStorage
