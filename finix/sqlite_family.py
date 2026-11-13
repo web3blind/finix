@@ -10,7 +10,114 @@ from pathlib import Path
 from . import core
 
 NAMES = ('state.db','state.db-wal','state.db-shm','state.db-journal')
-POLICY = 'sqlite-consistent-v2-aux-lifecycle'
+POLICY = 'sqlite-consistent-v3-sdk-heartbeat-rows'
+
+
+def protected_content(db):
+    """Read a guarded disk snapshot; exempt only the SDK's liveness rows.
+
+    No DELETE, VACUUM, dump execution, or live-database mutation. Rowids, exact
+    storage types, NUL-containing TEXT/BLOB bytes, schema and header settings
+    remain protected. FTS5 is represented by its physical shadow tables.
+    """
+    import hashlib
+    import json
+    import re
+    import sqlite3
+    import struct
+    from .default_recovery import RecoveryError, _preview_check
+    def refuse(): raise RecoveryError('UNSUPPORTED_SQLITE_TARGET')
+    quote=lambda name:'"'+name.replace('"','""')+'"'
+    db.enable_load_extension(False)
+    db.execute('PRAGMA query_only=ON')
+    db.execute('PRAGMA trusted_schema=OFF')
+    db.execute('PRAGMA cache_size=-2048')
+    db.execute('PRAGMA mmap_size=0')
+    db.execute('PRAGMA temp_store=MEMORY')
+    db.execute('PRAGMA reverse_unordered_selects=OFF')
+    schema=db.execute('SELECT type,name,tbl_name,sql FROM main.sqlite_schema ORDER BY type,name').fetchall()
+    heartbeat=[row for row in schema if row[0]=='table' and row[1]=='gateway_heartbeats']
+    if not heartbeat: return None
+    expected="""CREATE TABLE gateway_heartbeats (
+        backend_id TEXT PRIMARY KEY, pid INTEGER NOT NULL,
+        started_at REAL NOT NULL, last_heartbeat REAL NOT NULL,
+        profile TEXT NOT NULL DEFAULT '', host TEXT NOT NULL DEFAULT '')"""
+    normalize=lambda sql:re.sub(r'\s+','',sql).casefold()
+    if len(heartbeat)!=1 or normalize(heartbeat[0][3])!=normalize(expected): refuse()
+    expected_columns=[(0,'backend_id','TEXT',0,None,1,0),(1,'pid','INTEGER',1,None,0,0),
+        (2,'started_at','REAL',1,None,0,0),(3,'last_heartbeat','REAL',1,None,0,0),
+        (4,'profile','TEXT',1,"''",0,0),(5,'host','TEXT',1,"''",0,0)]
+    if db.execute('PRAGMA main.table_xinfo(gateway_heartbeats)').fetchall()!=expected_columns: refuse()
+    db.set_progress_handler(lambda:(_preview_check() or 0),1000)
+    if db.execute('PRAGMA main.integrity_check').fetchall()!=[('ok',)]: refuse()
+    if any(kind=='trigger' and table.casefold()=='gateway_heartbeats'
+           for kind,name,table,sql in schema): refuse()
+    tables=sorted((row for row in db.execute('PRAGMA main.table_list')
+                   if row[0]=='main' and row[2]!='view' and row[1]!='sqlite_schema'),key=lambda row:row[1])
+    for _,name,kind,ncol,without_rowid,strict in tables:
+        if any(row[2].casefold()=='gateway_heartbeats'
+               for row in db.execute('PRAGMA main.foreign_key_list('+quote(name)+')')): refuse()
+    digest=hashlib.sha256()
+    def feed(tag,value):
+        digest.update(tag);digest.update(struct.pack('>Q',len(value)));digest.update(value)
+    feed(b'P',POLICY.encode())
+    for row in schema: feed(b'S',json.dumps(row,ensure_ascii=True,separators=(',',':')).encode())
+    for pragma in ('schema_version','user_version','application_id','encoding','page_size','auto_vacuum'):
+        feed(b'H',json.dumps([pragma,db.execute('PRAGMA main.'+pragma).fetchone()[0]]).encode())
+    def scalar(value):
+        if value is None: feed(b'N',b'')
+        elif type(value) is int: feed(b'I',struct.pack('>q',value))
+        elif type(value) is float: feed(b'F',struct.pack('>d',value))
+        elif type(value) is str: feed(b'T',value.encode('utf-8','surrogatepass'))
+        elif type(value) is bytes: feed(b'B',value)
+        else: refuse()
+    definitions={name:sql for kind,name,table,sql in schema if kind=='table'}
+    for _,name,kind,ncol,without_rowid,strict in tables:
+        _preview_check()
+        if name=='gateway_heartbeats': continue
+        feed(b'D',name.encode('utf-8'))
+        if kind=='virtual':
+            if not re.search(r'\bUSING\s+fts5\s*\(',definitions.get(name) or '',re.I): refuse()
+            continue
+        if kind not in ('table','shadow'): refuse()
+        columns=db.execute('PRAGMA main.table_xinfo('+quote(name)+')').fetchall()
+        if not columns or any(column[6]!=0 for column in columns): refuse()
+        names=[column[1] for column in columns]
+        if without_rowid:
+            # Incremental BLOB I/O is unavailable for WITHOUT ROWID tables.
+            # Bound the complete SQLite record before it can be materialized.
+            limit=db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,8*1024*1024)
+            try:
+                keys=[c[1] for c in sorted(columns,key=lambda c:c[5]) if c[5]]
+                if not keys: refuse()
+                # A primary-table scan avoids sorting mixed ASC/DESC keys and
+                # materializing the complete table. SQLite version is pinned.
+                for row in db.execute('SELECT '+','.join(map(quote,names))+' FROM main.'+quote(name)+' NOT INDEXED'):
+                    _preview_check();feed(b'R',b'')
+                    for value in row: scalar(value)
+            finally: db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,limit)
+            continue
+        alias=next((alias for alias in ('rowid','_rowid_','oid') if alias not in {n.casefold() for n in names}),None)
+        if alias is None: refuse()
+        expressions=[]
+        for column in names:
+            q=quote(column)
+            expressions.extend(('typeof('+q+')',"CASE WHEN typeof("+q+") IN ('integer','real') THEN "+q+' ELSE NULL END'))
+        query='SELECT '+quote(alias)+','+','.join(expressions)+' FROM main.'+quote(name)+' ORDER BY '+quote(alias)
+        for row in db.execute(query):
+            _preview_check();feed(b'R',struct.pack('>q',row[0]))
+            for index,column in enumerate(names):
+                kind,value=row[1+index*2:3+index*2]
+                if kind in ('null','integer','real'): scalar(value)
+                elif kind in ('text','blob'):
+                    # blobopen also streams TEXT in its original database encoding.
+                    with db.blobopen(name,column,row[0],readonly=True) as blob:
+                        digest.update(b'T' if kind=='text' else b'B')
+                        digest.update(struct.pack('>Q',len(blob)))
+                        while chunk:=blob.read(1024*1024):
+                            _preview_check();digest.update(chunk)
+                else: refuse()
+    return digest.hexdigest()
 
 
 def _admitted_leaf(path):
@@ -126,12 +233,18 @@ def validate_policy(p):
         if p['target_entries']['state.db'] is not None: raise RecoveryError('INVALID_JOURNAL')
         return
     if type(g) is not dict or g.get('producer_pins')!=policy['capture_pins']: raise RecoveryError('INVALID_JOURNAL')
-    if (type(g) is not dict or set(g)!={'kind','native_identity','snapshot_sha256',
+    if (type(g) is not dict or set(g)!={'kind','native_identity','snapshot_sha256','protected_content_sha256','source_pragmas',
          'capture_algorithm_version','producer_pins','family_names','shm_authority'}
         or g['kind']!=POLICY or g['family_names']!=list(NAMES)
         or g['shm_authority']!='non-data-runtime-derived'
         or g['capture_algorithm_version']!='guarded-disk-online-backup-v1'
-        or not _hex(g['snapshot_sha256']) or type(g['native_identity']) is not list
+        or type(g['source_pragmas']) is not dict
+        or set(g['source_pragmas'])!={'schema_version','user_version','application_id','encoding','page_size','auto_vacuum'}
+        or any(type(g['source_pragmas'][key]) is not int for key in g['source_pragmas'] if key!='encoding')
+        or g['source_pragmas']['encoding'] not in ('UTF-8','UTF-16le','UTF-16be')
+        or not _hex(g['snapshot_sha256'])
+         or (g['protected_content_sha256'] is not None and not _hex(g['protected_content_sha256']))
+         or type(g['native_identity']) is not list
         or len(g['native_identity'])!=2 or any(type(i) is not int or i<0 for i in g['native_identity'])
         or type(g['producer_pins']) is not dict):
         raise RecoveryError('INVALID_JOURNAL')

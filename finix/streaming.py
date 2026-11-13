@@ -205,10 +205,15 @@ def memory_sqlite_snapshot(fd, parent, name):
 
 
 @contextmanager
-def sqlite_payload(fd, parent, name, sqlite_temp_dir, cancel, progress):
+def sqlite_payload(fd, parent, name, sqlite_temp_dir, cancel, progress, *, metadata=None, snapshot_inspect=None):
     from . import core
     source = _connect_source(fd, parent, name)
     try:
+        if metadata is not None:
+            # Capture header settings from the SAME pinned read transaction.
+            # sqlite3_backup may rewrite the destination's schema cookie.
+            metadata.update({key:source.execute('PRAGMA main.'+key).fetchone()[0]
+                for key in ('schema_version','user_version','application_id','encoding','page_size','auto_vacuum')})
         size = (source.execute('pragma page_count').fetchone()[0]
                 * source.execute('pragma page_size').fetchone()[0])
         check_cancel(cancel)
@@ -220,6 +225,10 @@ def sqlite_payload(fd, parent, name, sqlite_temp_dir, cancel, progress):
             try:
                 destination.execute('pragma journal_mode=OFF')
                 _sqlite_backup(source, destination, cancel, progress)
+                if snapshot_inspect is not None:
+                    # Inspect the already-owned private snapshot connection; do
+                    # not resolve /proc/self/fd capability paths as ancestry.
+                    snapshot_inspect(destination)
             finally:
                 destination.close()
             with snapshot.open('rb') as stream:

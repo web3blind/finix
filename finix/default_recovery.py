@@ -174,19 +174,23 @@ def _sqlite_generation(path, sqlite_temp_dir):
             else:
                 parent=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
                 guards.callback(os.close,parent)
-            digest=hashlib.sha256()
-            with streaming.sqlite_payload(fd,parent,path.name,sqlite_temp_dir,None,None) as (stream,size):
+            digest=hashlib.sha256();source_pragmas={};snapshot_metadata={}
+            def inspect_snapshot(db):
+                snapshot_metadata['protected_content_sha256']=sqlite_family.protected_content(db)
+            with streaming.sqlite_payload(fd,parent,path.name,sqlite_temp_dir,None,None,
+                    metadata=source_pragmas,snapshot_inspect=inspect_snapshot) as (stream,size):
                 count=0
                 while chunk:=stream.read(1024*1024):
                     _preview_check()
                     digest.update(chunk);count+=len(chunk)
                 if count!=size: raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
+            protected=snapshot_metadata['protected_content_sha256']
             final=os.fstat(fd)
             if final.st_nlink!=1 or identity!=[final.st_dev,final.st_ino] or _identity(path)!=identity:
                 raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
         scope()  # reader is CLOSED: validate its newly derived auxiliaries too
-    return dict(kind='sqlite-consistent-v2-aux-lifecycle',native_identity=identity,
-        snapshot_sha256=digest.hexdigest(),capture_algorithm_version='guarded-disk-online-backup-v1',
+    return dict(kind=sqlite_family.POLICY,native_identity=identity,
+        snapshot_sha256=digest.hexdigest(),protected_content_sha256=protected,source_pragmas=source_pragmas,capture_algorithm_version='guarded-disk-online-backup-v1',
         producer_pins=dict(sqlite_version=sqlite3.sqlite_version,functions=pins,helper_module=_sqlite_helper_pin(),
             runtime=dict(executable=str(Path(sys.executable).resolve()),
                          executable_leaf=_leaf(Path(sys.executable).resolve()),
@@ -197,7 +201,8 @@ def _sqlite_generation(path, sqlite_temp_dir):
 
 def _verify_sqlite_generation(path, sqlite_temp_dir, sealed):
     """Compare without changing the sealed object or granting new consent."""
-    if type(sealed) is not dict or sealed.get('kind')!='sqlite-consistent-v2-aux-lifecycle':
+    from . import sqlite_family
+    if type(sealed) is not dict or sealed.get('kind')!=sqlite_family.POLICY:
         raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
     path=core.checked_path(path)
     if _identity(path)!=sealed.get('native_identity'):
@@ -206,7 +211,10 @@ def _verify_sqlite_generation(path, sqlite_temp_dir, sealed):
         current=_sqlite_generation(path,sqlite_temp_dir)
     except OSError:
         raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED') from None
-    if current!=sealed: raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
+    compared_current=dict(current);compared_sealed=dict(sealed)
+    if current.get('protected_content_sha256') is not None and sealed.get('protected_content_sha256') is not None:
+        compared_current.pop('snapshot_sha256');compared_sealed.pop('snapshot_sha256')
+    if compared_current!=compared_sealed: raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
     return current
 
 

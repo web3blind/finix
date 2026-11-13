@@ -41,7 +41,7 @@ class QuiescenceContractTests(unittest.TestCase):
             if os.path.lexists(str(path)+s) else None
             for s in ('-wal','-shm','-journal')}
         print('SCOPE_IMMEDIATELY_AFTER_SDK_CLOSE',scope_after_close,flush=True)
-        self.assertEqual(sealed['kind'],'sqlite-consistent-v2-aux-lifecycle')
+        self.assertEqual(sealed['kind'],'sqlite-consistent-v3-sdk-heartbeat-rows')
         self.assertIn('runtime',sealed['producer_pins'])
         self.assertEqual(sealed['family_names'],['state.db','state.db-wal','state.db-shm','state.db-journal'])
         self.assertIsNone(scope_after_close['-wal'])
