@@ -223,9 +223,11 @@ class SkillImportClosure:
     unreviewed sibling (including dependency packages) into executable input.
     This policy stays installed through dynamic build_service/media imports.
     """
-    def __init__(self, home):
+    def __init__(self, skill):
         import sys
-        self.home = Path(home).resolve(strict=True)
+        # The owning profile may also contain the natively trusted SDK runtime
+        # and Finix plugin. Exclude the entire unpinned Skill tree, not its home.
+        self.skill = Path(skill).resolve(strict=True)
         self.paths = [p for p in sys.path if p and self.outside(p)]
         import types
         for key, module in list(sys.modules.items()):
@@ -239,7 +241,7 @@ class SkillImportClosure:
 
     def outside(self, path):
         try:
-            Path(path).resolve().relative_to(self.home)
+            Path(path).resolve().relative_to(self.skill)
             return False
         except ValueError:
             return True
@@ -277,7 +279,7 @@ def load_skill(skill):
         if hashlib.sha256(source.replace(b'\r\n', b'\n')).hexdigest() != digest:
             raise SetupNeeded('SKILL_CONTRACT_CHANGED')
         buffers[filename] = compile(source, str(skill/'scripts'/filename), 'exec')
-    closure = SkillImportClosure(expected_home)
+    closure = SkillImportClosure(skill)
     sys.meta_path[:] = [BuiltinImporter, FrozenImporter, closure]
     # Resolve the genuine public runtime helper before exposing Skill code. If
     # absent, the pinned _hermes_home's documented standalone fallback applies.

@@ -25,9 +25,10 @@ class BindingTests(unittest.TestCase):
             (skill/relative).write_bytes((Path(installed)/relative).read_bytes())
         return home, skill
 
-    def entry(self, root, source):
+    def entry(self, root, source, *, code_root=None):
         path = root/'offline_entry.py'
-        path.write_text('import sys\nsys.path.insert(0, '+repr(str(Path(__file__).resolve().parents[1]))+')\n'+'''import builtins, io, socket
+        code_root = code_root or Path(__file__).resolve().parents[1]
+        path.write_text('import sys\nsys.path.insert(0, '+repr(str(code_root))+')\n'+'''import builtins, io, socket
 _original_open=builtins.open
 def _offline_open(file, *args, **kwargs):
  if any(s in str(file) for s in ('google_token', 'client_secret', 'auth.json')):
@@ -70,18 +71,61 @@ raise SystemExit(main(service_factory=factory))
             self.assertEqual(error.exception.code, 'BINDING_CHANGED')
             self.assertFalse(marker.exists(), 'zero service/credential construction')
             self.assertTrue(runner.last_reaped)
+    def test_owning_profile_nested_runtime_and_finix_are_not_skill_code(self):
+        with private_stage() as root:
+            home, skill = self.fixture(root)
+            plugins = home/'plugins'
+            shutil.copytree(Path(transport.__file__).parent, plugins/'finix',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            runtime = home/'installs'/'runtime'
+            runtime.mkdir(parents=True)
+            (runtime/'_finix_runtime_cached.py').write_text('VALUE = "cached"\n')
+            (runtime/'_finix_runtime_late.py').write_text('VALUE = "late"\n')
+            entry = self.entry(root, '''import json, os
+from pathlib import Path
+sys.path.insert(0, RUNTIME)
+import _finix_runtime_cached as cached
+from finix import workspace_skill_transport as transport
+assert cached.__spec__.origin == cached.__file__
+assert Path(cached.__file__).is_relative_to(Path(RUNTIME))
+assert Path(transport.__file__).is_relative_to(Path(PLUGINS))
+request=json.loads(sys.stdin.readline())
+assert len(transport.contract_files(request['skill'])) == 3
+try:
+ module=transport.load_skill(request['skill'])
+ import _finix_runtime_late as late
+ assert cached.VALUE == 'cached' and late.VALUE == 'late'
+ assert Path(late.__spec__.origin).is_relative_to(Path(RUNTIME))
+ assert module.HERMES_HOME == Path(os.environ['HERMES_HOME'])
+ print(json.dumps({'result': {'loaded': True}}))
+except transport.SetupNeeded as exc:
+ print(json.dumps({'result': {'error': exc.code}}))
+'''.replace('RUNTIME', repr(str(runtime))).replace('PLUGINS', repr(str(plugins))), code_root=plugins)
+            runner = transport.WorkspaceSkillRunner(home)
+            with patch.object(transport, 'WORKER', entry):
+                response = runner._child({'skill': str(skill)}, None)
+            self.assertEqual(response, {'result': {'loaded': True}})
+            self.assertEqual(runner.last_exit_code, 0)
+            self.assertTrue(runner.last_reaped)
+
     def test_unpinned_siblings_never_enter_import_closure(self):
-        for sibling in ('hermes_constants', 'googleapiclient', 'shutil'):
-            with self.subTest(sibling=sibling), private_stage() as root:
+        cases = ((name, directory, package)
+                 for name in ('hermes_constants', 'googleapiclient', 'shutil')
+                 for directory in ('.', 'scripts') for package in (False, True))
+        for sibling, directory, package in cases:
+            with self.subTest(sibling=sibling, directory=directory, package=package), private_stage() as root:
                 home, skill = self.fixture(root)
                 marker = root/'unpinned-executed'
                 code = 'from pathlib import Path\nimport os\nPath('+repr(str(marker))+').write_text("executed")\n'
                 if sibling == 'hermes_constants':
                     code += 'def get_hermes_home():return Path(os.environ["HERMES_HOME"])\ndef display_hermes_home():return str(get_hermes_home())\n'
-                (skill/'scripts'/(sibling+'.py')).write_text(code)
+                source = skill/directory/(sibling+'/__init__.py' if package else sibling+'.py')
+                source.parent.mkdir(exist_ok=True)
+                source.write_text(code)
                 entry = self.entry(root, '''import json, importlib
 from finix.workspace_skill_transport import load_skill
 request=json.loads(sys.stdin.readline())
+sys.path.insert(0, request['skill'])  # Even a pre-Skill path inside the tree is excluded.
 module=load_skill(request['skill'])
 try:importlib.import_module(SIBLING)
 except ModuleNotFoundError:pass
