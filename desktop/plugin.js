@@ -9924,6 +9924,7 @@ function createDefaultMaintenance(ctx) {
         fence(r);
         if (history?.scope !== "stored" || !Array.isArray(history.sessions) || history.sessions.length > 200 || !history.sessions.every((x) => typeof x?.id === "string" && x.id.length > 0 && x.id.length <= 512)) throw Error("history");
         publish({ verified: true, busy: false, polling: false, message: "Physical default READY observed and its exact stock stored-history route is readable. Full historical metadata equality and AI-turn readiness are not claimed." });
+        hint("terminal");
       } catch {
         fence(r);
         publish({ verified: false, message: "Physical default READY was observed, but exact stock default/history-route verification failed. Usable recovery is not yet confirmed; duplicate Apply remains blocked." });
@@ -9948,6 +9949,7 @@ function createDefaultMaintenance(ctx) {
           if (hex(saved.maintenanceId, 32)) {
             maintenanceId = saved.maintenanceId;
             applySent = true;
+            anchor = Object.freeze({ maintenanceId, rootToken, profileId, registryIdentity, profile: owner.profile, source: owner.source, connection: owner.connection });
             publish({ busy: true, polling: true });
             await readMaintenance(r);
             return null;
@@ -10153,7 +10155,7 @@ function DefaultMaintenance({ maintenance }) {
   if (sdk6.host.state.connectionId) sdk6.useValue(sdk6.host.state.connectionId);
   const { value: s, actions: a } = maintenance.view();
   sdk6.useQuery?.({ queryKey: ["finix", "default-maintenance", "load", ...s.scope], queryFn: () => a.load(), enabled: !s.ready && !s.busy && !s.preview, retry: false, staleTime: Infinity, refetchOnWindowFocus: false });
-  sdk6.useQuery?.({ queryKey: ["finix", "default-maintenance", "job", ...s.scope], queryFn: () => a.poll(), enabled: s.busy && s.polling, retry: false, refetchInterval: s.busy && s.polling ? 1e3 : false, refetchOnWindowFocus: false });
+  sdk6.useQuery?.({ queryKey: ["finix", "default-maintenance", "job", ...s.scope], queryFn: () => a.poll(), enabled: s.busy && s.polling, retry: false, refetchInterval: s.busy && s.polling ? 1e3 : false, refetchIntervalInBackground: true, refetchOnWindowFocus: false });
   useEffect4(() => () => maintenance.actions.clear(), [maintenance]);
   const p = s.preview?.preview;
   return jsxs4("section", { "aria-label": "Finix physical-default maintenance", style: { padding: 16, overflow: "auto", height: "100%" }, children: [

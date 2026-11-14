@@ -1,5 +1,86 @@
 # Ordinary Restore security contract — first integration slice
 
+## Current SDK writer coordination files
+
+The exact top-level `.backup.lock` and `.checkpoints.lock` names are CURRENT SDK coordination resources, not incoming profile data. Their installed producers are `writer_fence`/`runtime_state._lock` and `tools.checkpoint_pruning.store_lock_path`. Backup capture and archive verification remain unchanged: archived bytes remain available in the inert copy and are reported as source shared resources, but true-default promotion never installs those archived lock markers.
+
+Retain existing target lock-file identities as opaque current control-plane members. Do not hash or copy their bytes while the actual SDK writer fence is held: native Windows byte-range locks deny even reads of empty locked files through another handle. Keep the fence held through publication/rollback; do not delete, unlock, truncate, chmod/adopt, or replace a CURRENT coordination file to make restoration succeed. Archived markers never confer current lock ownership. This rule also preserves the coordination namespace on POSIX; passing advisory-lock reads is not permission to replace its inode.
+
+This is an exact-name, top-level classification, not a `.lock` wildcard. Ordinary files such as `.user-data.lock`, suffix near-misses, and nested `notes/.backup.lock` retain their existing profile-data behavior. All other root/source/consent/identity, SQLite-family, rollback, and same-UID operating conditions remain unchanged. Opaque kept-member metadata is not a claim that every retained subtree is recursively verified.
+
+## SQLite runtime process-image pin
+
+On Windows, bind the generation producer to the current kernel process image from `GetModuleFileNameW(NULL)`, retaining its exact file identity, size, SHA-256 and Python version. The supported SDK can host the selected environment through the base Python image while a detached controller uses its venv redirector; `sys.executable` then spells different launcher files although the executing image is identical. This is not an executable allowlist or version-only comparison: a different image identity/hash still invalidates the plan. Failure/truncation of native image discovery fails closed. POSIX keeps the existing resolved `sys.executable` policy. No protected-content, schema, user-row, SQLite-family, source, consent or helper/function pin is exempted or rewritten.
+
+## Native Desktop polling and read-only reopen continuity
+
+An already admitted maintenance job may keep its status query active while the
+window is hidden. The existing busy/polling, disposal, source, registry, epoch,
+key-dispatch and mutation-once fences remain authoritative; enabling the SDK's
+background interval does not start idle work or consume Apply consent.
+
+A reopened applied-operation hint grants only an exact status read. After fresh
+capabilities and registry authentication, retain a read-only physical-root anchor
+from those current responses, never from saved consent. A same-profile/local-source
+SDK activation-epoch transition may then reauthenticate that exact root and resume
+GET-only status/history verification. A changed root token, registry, profile or
+connection still revokes continuation. The key and preview remain absent and
+Apply remains consumed; this anchor grants no creation, key, cancellation or Apply
+authority and never revives a historical native capability. Only after fresh READY
+and exact stock history-route verification, mark the nonsecret UI hint terminal.
+Do not edit native journals or receipts. A later fresh client may show a new catalog,
+but still needs a newly selected key, Prepare intent and separate Apply consent.
+
+## Native default-journal creation and owned-context census
+
+Create and privately admit `cache/finix/default-recovery` before its per-job child;
+Python recursive mkdir does not apply the leaf mode to missing parents. Existing
+nonprivate journal directories still refuse without chmod or adoption. The test
+uses a separate native child with umask 022, not an agent-wide mask change.
+For POSIX owned `memories`/`skills` census only, reuse the existing retained
+owner-only profile-root guard: SDK-created 0755 descendants remain unreachable
+by other UIDs. The exact private boundary and traversed ownership/no-follow/
+nonwritability checks remain required; an unrelated or nonprivate root and
+writable descendant refuse. Ordinary inert-copy inventory retains its strict
+private-leaf check; native Windows DACL semantics remain unchanged.
+
+## Exact stock SDK config metadata admission (2026-11-14)
+
+True-default maintenance admits the optional literal integer `_config_version: 52`
+emitted/preserved by the inspected SDK config_defaults/save_config producers.
+Other versions, booleans, floats, strings and malformed markers fail closed; the
+marker's presence does not admit any additional configuration or migration.
+The only admitted `plugins.entries` mapping is exactly
+`finix: {allow_tool_override: false}`, with literal boolean false, and only with
+the existing trusted CURRENT Finix exemption and exact `enabled: [finix]` list.
+This SDK enable-policy producer explicitly denies tool override; its consumer
+grants via truthy legacy values or additional capability grants, neither admitted
+here. Empty/malformed entries, foreign plugins, unknown fields and other grants
+remain refused. Neither marker nor denial grants executable authority. Existing
+SDK pins, sibling admission, read-only preflight and config digest binding remain.
+No protective metadata is stripped and no SDK/profile is rewritten by admission.
+
+## Scoped PM aliases and selected CURRENT Workspace helper (2026-11-14)
+
+POSIX capture classifies only exact PM direct-root generation aliases as layout
+data. Metadata directories reopened from root must match every retained traversal
+ancestor; bin aliases additionally match the retained bin parent. Traversal checks
+directory membership again on return, including replacement after classification.
+No alias target is opened, no metadata grants execution authority, and regular
+payload, unknown links/special files and Windows reparse refusal remain unchanged.
+
+True-default replacement may keep only the three existing files of the same-profile,
+explicitly selected, compatible CURRENT google-workspace helper: SKILL.md,
+scripts/google_api.py and scripts/_hermes_home.py. Existing kept-target records seal
+raw hashes, native leaves, ancestor bindings and selection/account coordinates.
+Checks precede registration, worker drain, publication, restart and success commit;
+changed raw bytes/identities/selection require reprepare, never fresh adoption.
+Archived helpers and unrelated current executable skills receive no exemption.
+Rollback touches only its sealed ordinary DATA names and keeps CURRENT native
+objects; cancellation and post-READY reconciliation retain their existing rules.
+These are defined-boundary checks, not an atomic hostile same-UID mutation claim.
+No release gate, resource floor or public SDK authority is changed.
+
 ## M08 `runtime-attempt-preserve-v1` (plan4/journal3; review gate CLOSED)
 
 Only the initially admitted isolated real-default root with the existing empty/inert

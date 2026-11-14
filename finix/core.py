@@ -260,6 +260,85 @@ def read_regular(fd, limit=MAX_BYTES):
     return data
 
 
+def _pm_runtime_alias(rootfd, parent, relative, info, *, ancestry):
+    """Omit only POSIX aliases in PM's direct-root uv virtualenv layout.
+
+    Unlike app environments these generations have no enclosing `venv` name.
+    Metadata is a layout check, NOT credential/execution authority: never follow
+    a link, read its target, exclude a regular file, or skip a generation tree.
+    Unknown layouts keep the ordinary fail-closed special-file policy.
+    """
+    match = re.fullmatch(
+        r'(installs/[0-9a-f]{16}/pm-runtime/generations/[0-9a-f]{32})/'
+        r'(lib64|bin/python(?:3(?:[.][0-9]+)?)?)', relative)
+    if match is None or not stat.S_ISLNK(info.st_mode):
+        return False
+    try:
+        with ExitStack() as stack:
+            generation = rootfd
+            prefix = ''
+            for part in match[1].split('/'):
+                generation = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                     dir_fd=generation)
+                stack.callback(os.close, generation)
+                prefix = f'{prefix}/{part}' if prefix else part
+                # O_NOFOLLOW only binds this reopen to its current name. It
+                # must also be the object retained by the actual traversal.
+                if fingerprint(os.fstat(generation))[:3] != fingerprint(os.fstat(ancestry[prefix]))[:3]:
+                    return False
+            if match[2].startswith('bin/'):
+                child = os.open('bin', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                dir_fd=generation)
+                stack.callback(os.close, child)
+                if fingerprint(os.fstat(child))[:3] != fingerprint(os.fstat(parent))[:3]:
+                    return False
+            elif fingerprint(os.fstat(generation))[:3] != fingerprint(os.fstat(parent))[:3]:
+                return False
+
+            def record(name):
+                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=generation)
+                stack.callback(os.close, fd)
+                return read_regular(fd, 16384)
+
+            # A singleton pairs tuple also rejects duplicate JSON keys.
+            marker = json.loads(record('pm-runtime.json'), object_pairs_hook=tuple)
+            if (type(marker) is not tuple or len(marker) != 1 or marker[0][0] != 'inputs'
+                    or type(marker[0][1]) is not str
+                    or re.fullmatch('[0-9a-f]{64}', marker[0][1]) is None
+                    or record('.lease-managed') != b''):
+                return False
+            config = {}
+            for line in record('pyvenv.cfg').decode('utf8').splitlines():
+                key, sep, value = line.partition('=')
+                key, value = key.strip(), value.strip()
+                if not sep or key in config:
+                    return False
+                config[key] = value
+            version = config.get('version_info', '')
+            home = config.get('home', '')
+            # SDK pm.packages.Python: POSIX binary_rel = bin/python3; the
+            # default store entry is python-<version+build>-<target>. No arbitrary
+            # home/target supplied by a forged config gains an exclusion.
+            if (re.fullmatch(r'3[.][0-9]+[.][0-9]+', version) is None
+                    or re.fullmatch(r'/[^\n]+/tools/python-' + re.escape(version)
+                                    + r'[+][0-9]+-linux-(?:x64|arm64)/bin', home) is None
+                    or not safe_name(home[1:])
+                    or config.get('implementation') != 'CPython'
+                    or config.get('include-system-site-packages') != 'false'
+                    or config.get('relocatable') != 'true'):
+                return False
+            targets = {'lib64': 'lib', 'bin/python': home + '/python3',
+                       'bin/python3': 'python',
+                       'bin/python' + version.rsplit('.', 1)[0]: 'python'}
+            target = os.readlink(relative.rsplit('/', 1)[-1], dir_fd=parent)
+            return (targets.get(match[2]) == target
+                    and fingerprint(info) == fingerprint(os.stat(
+                        relative.rsplit('/', 1)[-1], dir_fd=parent, follow_symlinks=False)))
+    except (OSError, ValueError, UnicodeError, FinixError):
+        return False
+
+
 def scan(rootfd, directory_guard=None):
     """Open every included component relative to anchored directory descriptors."""
     if os.name == 'nt':
@@ -269,6 +348,7 @@ def scan(rootfd, directory_guard=None):
         inventory(rootfd, result)
         return result
     result = {}
+    ancestry = {'': rootfd}
 
     def walk(fd, prefix=''):
         if directory_guard is not None:
@@ -287,8 +367,14 @@ def scan(rootfd, directory_guard=None):
                 try:
                     if fingerprint(s)[:3] != fingerprint(os.fstat(child))[:3]:
                         raise FinixError('Source changed during discovery')
+                    ancestry[relative] = child
                     walk(child, relative)
+                    # Also fence substitutions after an alias classifier has
+                    # returned, before ordinary payloads are later reopened.
+                    if fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False))[:3] != fingerprint(os.fstat(child))[:3]:
+                        raise FinixError('Source changed during discovery')
                 finally:
+                    ancestry.pop(relative, None)
                     os.close(child)
             elif stat.S_ISREG(s.st_mode) and allowed(relative):
                 child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
@@ -298,6 +384,8 @@ def scan(rootfd, directory_guard=None):
                     result[relative] = discovered_source(child, fd, name, relative=relative)
                 finally:
                     os.close(child)
+            elif _pm_runtime_alias(rootfd, fd, relative, s, ancestry=ancestry):
+                continue
             else:
                 raise FinixError('Included source contains a symlink or special file')
     walk(rootfd)

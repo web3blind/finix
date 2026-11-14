@@ -11,7 +11,7 @@ class RegistrationAckTests(TestCase):
         from finix import core,default_recovery_lifecycle as life
         from hermes_constants import get_default_hermes_root
         root=core.private_dir(get_default_hermes_root());directory=core.private_dir(root/'cache/finix/fixture-engine')
-        engine=SimpleNamespace(directory=directory,plan_digest='d'*64,_plan=lambda:{'id':'e'*32,'root':str(root)},status=lambda:{'state':'prepared'})
+        engine=SimpleNamespace(directory=directory,plan_digest='d'*64,_plan=lambda:{'id':'e'*32,'root':str(root),'kept_target':{}},status=lambda:{'state':'prepared'})
         owner={'instance_id':'fixture','authority_epoch':2,'pid':1,'start_time':1,'hermes_home':str(root)}
         confirmation={'consent':{'fixture':True},'runtime':{k:owner[k] for k in owner}}
         controller=life.ColdController(root)

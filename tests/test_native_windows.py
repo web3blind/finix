@@ -384,8 +384,9 @@ class NativeWindowsTests(unittest.TestCase):
             adapter = RcloneStorage(base, 'a' * 64, base / 'state', str(config), 'cloud', 'backups', runner=transport)
             cipher = base / 'synthetic.age'
             cipher.write_bytes(b'age-encryption.org/v1\nsynthetic-ciphertext-fixture')
-            first = adapter.backup_cipher(cipher, keep=1)
-            second = adapter.backup_cipher(cipher, keep=1)
+            completion = dict(sha256=core.digest_file(cipher), complete=True, omitted_count=0)
+            first = adapter.backup_cipher(cipher, keep=1, completion=completion)
+            second = adapter.backup_cipher(cipher, keep=1, completion=completion)
             self.assertNotEqual(first['id'], second['id'])
             self.assertEqual(len(adapter.ledger()['records']), 1)
             output = base / 'download.age'

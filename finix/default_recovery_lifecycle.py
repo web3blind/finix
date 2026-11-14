@@ -41,8 +41,11 @@ def _inert(config, trusted_finix=False):
     # Intentionally a narrow, explicit configuration domain, not a universal
     # blank-role assertion. Unknown configurations require separate admission.
     known={'gateway','platforms','profile_routes','plugins','hooks','skills',
-           'mcp_servers','secrets','cron','model','display','telemetry','auth','security'}
+           'mcp_servers','secrets','cron','model','display','telemetry','auth','security','_config_version'}
     if set(config)-known: return False
+    # Inspected SDK config_defaults/save_config schema stamp only. Never coerce
+    # legacy/future markers or let metadata admit other configuration fields.
+    if '_config_version' in config and (type(config['_config_version']) is not int or config['_config_version']!=52): return False
     # Stock credential_sources / pm.install opt-outs only: these disable
     # borrowing external logins and acquiring executable dependencies.
     # Do not admit defaults, truthy/coercible values or unrelated policy fields.
@@ -72,7 +75,15 @@ def _inert(config, trusted_finix=False):
     skills=config.get('skills',{})
     if type(skills) is not dict or set(skills)-{'auto_load'} or skills.get('auto_load',[])!=[]: return False
     plugins=config.get('plugins',{})
-    if type(plugins) is not dict or set(plugins)-{'enabled','disabled'}: return False
+    if type(plugins) is not dict or set(plugins)-{'enabled','disabled','entries'}: return False
+    # SDK --no-allow-tool-override persists this explicit denial. It adds no
+    # authority beyond the existing trusted CURRENT Finix root-only exemption.
+    if 'entries' in plugins:
+        entries=plugins['entries']
+        if not trusted_finix or type(plugins.get('enabled')) is not list or plugins['enabled']!=['finix']: return False
+        if type(entries) is not dict or set(entries)!={'finix'}: return False
+        policy=entries['finix']
+        if type(policy) is not dict or set(policy)!={'allow_tool_override'} or policy['allow_tool_override'] is not False: return False
     # Stock PM PluginSelection emits an empty deny-list even on enable. Only
     # exact-empty metadata is inert; it grants no executable plugin authority.
     if 'disabled' in plugins and (type(plugins['disabled']) is not list or plugins['disabled']): return False
@@ -563,6 +574,41 @@ def _current_finix(root):
     return actual
 
 
+def _current_workspace_skill(root):
+    """Retain only the selected CURRENT transport's pinned three-file closure.
+
+    Discovery reads same-profile metadata, never executes a Skill or opens grants.
+    Archived copies have no role here, even if their compatibility hashes match.
+    """
+    from .integration import Profile
+    from .workspace_skill_transport import discover_skill, contract_files, binding_snapshot, NativeBinding, SetupNeeded
+    profile=Profile(root,default_root=root)
+    config=profile.config()
+    if config.get('storage')!='workspace' or config.get('workspace_transport','finix')!='skill':
+        return {}
+    try:
+        skill=discover_skill(root)
+    except SetupNeeded:
+        # Missing, disabled, changed or ambiguous CURRENT code is not an
+        # authority to activate a compatible archived counterpart.
+        return {}
+    selection=dict(home=str(profile.home),backend_id=profile.profile_id,
+                   storage='workspace',workspace_transport='skill',
+                   account_digest=config.get('workspace_account'))
+    records=binding_snapshot(root,skill)
+    result={}
+    with ExitStack() as guards:
+        for path in contract_files(skill):
+            cold._retain(guards,path.parent,root)
+        with NativeBinding(root,records):
+            for path in contract_files(skill):
+                result[path.relative_to(root).as_posix()]=dict(
+                    kind='current-workspace-skill-runtime',leaf=cold._leaf(path),
+                    selection=selection,binding=records)
+            contract_files(skill)
+    return result
+
+
 def prepare_live(cap,root,*,journal_root,intent):
     """Server-only narrow exemption; archived plugins stay parked/disabled.
 
@@ -574,6 +620,7 @@ def prepare_live(cap,root,*,journal_root,intent):
     trusted=_current_finix(root)
     preflight(root,trusted_finix=True)
     binding=cold._CAPABILITIES[cap]
+    binding['current_workspace_skill']=_current_workspace_skill(root)
     source=binding['source']
     from .recovery_activation import profile_digest
     if profile_digest(source)!=binding['digest']: raise RecoveryError('SOURCE_CHANGED')
@@ -591,6 +638,7 @@ def prepare_live(cap,root,*,journal_root,intent):
 
 def _verify_engine(engine):
     plan=engine._plan()
+    cold._check_current_workspace(plan)
     source=Path(plan['source'])
     from .recovery_activation import profile_digest
     if cold._identity(source)!=plan['source_identity'] or profile_digest(source)!=plan['source_digest']:
@@ -632,6 +680,7 @@ class ColdController:
         # Do not repeat the bulk census on the synchronous HTTP ACK path.
         if engine.status()['state']!='prepared': raise RecoveryError('JOB_NOT_PREPARED')
         if Path(plan['root'])!=self.root: raise RecoveryError('WRONG_DEFAULT_ROOT')
+        cold._check_current_workspace(plan)
         exemption=engine.directory/'current-finix.json'
         trusted=cold._load(exemption) if exemption.exists() else None
         if trusted is not None and trusted!={'digest':_current_finix(self.root),'plan_digest':engine.plan_digest}:
@@ -782,6 +831,7 @@ def run_job(root,job):
             if trusted is not None and trusted!={'digest':_current_finix(root),'plan_digest':engine.plan_digest}:
                 raise RecoveryError('CURRENT_FINIX_CHANGED')
             preflight(root,trusted_finix=trusted is not None)
+            cold._check_current_workspace(engine._plan())
             old=OwnedGateway(root)
             try: ready=old.ready()
             except BaseException: old.cleanup();raise
@@ -811,6 +861,7 @@ def run_job(root,job):
                 state('publishing')
                 engine.apply(record['consent'])
             state('published_offline')
+            cold._check_current_workspace(engine._plan())
             if engine._plan()['version']==4:
                 cold._write(engine.directory/'attempt-start.json',{'version':1,'plan_digest':engine.plan_digest})
             new=OwnedGateway(root,retain=attempts.append,attempt_plan_digest=engine.plan_digest)
@@ -839,6 +890,7 @@ def run_job(root,job):
                 state('rollback_not_ready',error)
                 raise
             preflight(root,trusted_finix=trusted is not None)
+            cold._check_current_workspace(engine._plan())
             old=OwnedGateway(root)
             try: ready=old.ready()
             except BaseException:
@@ -849,6 +901,7 @@ def run_job(root,job):
         # Live READY ends the launch-failure rollback boundary even when saving
         # its durable success record fails. Never stop/rollback in this except.
         try:
+            cold._check_current_workspace(engine._plan())
             if engine._plan()['version']==4:
                 from .runtime_attempt import commit_success
                 commit_success(engine,ready)

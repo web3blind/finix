@@ -164,7 +164,7 @@ class IncompleteCaptureTests(unittest.TestCase):
         profile = Profile(self.home, default_root=self.home)
         profile.recipient(profile.profile_id, recipient, None)
         previous = profile.backup()
-        for storage in ('drive', 'workspace', 'connector-drive', 'rclone'):
+        for storage in ('drive', 'workspace', 'rclone'):
             with self.subTest(storage=storage):
                 cfg = profile.config()
                 cfg.update(storage=storage, retention=1, folder_id='synthetic')
@@ -176,12 +176,26 @@ class IncompleteCaptureTests(unittest.TestCase):
                     return {'verified': True, 'storage': 'workspace',
                             'sha256': core.digest_file(Path(path))}
                 fake.backup_cipher.side_effect = emitted_receipt
-                with patch('finix.drive.Drive', return_value=fake), patch.object(profile, 'workspace', return_value=fake), patch.object(profile, 'connector', return_value=fake), patch.object(profile, 'rclone', return_value=fake), self.races():
+                with patch('finix.drive.Drive', return_value=fake), patch.object(profile, 'workspace', return_value=fake), patch.object(profile, 'rclone', return_value=fake), self.races():
                     result = profile.backup()
-                call = fake.upload.call_args if storage in ('drive', 'connector-drive') else fake.backup_cipher.call_args
+                call = fake.upload.call_args if storage == 'drive' else fake.backup_cipher.call_args
                 self.assertEqual(call.args[-1], 0)
                 self.assertFalse(result['complete'])
                 self.assertTrue(Path(previous['path']).exists())
+
+    def test_removed_connector_refuses_before_capture_or_adapter_creation(self):
+        from finix.integration import Profile
+        profile = Profile(self.home, default_root=self.home)
+        cfg = profile.config()
+        cfg['storage'] = 'connector-drive'
+        core.atomic_json(profile.root / 'settings.json', cfg)
+        before = {p.name:p.read_bytes() for p in self.home.iterdir() if p.is_file()}
+        with patch.object(core, 'backup', side_effect=AssertionError('REMOVED_BACKEND_CAPTURE')), \
+                patch.object(profile, 'workspace', side_effect=AssertionError('REMOVED_BACKEND_ADAPTER')):
+            with self.assertRaisesRegex(core.FinixError, 'Managed Drive backend removed'):
+                profile.backup()
+        self.assertEqual({p.name:p.read_bytes() for p in self.home.iterdir() if p.is_file()}, before)
+        self.assertEqual(profile.config()['storage'], 'connector-drive')
 
     def test_workspace_wrong_readback_hash_still_refused(self):
         from finix.integration import Profile

@@ -13,7 +13,7 @@ import re
 import uuid
 import weakref
 from . import core
-from .preview_budget import check as _preview_check
+from .preview_budget import check as _preview_check, PreviewBudgetError
 from .recovery_import import _members, RUNTIME_ROOTS, RUNTIME_FILES
 from .recovery_activation import profile_digest
 
@@ -27,7 +27,9 @@ class VerifiedImport:
     """Construction alone confers no authority; use verified_import."""
     pass
 
-SHARED=RUNTIME_ROOTS|frozenset({'plugin-data','shared','checkpoints','desktop',
+# Actual SDK writer-fence locks: archive bytes cannot represent live ownership.
+CURRENT_COORDINATION_FILES = frozenset({'.backup.lock', '.checkpoints.lock'})
+SHARED=RUNTIME_ROOTS|CURRENT_COORDINATION_FILES|frozenset({'plugin-data','shared','checkpoints','desktop',
     'bot-desktop','plugins','desktop-plugins','hooks','agent-hooks','cron','state',
     'shell-hooks-allowlist.json','active_profile','.finix-paused','recovery-custody'})
 
@@ -46,7 +48,7 @@ def _owned_inventory(root, stack):
             # Census locks must be released before a second census in this same
             # exclusive SDK transaction (flock is not reentrant across opens).
             with ExitStack() as census:
-                result.update({name+'/'+n:d for n,(_,d) in _inventory(path,census).items()})
+                result.update({name+'/'+n:d for n,(_,d) in _inventory(path,census,private_from=root).items()})
     return result
 
 def _kept_inventory(root, entries):
@@ -59,12 +61,54 @@ def _kept_inventory(root, entries):
         if path.name in PROFILE_REPLACEMENT_ROOTS or path.name in entries: continue
         info=path.lstat()
         if (stat.S_ISREG(info.st_mode) and path.name.casefold() not in RUNTIME_FILES
+            and path.name.casefold() not in CURRENT_COORDINATION_FILES
             and path.name not in {'auth.json','finix.key','.backup.lock'}
             and not path.name.startswith('.finix-')):
             result[path.name]={'kind':'file','sha256':core.digest_file(path)}
         else:
             result[path.name]={'kind':'opaque-retained-member','identity':[info.st_dev,info.st_ino]}
     return result
+
+def _workspace_kept(kept):
+    """The sole leaf-level CURRENT exception inside replacement roots."""
+    result={n:v for n,v in kept.items()
+            if type(v) is dict and v.get('kind')=='current-workspace-skill-runtime'}
+    if not result:return result
+    markers=[n for n in result if n.endswith('/SKILL.md')]
+    if len(markers)!=1:raise RecoveryError('INVALID_JOURNAL')
+    base=markers[0][:-len('/SKILL.md')]
+    if (not base.startswith('skills/') or not _member(base)
+        or set(result)!={base+'/SKILL.md',base+'/scripts/google_api.py',base+'/scripts/_hermes_home.py'}):
+        raise RecoveryError('INVALID_JOURNAL')
+    first=result[markers[0]]
+    for name,value in result.items():
+        leaf=value.get('leaf')
+        if (set(value)!={'kind','leaf','selection','binding'}
+            or type(leaf) is not dict or set(leaf)!={'identity','size','sha256'}
+            or type(leaf['identity']) is not list or len(leaf['identity'])!=2
+            or any(type(i) is not int or i<0 for i in leaf['identity'])
+            or type(leaf['size']) is not int or leaf['size']<0 or not _hex(leaf['sha256'])
+            or type(value['selection']) is not dict or type(value['binding']) is not list
+            or value['selection']!=first['selection'] or value['binding']!=first['binding']):
+            raise RecoveryError('INVALID_JOURNAL')
+    return result
+
+
+def _check_current_workspace(p):
+    expected=_workspace_kept(p['kept_target'])
+    if not expected:return
+    from .default_recovery_lifecycle import _current_workspace_skill
+    from .workspace_skill_transport import NativeBinding
+    try:
+        # Check original native membership BEFORE reading a new selection or
+        # rediscovering sources; changed objects cannot become fresh authority.
+        with NativeBinding(Path(p['root']),next(iter(expected.values()))['binding']):
+            if _current_workspace_skill(Path(p['root']))!=expected:
+                raise RecoveryError('CURRENT_WORKSPACE_SKILL_CHANGED_REPREPARE_REQUIRED')
+    except (RecoveryError, PreviewBudgetError):raise
+    except Exception:
+        raise RecoveryError('CURRENT_WORKSPACE_SKILL_CHANGED_REPREPARE_REQUIRED') from None
+
 
 def _identity(path):
     info=path.stat(follow_symlinks=False)
@@ -125,6 +169,19 @@ def _check_sqlite_helper(p):
         or sealed.get('module')!='finix.sqlite_family' or not _hex(sealed.get('sha256'))):
         raise RecoveryError('PINNED_PACKAGE_CHANGED')
     if _sqlite_helper_pin()!=sealed:raise RecoveryError('PINNED_PACKAGE_CHANGED')
+
+
+def _runtime_executable():
+    """Pin the actual process image, not a Windows venv redirector spelling."""
+    import sys
+    if os.name!='nt':return Path(sys.executable).resolve()
+    from . import windows_native as win
+    module_name=win.api(win.K,'GetModuleFileNameW',win.W.DWORD,
+                        win.W.HMODULE,win.W.LPWSTR,win.W.DWORD)
+    buffer=win.C.create_unicode_buffer(32768)
+    count=module_name(None,buffer,len(buffer))
+    if not 0<count<len(buffer):raise RecoveryError('PINNED_PACKAGE_CHANGED')
+    return Path(buffer.value).resolve()
 
 
 def _sqlite_generation(path, sqlite_temp_dir):
@@ -189,11 +246,12 @@ def _sqlite_generation(path, sqlite_temp_dir):
             if final.st_nlink!=1 or identity!=[final.st_dev,final.st_ino] or _identity(path)!=identity:
                 raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
         scope()  # reader is CLOSED: validate its newly derived auxiliaries too
+    executable=_runtime_executable()
     return dict(kind=sqlite_family.POLICY,native_identity=identity,
         snapshot_sha256=digest.hexdigest(),protected_content_sha256=protected,source_pragmas=source_pragmas,capture_algorithm_version='guarded-disk-online-backup-v1',
         producer_pins=dict(sqlite_version=sqlite3.sqlite_version,functions=pins,helper_module=_sqlite_helper_pin(),
-            runtime=dict(executable=str(Path(sys.executable).resolve()),
-                         executable_leaf=_leaf(Path(sys.executable).resolve()),
+            runtime=dict(executable=str(executable),
+                         executable_leaf=_leaf(executable),
                          python_version=sys.version)),
         family_names=['state.db','state.db-wal','state.db-shm','state.db-journal'],
         shm_authority='non-data-runtime-derived')
@@ -300,8 +358,13 @@ def _write(path,value):
     core.atomic_json(path,value)
     _sync_directory(path.parent)
 
-def _inventory(root,stack):
-    _private(root)
+def _inventory(root,stack,*,private_from=None):
+    if os.name!='nt' and private_from is not None:
+        # The existing retained-root guard proves effective POSIX privacy for
+        # owned, non-writable SDK descendants beneath the private profile root.
+        _retain(stack,root,private_from)
+    else:
+        _private(root)
     result={}
     for name,path in _members(root,stack):
         _preview_check()
@@ -398,7 +461,9 @@ def _validate_plan(p):
             or type(leaf['size']) is not int or leaf['size']<0
             or leaf['sha256']!=p['deletions'][name]):
             raise RecoveryError('INVALID_JOURNAL')
-    if p['deletions']!={n:d for n,d in p['target_owned'].items() if n not in p['entries']}:
+    retained=_workspace_kept(p['kept_target'])
+    if (any(n in p['entries'] or p['target_owned'].get(n)!=v['leaf']['sha256'] for n,v in retained.items())
+        or p['deletions']!={n:d for n,d in p['target_owned'].items() if n not in p['entries'] and n not in retained}):
         raise RecoveryError('INVALID_JOURNAL')
     if (type(p['target_entries']) is not dict or set(p['target_entries'])!=set(p['entries'])
         or any(d is not None and not _hex(d) for d in p['target_entries'].values())):
@@ -501,9 +566,13 @@ def prepare(verified_import_capability,canonical_default_root,*,journal_root,int
         for name in selected:
             destination=core.checked_path(root/name)
             if destination.exists() and not destination.is_file(): raise RecoveryError('TARGET_CONFLICT')
+        # Create and admit the private parent explicitly: Path.mkdir(parents=True)
+        # applies mode only to its leaf, not to missing intermediate directories.
+        core.private_dir(journal_root)
+        _private(journal_root)
         job=uuid.uuid4().hex
         directory=core.private_dir(journal_root/job)
-        for p in [journal_root,directory]: _private(p)
+        _private(directory)
         payload=core.private_dir(directory/'payload')
         for name,(path,digest) in selected.items():
             _preview_check()
@@ -515,6 +584,9 @@ def prepare(verified_import_capability,canonical_default_root,*,journal_root,int
         sqlite_families=prepare_policy(root,entries,directory)
         _preview_check()
         kept=_kept_inventory(root,entries)
+        retained=cap.get('current_workspace_skill',{})
+        kept.update(retained)
+        _check_current_workspace(dict(root=str(root),kept_target=kept))
         plan=dict(version=3,id=job,root=str(root),root_identity=_identity(root),
             source=str(source),source_identity=cap['identity'],source_digest=cap['digest'],
             content_digest=cap['content_digest'],epoch=uuid.uuid4().hex,
@@ -522,8 +594,8 @@ def prepare(verified_import_capability,canonical_default_root,*,journal_root,int
             retained_source_shared_files=cap['retained_source_shared_files'],
             shared_policy='preserve-existing-report-source-not-promoted',
             replacement_policy=REPLACEMENT_POLICY,replacement_roots=sorted(PROFILE_REPLACEMENT_ROOTS),
-            target_owned=target_owned,deletions={n:d for n,d in target_owned.items() if n not in entries},
-            deletion_leaves={n:_leaf(root/n) for n in target_owned if n not in entries},
+            target_owned=target_owned,deletions={n:d for n,d in target_owned.items() if n not in entries and n not in retained},
+            deletion_leaves={n:_leaf(root/n) for n in target_owned if n not in entries and n not in retained},
             kept_target=kept,kept_target_count=len(kept),kept_target_digest=_digest(kept),
             target_entries={n:core.digest_file(root/n) if (root/n).exists() else None for n in entries},
             sqlite_families=sqlite_families)
@@ -677,6 +749,7 @@ class DefaultRecovery:
         if consent!=self.consent(): raise RecoveryError('CONSENT_REQUIRED')
         root=_root(p['root'])
         if _identity(root)!=p['root_identity']: raise RecoveryError('ROOT_CHANGED')
+        _check_current_workspace(p)
         source=Path(p['source'])
         if _identity(source)!=p['source_identity'] or profile_digest(source)!=p['source_digest']:
             raise RecoveryError('SOURCE_CHANGED')
@@ -704,6 +777,7 @@ class DefaultRecovery:
             with exclusive_maintenance([root],purpose='finix-default-recovery'),ExitStack() as anchors:
                 root_anchor=anchors.enter_context(core.locked(root))
                 self._fence(p,anchors)
+                _check_current_workspace(p)
                 _private(root)
                 # Re-census only after actual SDK exclusive quiescence. Consent
                 # authorizes this exact old inventory, not a later generation.
@@ -758,6 +832,7 @@ class DefaultRecovery:
                             if core.digest_file(root/name)!=digest: raise RecoveryError('PUBLISH_VERIFY_FAILED')
                         journal['published'].append(name);journal['pending']=[]
                         _write(self.directory/'journal.json',journal)
+                    _check_current_workspace(p)
                     # No readiness claim from data-only publication. A full adapter
                     # must prove SDK ready and exact default role before success.
                     self._state('published_offline')

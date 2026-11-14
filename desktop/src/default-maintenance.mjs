@@ -104,7 +104,7 @@ export function createDefaultMaintenance(ctx){
     const description=await sdk.host.requestProfile(route,'profiles.describe',{name:'default'});fence(r);if(description?.name!=='default')throw Error('description');
     const history=await sdk.host.requestProfile(route,'session.list',{scope:'stored',limit:200});fence(r);
     if(history?.scope!=='stored'||!Array.isArray(history.sessions)||history.sessions.length>200||!history.sessions.every(x=>typeof x?.id==='string'&&x.id.length>0&&x.id.length<=512))throw Error('history');
-    publish({verified:true,busy:false,polling:false,message:'Physical default READY observed and its exact stock stored-history route is readable. Full historical metadata equality and AI-turn readiness are not claimed.'});
+    publish({verified:true,busy:false,polling:false,message:'Physical default READY observed and its exact stock stored-history route is readable. Full historical metadata equality and AI-turn readiness are not claimed.'});hint('terminal');
    }catch{fence(r);publish({verified:false,message:'Physical default READY was observed, but exact stock default/history-route verification failed. Usable recovery is not yet confirmed; duplicate Apply remains blocked.'});}
   }
  }
@@ -115,7 +115,7 @@ export function createDefaultMaintenance(ctx){
    const saved=ctx.storage?.get(HINT,null);
    // Global storage is an untrusted read-only hint; never hydrate consent or key authority.
    if(saved?.version===1&&saved.profile===owner.profile&&saved.connection==='local'&&saved.profileId===profileId&&saved.phase!=='terminal'){
-    if(hex(saved.maintenanceId,32)){maintenanceId=saved.maintenanceId;applySent=true;publish({busy:true,polling:true});await readMaintenance(r);return null;}
+    if(hex(saved.maintenanceId,32)){maintenanceId=saved.maintenanceId;applySent=true;anchor=Object.freeze({maintenanceId,rootToken,profileId,registryIdentity,profile:owner.profile,source:owner.source,connection:owner.connection});publish({busy:true,polling:true});await readMaintenance(r);return null;}
     if(hex(saved.job,32)){job=saved.job;previewSent=true;previewReadOnly=true;if(saved.rootToken===rootToken&&['preview-pending','preview-terminal'].includes(saved.phase)){publish({busy:true,polling:true,cancellable:false,message:'Reattached for exact preview status only; no new preparation or Apply consent.'});await readPreview(r);}else publish({busy:true,polling:false,message:'Previous preparation requires exact-operation reconciliation. No creation or key request will be repeated.'});return null;}
     publish({busy:true,polling:false,message:'Previous preparation acknowledgement is unknown. Reconcile the original operation before starting another.'});return null;
    }
@@ -150,7 +150,7 @@ export function DefaultMaintenance({maintenance}){
  sdk.useGatewayActivationEpoch?.();sdk.useValue(maintenance.state);sdk.useValue(sdk.host.state.profile);if(sdk.host.state.connectionId)sdk.useValue(sdk.host.state.connectionId);
  const {value:s,actions:a}=maintenance.view();
  sdk.useQuery?.({queryKey:['finix','default-maintenance','load',...s.scope],queryFn:()=>a.load(),enabled:!s.ready&&!s.busy&&!s.preview,retry:false,staleTime:Infinity,refetchOnWindowFocus:false});
- sdk.useQuery?.({queryKey:['finix','default-maintenance','job',...s.scope],queryFn:()=>a.poll(),enabled:s.busy&&s.polling,retry:false,refetchInterval:s.busy&&s.polling?1000:false,refetchOnWindowFocus:false});
+ sdk.useQuery?.({queryKey:['finix','default-maintenance','job',...s.scope],queryFn:()=>a.poll(),enabled:s.busy&&s.polling,retry:false,refetchInterval:s.busy&&s.polling?1000:false,refetchIntervalInBackground:true,refetchOnWindowFocus:false});
  useEffect(()=>()=>maintenance.actions.clear(),[maintenance]);
  const p=s.preview?.preview;
  return jsxs('section',{'aria-label':'Finix physical-default maintenance',style:{padding:16,overflow:'auto',height:'100%'},children:[
