@@ -10,47 +10,41 @@ notices and licenses are preserved in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTIC
 
 ## Current verification status
 
-- **Linux local physical-default recovery is functionally verified** on an isolated,
-  synthetic real-default root using the exact reviewed native package. One fresh
-  preparation and one Apply reached a new READY owner. The stock session picker
-  returned the original three sessions and history returned six messages; the
-  saved note was restored and SQLite integrity was `ok`. Old-only memories/skills
-  were removed, shared resources remained unchanged, and the existing ciphertext
-  was reused without recapture or a package-manager clone.
-- Durable bounded preparation is implemented in the registered CLI and shipped
-  Desktop protocol. Exact-job polling, cancellation and lost-acknowledgement
-  reconciliation do not replay preparation or Apply. This protocol's component
-  tests are not native Windows Desktop acceptance.
-- Native Windows archive decryption was verified previously; its historical
-  Desktop cold preview timed out before Plan/Apply. The new native Windows UI,
-  physical-default Apply, restored-history and restored-note workflow remains
-  **pending**, not proven fixed by the Linux result.
-- New-profile import/activation is currently blocked with
-  `HOST_IMPORT_CONTRACT_UNSUPPORTED`: the public SDK importer does not provide
-  the required publication contract. Finix does not replace Hermes modules or
-  mutate the interpreter's global temporary-directory setting. This restriction
-  does not disable inert extraction or the separate guarded in-place default
-  replacement; its final integrated acceptance remains separate.
-- Default recovery remains experimental and restricted to guarded inert/default-only
-  ownership, explicit root/plan-bound consent and fail-closed safety fences.
-  Interrupted legacy operations remain blocked; never discard retained state to
-  force a retry. Unknown acknowledgements require exact-job reconciliation.
-- POSIX CURRENT source admission now validates source ownership, absence of
-  non-owner write permission and retained ancestry before hashing bounded regular files. The
-  two-file guard/test change was independently reviewed and tested on native Linux,
-  including cross-user write attempts and safe read-only hardlink compatibility.
-  Native Windows regression tests preserve its existing admission; POSIX cases
-  are skipped there, not evidence of Windows POSIX protection. This guard was not
-  part of the earlier functional package and has not had a second full Apply.
-- Private-cloud acceptance is separate: this is **local recovery proof**, not a
-  new cloud-download/readback or cloud-restoration result. This is not a
-  whole-plugin security certification or universal SDK compatibility claim.
-  Keep independent backups and test offline.
+The 2026-11-14 development acceptance completed **private-cloud physical-default
+recovery on Windows Desktop and Linux CLI** with Finix 0.1.0, reviewed build B11,
+and Hermes SDK 0.23.0 (`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`).
+These were isolated synthetic genuine SDK defaults, not personal profiles or
+named-profile substitutes. The transport was explicitly selected **Google Drive
+through the pinned Google Workspace skill bridge**, not independent `finix:google`.
+Windows recovery reused a cloud archive produced and verified by an earlier
+0.1.0 candidate; Linux created a fresh B11 backup before its B11 recovery.
 
-Native integration depends on the host SDK contracts described in the linked
-installation and SDK documents. This milestone does not establish support for
-all SDK versions.
-See [publication status](docs/PUBLICATION-STATUS.md) for the current limits.
+| Tested surface | Completed workflow and verified result |
+| --- | --- |
+| Native Windows Desktop, local NTFS | Encrypted cloud backup/readback, explicit cloud-copy selection, download/decryption, fresh PREVIEW and separate Apply, restart to `ready`; 3 original conversations / 12 messages, memory and garden notes and garden SQLite rows restored. The restored conversation opened in the reopened native Desktop. |
+| Ubuntu Linux CLI, unprivileged user | The same cloud/default workflow reached `ready`; 6 conversations / 12 messages, saved note, original SQLite proof and garden note/database restored. Stock SDK history/list/resume worked without an AI request. |
+
+Post-backup mutations disappeared and SQLite integrity checks returned `ok`.
+These are development acceptance results for the identified package and host,
+not an independent security certification or support for every SDK version.
+
+- **The Workspace bridge does not satisfy the SDK-only review requirement.** It
+  invokes a pinned external skill helper. The declared Hermes-managed
+  `finix:google` / `drive.file` path exists but still needs its own complete
+  authorization-lifecycle and Windows/Linux recovery acceptance with the skill absent.
+- New-profile import/activation remains blocked with
+  `HOST_IMPORT_CONTRACT_UNSUPPORTED`; the verified in-place default replacement
+  does not establish that separate feature.
+- Default Apply remains restricted to admitted idle, inert/default-only ownership
+  and fresh root/plan-bound consent. Never delete retained state or replay Apply
+  after an uncertain acknowledgement.
+- A subsequent independent gateway restart can leave a saved historical maintenance
+  hint requiring manual reconciliation. Restored data remains available; a fully
+  seamless status/next-maintenance experience after owner changes is not claimed.
+
+See [publication status](docs/PUBLICATION-STATUS.md) for exact package identity,
+transport boundaries, verification provenance and remaining limitations.
+Keep independent backups and test in an isolated environment first.
 
 ## Install and use
 
@@ -96,9 +90,9 @@ The Desktop warning appears before choosing a fresh key where the backend knows
 this geometry. No extra controls or SDK changes are required. Unknown frontend
 routing geometry is still a host-capability limitation, not permission for a
 private bridge or an unsafe fallback. Physical default Apply is enabled only when the reviewed ownership,
-consent and inert/default-only gates admit it. Linux local physical-default Apply
-has passed the isolated synthetic workflow described above; native Windows
-Desktop Apply remains unverified.
+consent and inert/default-only gates admit it. The cloud-backed Windows and Linux
+physical-default workflows above passed those gates; they do not validate the
+separate shared-root/new-profile publication contract.
 
 ## Verification boundaries
 
