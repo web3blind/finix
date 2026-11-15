@@ -1,5 +1,6 @@
 """Owner chat-language boundary; synthetic profiles only, no providers."""
 from pathlib import Path
+import os
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -9,7 +10,8 @@ from finix.integration import command
 
 class ConnectReplyLanguageTests(unittest.TestCase):
     def reply(self, text=None):
-        with tempfile.TemporaryDirectory() as tmp:
+        # Hosted Windows TEMP may contain an 8.3 alias; use the runner's long path.
+        with tempfile.TemporaryDirectory(dir=os.environ.get('RUNNER_TEMP')) as tmp:
             home = Path(tmp)
             if text is not None:
                 (home / 'config.yaml').write_text(text, encoding='utf-8')
