@@ -30,7 +30,7 @@ class PreparationCancellationIntegrationTests(unittest.TestCase):
 
     def test_copy_and_hash_observe_manual_cancellation(self):
         from finix import default_recovery as cold
-        from finix.recovery_activation import profile_digest
+        from finix.recovery_import import profile_digest
         root = core.private_dir(Path(os.environ['FINIX_PREVIEW_TEST_ROOT']) / uuid.uuid4().hex)
         source = root / 'input'
         with core.regular_output(source) as fd: os.write(fd, b'synthetic')
@@ -45,10 +45,11 @@ class PreparationCancellationIntegrationTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 'PREVIEW_CANCELLED')
         self.assertIsNone(preview_budget.check())
 
-    def test_public_prepare_checks_cancellation_before_work(self):
+    def test_public_prepare_refuses_before_cancellation_or_work(self):
         from finix.default_recovery_api import DefaultRecoveryAPI
+        from finix.recovery_import import RecoveryImportError
         active = [False]
-        with self.assertRaises(preview_budget.PreviewBudgetError):
+        with self.assertRaisesRegex(RecoveryImportError, '^PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE$'):
             with preview_budget.scope(cancelled=lambda: active[0]):
                 active[0] = True
                 DefaultRecoveryAPI().prepare(None, None, 'b' * 32, consent=True)

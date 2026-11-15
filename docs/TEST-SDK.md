@@ -20,7 +20,28 @@
 Set `FINIX_TEST_SDK_SOURCE` to your own checked-out Hermes SDK source directory.
 The integration fixtures read the real SDK producer source without changing it.
 Use the exact reviewed SDK checkout for reproducible results; native integration
-requires Hermes plugin SDK 0.23.0. This repository does not vendor the SDK.
-The Node route-source fixture requires this variable; the Python pure-admission
-suite explicitly skips only its SDK-producer test when it is unset. All pure
-admission assertions still execute. Missing SDK tests are not a full pass.
+requires Hermes plugin SDK 0.23.1 or later. This repository does not vendor the SDK.
+Historical route-source and automatic-publication fixtures are not the current
+acceptance gate. Missing or retired SDK tests are not a full pass.
+
+## Current bounded regression gates
+
+`.github/workflows/finix-public-api.yml` lists the exact active files and native
+unittest filters. It separates public-boundary/locale tests, real age backup and
+inert extraction on Linux, native Windows owner/DACL/publication tests, Desktop
+component contracts, and validation with released Hermes v0.23.1 and its PM.
+Portable-history preparation uses `inert_history_fixture.py`: synthetic public
+SessionDB data, a fenced scratch home, no borrowed runtime or retired pipeline
+teardown. Cancellation tests retain data-copy/hash/SQLite checks; an unavailable
+automatic Prepare now refuses before work rather than simulating a running job.
+
+This is a focused gate, **not a claim that the entire historical suite passes**.
+Legacy controller/source-admission tests still refer to removed
+`default_recovery_lifecycle`/`default_recovery_worker`; private named/shared-host
+execution tests refer to removed `recovery_activation`/`recovery_pipeline`/
+`recovery_shared_host`. Workspace helper-closure tests describe the removed
+skill transport, not the supported `finix:google` provider. Mixed modules also
+contain valid catalog, inert history and SQLite/custody invariants; they must
+not be excluded solely by their filename. No blanket recovery/workspace skip,
+import-error suppression or passing xfail policy has been added. Full legacy
+collection and replacement transaction coverage remain unverified.

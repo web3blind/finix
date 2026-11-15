@@ -2,7 +2,7 @@
 import json
 import pytest
 from pathlib import Path
-from test_recovery_history_ownership import fenced_root, seed
+from inert_history_fixture import fenced_root, seed
 
 
 def test_prepare_new_copy_without_source_stamp(tmp_path):
