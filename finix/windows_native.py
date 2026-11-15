@@ -317,7 +317,8 @@ def private_security():
     descriptor = C.c_void_p()
     convert = api(A, 'ConvertStringSecurityDescriptorToSecurityDescriptorW', W.BOOL,
                   W.LPCWSTR, W.DWORD, C.POINTER(C.c_void_p), C.c_void_p)
-    sddl = 'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;' + current_sid() + ')'
+    owner = current_sid()
+    sddl = 'O:' + owner + 'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;' + owner + ')'
     if not convert(sddl, 1, C.byref(descriptor), None):
         raise error('Cannot create private security descriptor')
     try:
