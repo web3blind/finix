@@ -17,6 +17,7 @@ from .recovery import RecoveryService, RecoveryError, CommittedSource, _ManagedD
 from .recovery_import import RecoveryImportError
 from .recovery_contract import public_job
 from .setup_flow import SetupFlow
+from .workspace_drive import RemovedWorkspaceTransport
 from starlette.concurrency import run_in_threadpool
 
 
@@ -46,6 +47,22 @@ def operation_lock(profile,*,backend_lease=True,preview_job=None):
     except BaseException:
         retained.close()
         raise
+    try:
+        yield
+    finally:
+        retained.close()
+
+
+@contextmanager
+def catalog_lock(profile):
+    """Serialize ledger reads without adopting or blocking on retired jobs."""
+    from contextlib import ExitStack
+    retained = ExitStack()
+    try:
+        retained.enter_context(core.locked(profile.directories()))
+    except (OSError, core.FinixError):
+        retained.close()
+        fail('BUSY')
     try:
         yield
     finally:
@@ -313,8 +330,12 @@ def create_router(current_profile):
         response.headers['Cache-Control'] = 'no-store'
         if not local_request(request):
             fail('LOCAL_DESKTOP_REQUIRED', 403)
-        profile = current_profile()
-        if not re.fullmatch(r'[a-f0-9]{64}', profile.profile_id):
+        try:
+            profile = current_profile()
+            profile_id = profile.profile_id
+        except Exception:
+            fail('PROFILE_UNAVAILABLE')
+        if not isinstance(profile_id, str) or not re.fullmatch(r'[a-f0-9]{64}', profile_id):
             fail('PROFILE_UNAVAILABLE')
         return profile
 
@@ -324,6 +345,8 @@ def create_router(current_profile):
             yield
         except HTTPException:
             raise
+        except RemovedWorkspaceTransport:
+            fail('WORKSPACE_SKILL_TRANSPORT_REMOVED')
         except (RecoveryError, RecoveryImportError) as exc:
             fail(exc.code, 404 if exc.code == 'NOT_FOUND' else 409)
         except Exception:
@@ -357,7 +380,7 @@ def create_router(current_profile):
     @router.get('/catalog')
     def catalog(request: Request,response: Response):
         profile = guard(request,response)
-        with closed_errors(),state_lock(adapter),operation_lock(profile):
+        with closed_errors(),state_lock(adapter),catalog_lock(profile):
             service = adapter.service(profile)
             items = []
             from datetime import datetime

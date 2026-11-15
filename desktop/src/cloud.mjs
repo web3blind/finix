@@ -9,7 +9,7 @@ const remedies = Object.freeze({
   RCLONE_PROVIDER_FAILED: 'rclone не завершил подключение к сервису. Проверьте сеть и доступность сервиса, затем начните заново.',
   CONNECTION_TIMEOUT: 'Время подключения истекло. Начните заново.',
   CONNECTION_UNSUPPORTED: 'Этот шаг авторизации не поддерживается мастером. Настройте именованный remote вручную.',
-  WORKSPACE_SKILL_TRANSPORT_REMOVED: 'The external Workspace skill transport was removed. Existing settings, journals and ciphertext are preserved. Explicitly select finix:google or rclone for new backups; retrieve old ciphertext with the original provider access and use local recovery. No automatic migration occurs.',
+  WORKSPACE_SKILL_TRANSPORT_REMOVED: 'Внешний транспорт навыка Workspace удалён. Настройки, журналы и шифротекст сохранены. Для новых копий явно выберите finix:google или rclone; прежний шифротекст скачайте через исходное подключение и используйте локальное восстановление. Автоматического переноса нет.',
   GOOGLE_ACCOUNT_CHANGED: 'The Google account changed after verification. Cancel and explicitly check the intended profile account again. Existing storage is unchanged.',
   GOOGLE_AUTH_SETUP_REQUIRED: 'Google sign-in is not verified. Run hermes auth add finix:google in the selected profile, then check again. Legacy Workspace grants are not reused.',
   CONNECTION_BUSY: 'Другое подключение уже выполняется. Обновите его статус или отмените его.',
@@ -159,7 +159,7 @@ export function Cloud({ cloud, enabled = true }) {
     jsxs('details', { children: [
       jsx('summary', { children: 'Помощь: удалённый backend и первый вход Google' }),
       isRclone(s.provider) && jsx('p', { children: 'For rclone, the browser must reach backend loopback port 53682 on the same machine or through your own SSH tunnel. No public callback is created.' }),
-      jsx('p', { children: 'Google uses only Finix-declared OAuth with drive.file scope. Run hermes auth add finix:google in the selected profile before checking this connection. Hermes owns credentials; no Workspace-skill grant is reused. Legacy backups and settings are preserved and require explicit migration.' })
+      jsx('p', { children: 'Для Google используется только объявленный Finix OAuth с правами drive.file. Перед проверкой выполните hermes auth add finix:google в выбранном профиле. Учётными данными управляет Hermes; разрешение навыка Workspace не используется. Прежние копии и настройки сохранены; перенос требует явного действия.' })
     ] }),
     jsx('p', { role: 'status', 'aria-live': 'polite', children: s.message })
   ] });

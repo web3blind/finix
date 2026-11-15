@@ -17,7 +17,22 @@ async function harness(rest, {sdkLocale = 'ru', hook = true} = {}) {
   await source.evaluate();
   const calls = [], disposers = [];
   const start = () => source.namespace.createLocale({rest: async (path, options) => {calls.push({path, options}); return rest(path);}, onDispose: fn => disposers.push(fn)});
-  return {api: source.namespace, profile, start, calls, dispose: () => disposers.forEach(fn => fn()), tick: async () => {for (let n = 0; n < 12; n++) await Promise.resolve();}};
+  const modules = new Map();
+  const component = async filename => {
+    if (modules.has(filename)) return modules.get(filename);
+    const module = new vm.SourceTextModule(await readFile(new URL('../desktop/src/' + filename, import.meta.url), 'utf8'), {context});
+    modules.set(filename, module);
+    await module.link(async name => {
+      if (name === './i18n.mjs') return source;
+      if (values[name]) return new vm.SyntheticModule(Object.keys(values[name]), function () {
+        for (const [key, value] of Object.entries(values[name])) this.setExport(key, value);
+      }, {context});
+      return component(name.replace(/^\.\//, ''));
+    });
+    await module.evaluate();
+    return module;
+  };
+  return {api: source.namespace, profile, start, calls, component: async name => (await component(name)).namespace, dispose: () => disposers.forEach(fn => fn()), tick: async () => {for (let n = 0; n < 12; n++) await Promise.resolve();}};
 }
 
 for (const value of [{}, {ui_language: 'de'}, {ui_language: null}, {ui_language: 'en'}]) {
@@ -49,3 +64,33 @@ test('scope changes remain fenced while English fallback resolves', async () => 
   await h.tick(); assert.equal(locale.view(), 'en'); release({ui_language: 'ru'}); await h.tick();
   assert.equal(locale.view(), 'en', 'late Russian from old profile must not overwrite current English'); h.dispose();
 });
+
+for (const language of ['en', 'ru']) {
+  test('actual retired-recovery messages render in ' + language, async () => {
+    const h = await harness(() => ({ui_language: language})); h.start(); await h.tick();
+    const recoveryModule = await h.component('recovery.mjs');
+    const calls = [];
+    const recovery = recoveryModule.createRecovery({
+      rest: async path => {calls.push(path); return {items: [
+        {id: 'first', label: 'Encrypted backup', complete: true},
+        {id: 'second', label: 'Encrypted backup', complete: false}
+      ]};}, onDispose: () => {}
+    });
+    await recovery.actions.load();
+    const recoveryTree = JSON.stringify(recoveryModule.Recovery({recovery}));
+    const maintenanceModule = await h.component('default-maintenance.mjs');
+    const maintenance = maintenanceModule.createDefaultMaintenance({});
+    const maintenanceTree = JSON.stringify(maintenanceModule.DefaultMaintenance({maintenance}));
+    assert.deepEqual(calls, ['/recovery/catalog']);
+    if (language === 'en') {
+      assert.doesNotMatch(recoveryTree + maintenanceTree, /[А-Яа-яЁё]/u);
+      assert.match(recoveryTree, /No recovery key is requested/);
+      assert.match(recoveryTree, /complete backup/);
+      assert.match(maintenanceTree, /Physical default replacement/);
+    } else {
+      assert.match(recoveryTree, /Автоматический импорт/u);
+      assert.match(maintenanceTree, /Замена физического default/u);
+    }
+    h.dispose();
+  });
+}

@@ -16,9 +16,7 @@ jobs:
         os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    env:
-      # Runner metadata is trusted; no event text or user input enters shell commands.
-      TMPDIR: ${{ runner.temp }}
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,7 +40,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Public boundary and ownership regressions
-        run: python -m pytest -q tests/test_connect_reply_language.py tests/test_workspace_skill_selection.py tests/test_removed_transport_setup.py tests/test_public_namespace.py tests/test_public_recovery_unavailable.py
+        env:
+          # Runner metadata is trusted; no event text enters shell commands.
+          TMPDIR: ${{ runner.temp }}
+        run: python -m pytest -q tests/test_connect_reply_language.py tests/test_workspace_skill_selection.py tests/test_removed_transport_setup.py tests/test_public_namespace.py tests/test_public_recovery_unavailable.py tests/test_recovery_catalog_history.py
       - name: Network-denied offline packaging gate
         run: python scripts/release/offline_gate.py --scratch "${{ runner.temp }}"
       - name: Desktop locale, transport and recovery contracts
@@ -50,10 +51,7 @@ jobs:
   sdk-validation:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      # Isolated synthetic homes, never the controller's live Hermes profile.
-      HERMES_HOME: ${{ runner.temp }}/finix-sdk-home
-      HERMES_RUNTIME_DIR: ${{ runner.temp }}/finix-sdk-runtime
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,11 +66,19 @@ jobs:
           python -c "import shutil; shutil.rmtree('node_modules')"
       - name: Validate with released Hermes and its package manager
         shell: bash
+        env:
+          # Isolated synthetic homes, never the controller's live profile.
+          HOME: ${{ runner.temp }}/finix-ci-user
+          HERMES_HOME: ${{ runner.temp }}/finix-ci-user/.hermes
+          HERMES_RUNTIME_DIR: ${{ runner.temp }}/finix-sdk-runtime
         run: |
           set -euo pipefail
+          mkdir -p "$HOME"
           git clone --depth 1 --branch v0.23.1 https://github.com/NousResearch/hermes-agent.git "$RUNNER_TEMP/hermes-sdk"
           cd "$RUNNER_TEMP/hermes-sdk"
           test "$(git rev-parse HEAD)" = 3b421578588243f920886e6fe79a6faa87ea026e
+          bash scripts/run-in-hermes-env python hermes profile create finix-ci --no-alias --no-skills
+          bash scripts/run-in-hermes-env python "$GITHUB_WORKSPACE/.github/public-sdk-probe.py" --project "$GITHUB_WORKSPACE"
           bash scripts/run-in-hermes-env python hermes plugins validate "$GITHUB_WORKSPACE" --install-deps --json | tee "$RUNNER_TEMP/finix-sdk-validation.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

@@ -54,8 +54,13 @@ class RecoveryOperations:
         core.atomic_json(core.private_dir(root/'history')/(state['id']+'.json'),state)
         core.atomic_json(root/'current.json',state)
 
-    def _view(self,state):
-        return {k:state[k] for k in _PUBLIC if k in state} if state else None
+    def _view(self, state):
+        if not state:
+            return None
+        view = {key: state[key] for key in _PUBLIC if key in state}
+        view.update(historical_only=True, runtime_capability_supported=False,
+                    cancellable=False, full_acceptance=False)
+        return view
 
     def _refresh(self,service,root,path,lease):
         return self._read(service, path)
