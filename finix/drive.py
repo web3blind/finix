@@ -56,9 +56,12 @@ def session_target(uri):
         query = parse_qs(url.query, keep_blank_values=True, strict_parsing=True)
         if (url.scheme != 'https' or url.netloc not in {'www.googleapis.com', 'www.googleapis.com:443'}
                 or url.path != '/upload/drive/v3/files' or url.fragment or '#' in uri
-                or set(query) != {'uploadType', 'upload_id'}
+                or set(query) not in ({'uploadType', 'upload_id'},
+                                      {'uploadType', 'upload_id', 'session_crd'})
                 or query['uploadType'] != ['resumable'] or len(query['upload_id']) != 1
-                or not re.fullmatch(r'[A-Za-z0-9_-]{1,4096}', query['upload_id'][0])):
+                or not re.fullmatch(r'[A-Za-z0-9_-]{1,4096}', query['upload_id'][0])
+                or ('session_crd' in query and (len(query['session_crd']) != 1
+                    or not re.fullmatch(r'[A-Za-z0-9_-]{1,4096}', query['session_crd'][0])))):
             raise ValueError
         return url.path + '?' + url.query
     except (ValueError, TypeError):

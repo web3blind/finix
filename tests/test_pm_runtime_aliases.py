@@ -116,8 +116,13 @@ class PMRuntimeAliasTests(unittest.TestCase):
             with self.subTest(home=home), fixture() as (base, source):
                 runtime(source)
                 config = source / PREFIX / 'pyvenv.cfg'
-                config.write_text(config.read_text().replace(HOME, home).replace(
-                    'version_info = 3.14.9', 'version_info = ' + version))
+                original = config.read_text()
+                changed = original.replace(HOME, home).replace(
+                    'version_info = 3.14.9', 'version_info = ' + version)
+                self.assertNotEqual(original, changed)
+                self.assertIn('home = ' + home + '\n', changed)
+                self.assertIn('version_info = ' + version + '\n', changed)
+                config.write_text(changed)
                 primary = source / PREFIX / 'bin/python'
                 primary.unlink()
                 primary.symlink_to(home + '/' + executable)
@@ -140,6 +145,36 @@ class PMRuntimeAliasTests(unittest.TestCase):
                 # Even in a recognized layout, an unexpected target is never followed.
                 primary.unlink()
                 primary.symlink_to('/etc/passwd')
+                with self.assertRaises(core.FinixError):
+                    scan(source)
+
+    def test_released_sdk_layout_metadata_and_primary_targets_must_agree(self):
+        package = '/synthetic-owner/.cache/hermes-runtime/python-3.14.9+1-linux-x64/bin'
+        uv = '/synthetic-owner/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin'
+        cases = (
+            (package.replace('3.14.9', '3.14'), '3.14', 'python3'),
+            (package, '3.14.9', 'python3.14'),
+            (uv, '3.14', 'python3'),
+            (package, '3.13.9', 'python3'),
+            (uv, '3.13', 'python3.14'),
+            (package.replace('-x64/', '-x86_64/'), '3.14.9', 'python3'),
+            (uv.replace('-x86_64-', '-x64-'), '3.14', 'python3.14'),
+            (uv.replace('-gnu/', '-musl/'), '3.14', 'python3.14'),
+        )
+        for home, version, executable in cases:
+            with self.subTest(home=home, version=version, executable=executable), fixture() as (_, source):
+                runtime(source)
+                config = source / PREFIX / 'pyvenv.cfg'
+                original = config.read_text()
+                changed = original.replace(HOME, home).replace(
+                    'version_info = 3.14.9', 'version_info = ' + version)
+                self.assertNotEqual(original, changed)
+                self.assertIn('home = ' + home + '\n', changed)
+                self.assertIn('version_info = ' + version + '\n', changed)
+                config.write_text(changed)
+                primary = source / PREFIX / 'bin/python'
+                primary.unlink()
+                primary.symlink_to(home + '/' + executable)
                 with self.assertRaises(core.FinixError):
                     scan(source)
 

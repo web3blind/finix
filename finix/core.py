@@ -320,9 +320,10 @@ def _pm_runtime_alias(rootfd, parent, relative, info, *, ancestry):
             # Both SDK-managed tool archives and uv-managed Python are used by
             # released bootstrap. Their parent location is configurable; neither
             # layout authorizes following a target or discarding regular payloads.
-            packaged = re.fullmatch(
+            packaged = (re.fullmatch(
                 r'/[^\n]+/python-' + re.escape(version)
                 + r'[+][0-9]+-linux-(?:x64|arm64)/bin', home)
+                if re.fullmatch(r'3[.][0-9]+[.][0-9]+', version) else None)
             uv_managed = re.fullmatch(
                 r'/[^\n]+/cpython-' + re.escape(version)
                 + r'-linux-(?:x86_64|aarch64)-gnu/bin', home)

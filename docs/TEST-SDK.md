@@ -45,3 +45,51 @@ contain valid catalog, inert history and SQLite/custody invariants; they must
 not be excluded solely by their filename. No blanket recovery/workspace skip,
 import-error suppression or passing xfail policy has been added. Full legacy
 collection and replacement transaction coverage remain unverified.
+
+## Disposable-VM public-SDK verification
+
+The 2026-11-15 Linux experiment used released Hermes v0.23.1, a new synthetic
+profile and its own `finix:google` OAuth grant with only `drive.file`. No old
+Workspace helper, copied user grant or raw-token transport was used.
+
+Two real producer differences were reproduced before repair: PM bootstrap
+virtualenv aliases outside a literal `tools/` directory (including uv's minor
+version metadata), and Google's optional `session_crd` in a resumable Location.
+Capture still preserves every regular file; it does not skip PM generations or
+change legacy archive admission. The URI repair permits only one bounded opaque
+`session_crd`, retaining the exact HTTPS origin/path and all other query fences.
+
+Remote checks ran 14 alias tests (two named platform/tooling skips), two URI
+boundary tests and 18 controlled loopback protocol tests. These fixtures are not
+live Google acceptance. The opt-in SDK-created-venv test was skipped; independent
+real SDK `pyvenv.cfg` and no-follow readlink captures establish the two witnessed
+layouts. A hypothetical full-version uv variation is not runtime-certified.
+
+The separate live cloud component run uploaded 92,168,673 ciphertext bytes,
+independently downloaded and matched SHA256, then decrypted and validated all
+13,004 archived files. It deliberately combined the unchanged installed
+`dcde333` credentialed adapter with candidate capture/media handling. It is not a
+native installation or GUI-backup acceptance of the final candidate.
+
+The actual downloaded bytes also passed an externally orchestrated cold test:
+absent canonical default-home, original home/state retained separately, no user
+writers, normal SDK startup/PM regeneration, full equality of three synthetic
+SessionDB exports and a note, and paused cron. Original directories were returned.
+SDK installation/runtime stayed outside the restored home on the same VM. This
+proves cold data continuity, not fresh-machine restoration, live replacement,
+automatic Default Apply, sandboxing, or an application-owned writer lease.
+
+A real older-producer/newer-reader age fixture additionally preserved a regular
+PM-interpreter-named file and paused an originally enabled future cron job without
+mutating its source. The installed older reader accepted the candidate-produced
+cloud copy as well. Existing journals and inactive recovery state remain inert.
+
+Actual Linux Desktop loaded the approved payload in English, preserved the
+registered-key lock, verified/applied its own Google connection, and showed the
+automatic-default capability as unavailable without an identity picker. Native
+Windows GUI, final-candidate native CLI/UI backup, unrestricted legacy collection,
+and automatic recovery remain separate, uncompleted gates. A source-only,
+tool-less Claude Opus 5.5 review found no remaining substantive safety/correctness
+blocker after actual-layout evidence and regression fixes; it does not replace
+those acceptance gates. The chronological operator record and credential-free
+runtime reports are retained privately; the workflow declares the public CI gates.

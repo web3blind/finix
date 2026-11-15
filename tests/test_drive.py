@@ -174,6 +174,11 @@ class DriveTests(unittest.TestCase):
         spec.loader.exec_module(module)
         installed = importlib.import_module(package + '.drive')
         self.error_type = importlib.import_module(package + '.core').FinixError
+        from hermes_constants import set_hermes_home_override, reset_hermes_home_override
+        # Production refuses unbound provider calls; fence the real SDK caller
+        # to this synthetic installation, never the operator's default profile.
+        scope = set_hermes_home_override(core.checked_path(self.root))
+        self.addCleanup(reset_hermes_home_override, scope)
         patch('hermes_constants.get_hermes_home', return_value=self.root).start()
         patch('hermes_cli.plugin_oauth._plugin_oauth_spec', return_value=(
             frozenset({('https', 'www.googleapis.com', 443)}),
@@ -182,6 +187,14 @@ class DriveTests(unittest.TestCase):
         self.folder = self.drive.create_folder()
         self.file = self.root / 'backup.age'
         self.file.write_bytes(b'age-encryption.org/v1\n' + bytes(range(256)) * 8193)  # binary transport fixture
+
+    def test_unbound_provider_call_refuses_before_sdk_or_network(self):
+        import contextvars
+        with patch('hermes_cli.plugin_provider_requests.credentialed_provider_request') as caller:
+            with self.assertRaises(self.error_type):
+                contextvars.Context().run(self.drive.request, 'GET',
+                    'https://www.googleapis.com/drive/v3/files')
+            caller.assert_not_called()
 
     def completion(self):
         # Synthetic transport fixtures explicitly attest their known provenance.
