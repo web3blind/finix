@@ -397,8 +397,7 @@ def _source_namespace(rootfd):
     """
     from . import core
     try:
-        from hermes_constants import profile_name_for_home
-        from hermes_cli.profiles import get_profile_dir, validate_profile_name
+        from hermes_constants import profile_name_for_home, get_default_hermes_root, named_profile_home
     except ImportError:
         return None
     if os.name == 'nt':
@@ -414,8 +413,12 @@ def _source_namespace(rootfd):
     if name is None:
         return None
     try:
-        validate_profile_name(name)  # exact SDK result, never case repair
-        resolved = get_profile_dir(name)
+        # This is Finix's serialized namespace policy, not a private SDK validator.
+        if not isinstance(name, str) or not core.re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', name):
+            raise ValueError()
+        resolved = get_default_hermes_root(home=home) if name == 'default' else named_profile_home(home)
+        if resolved is None:
+            raise ValueError()
         if os.name == 'nt':
             if canonical_directory(resolved)[1] != identity:
                 raise ValueError()

@@ -1,10 +1,13 @@
 """Closed setup diagnostics. Never serialize exception text or provider output."""
 from .core import FinixError
 from .rclone_storage import RcloneError
+from .workspace_drive import RemovedWorkspaceTransport
 import sqlite3
 
 
 def setup_error_code(error):
+    if isinstance(error, RemovedWorkspaceTransport):
+        return 'WORKSPACE_SKILL_TRANSPORT_REMOVED'
     if isinstance(error, sqlite3.Error):
         return 'SETUP_SQLITE_FAILED'
     if isinstance(error, RcloneError):

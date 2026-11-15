@@ -137,24 +137,10 @@ def validate_policy(p):
 def stopped_attempt(engine,runtime):
     # Not serializable process authority. Cleanup must have completed against the
     # retained Popen/native handles; a durable PID is never sufficient.
-    if (not getattr(runtime,'_stopped',False)
-        or getattr(runtime,'attempt_plan_digest',None)!=engine.plan_digest
-        or getattr(runtime,'_ready_observed',False)
-        or (runtime.child is not None and runtime.child.poll() is None)
-        or (runtime.child is None and not getattr(runtime,'_never_spawned',False))
-        or (os.name=='nt' and runtime.child is not None
-            and (runtime.native is None or not runtime.native.runtime_pids))
-        or cold._identity(runtime.root)!=engine._plan()['root_identity']):
-        raise cold.RecoveryError('ATTEMPT_STOP_UNVERIFIED')
-    proof=_Stopped();_PROOFS[proof]=engine.plan_digest
-    return proof
+    raise cold.RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
 
 def require_stopped_attempt(engine,proof):
-    from gateway.runtime_ownership import live_runtime_owner
-    if live_runtime_owner(Path(engine._plan()['root'])) is not None:
-        raise cold.RecoveryError('REOPEN_LIVE_OWNER_UNVERIFIED')
-    if proof not in _PROOFS or _PROOFS[proof]!=engine.plan_digest:
-        raise cold.RecoveryError('ATTEMPT_STOP_UNVERIFIED')
+    raise cold.RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
 
 def commit_success(engine,identity):
     """Fresh owned READY is already observed; errors MUST NOT roll back."""
@@ -228,120 +214,4 @@ def _manifest(engine,p,j,base):
     return result
 
 def rollback(engine,consent,proof):
-    p=engine._plan()
-    if p['version']!=4: raise cold.RecoveryError('RUNTIME_ATTEMPT_NOT_AUTHORIZED')
-    if consent!=engine.consent(): raise cold.RecoveryError('CONSENT_REQUIRED')
-    if (engine.directory/'success-commit.json').exists() or (engine.directory/'ready-observed.json').exists():
-        raise cold.RecoveryError('SUCCESS_RECONCILIATION_REQUIRED')
-    root=cold._root(p['root']); base=Path(p['runtime_attempt']['custody'])
-    from gateway.runtime_ownership import exclusive_maintenance,live_runtime_owner
-    from .backup_jobs import file_lease
-    from .default_recovery_lifecycle import writer_fence
-    # Proof required for first census. Durable manifest permits only DATA
-    # continuation after crash, under absent-owner + exclusive SDK reservation.
-    if not (base/'execution-manifest.json').exists(): require_stopped_attempt(engine,proof)
-    if live_runtime_owner(root) is not None: raise cold.RecoveryError('REOPEN_LIVE_OWNER_UNVERIFIED')
-    with file_lease(engine.directory/'worker.lock'),writer_fence(root),exclusive_maintenance([root],purpose='finix-runtime-attempt-preserve'),ExitStack() as guards:
-        guards.enter_context(core.locked(root));engine._fence(p,guards)
-        j=engine._journal(p)
-        for d in [base,base/'copies',base/'old',base/'objects',base/'restore-staging',engine.directory/'custody-originals']:
-            core.private_dir(d);cold._retain(guards,d,root);cold._private(d)
-        manifest_file=base/'execution-manifest.json'
-        m=cold._load(manifest_file) if manifest_file.exists() else _manifest(engine,p,j,base)
-        from . import custody_payload as container
-        try: container.validate_manifest(m)
-        except (ValueError, TypeError, KeyError): raise cold.RecoveryError('INVALID_JOURNAL') from None
-        if (m.get('version')!=2 or m.get('namespace')!=p['id'] or m.get('policy')!=POLICY or m.get('plan_digest')!=engine.plan_digest
-            or m.get('root_identity')!=p['root_identity'] or cold._identity(root)!=p['root_identity']
-            or set(m.get('current',{}))!=set(p['runtime_attempt']['names'])
-            or set(m.get('old',{}))!=set(p['runtime_attempt']['names'])):
-            raise cold.RecoveryError('INVALID_JOURNAL')
-        for parent,identity in m['parents'].items():
-            if cold._identity(Path(parent))!=identity: raise cold.RecoveryError('TARGET_CHANGED')
-        progress_file=base/'progress.json'
-        progress=cold._load(progress_file) if progress_file.exists() else dict(version=2,manifest_digest=cold._digest(m),state='capturing',pending=None,restore={})
-        if progress.get('manifest_digest')!=cold._digest(m): raise cold.RecoveryError('INVALID_JOURNAL')
-        def pending(action):
-            progress['pending']=action;cold._write(progress_file,progress)
-        def check_scope():
-            _unknown(root,m['current'])
-            for n,leaf in m['current'].items():
-                saved=_leaf(engine.directory/'custody-originals'/token(n));actual=_leaf(root/n)
-                restored=progress['restore'].get(n)
-                if saved is not None and saved!=leaf: raise cold.RecoveryError('TARGET_CHANGED')
-                if saved is None:
-                    allowed=[leaf] if progress['state']=='capturing' else [None,restored]
-                else: allowed=[None,restored]
-                if actual not in allowed: raise cold.RecoveryError('TARGET_CHANGED')
-        check_scope()
-        # ALL bytes are copied before ANY canonical move. Reopening never treats
-        # a partially copied final basename as authority.
-        for kind,leaves in [('old',m['old']),('copies',m['current'])]:
-            for n,leaf in leaves.items():
-                if leaf is None: continue
-                target=base/kind/token(n)
-                if target.exists():
-                    _container(target,leaf,m['stored'][kind+'/'+token(n)])
-                    continue
-                if progress['state']!='capturing': raise cold.RecoveryError('PREIMAGE_CHANGED')
-                source=(engine.directory/'preimages'/n if kind=='old' else root/n)
-                if kind=='old' and n in family.NAMES and j['sqlite']:
-                    source=engine.directory/'sqlite-quarantine'/n
-                if _leaf(source)!=leaf: raise cold.RecoveryError('TARGET_CHANGED')
-                pending('copy:'+kind+':'+n)
-                _copy_blob(engine,source,target,logical=leaf)
-                _container(target,leaf,m['stored'][kind+'/'+token(n)])
-                if _leaf(source)!=leaf:
-                    raise cold.RecoveryError('TARGET_CHANGED')
-        for n,leaf in m['current'].items():
-            if leaf is None: continue
-            saved_container=base/'objects'/token(n)
-            if not saved_container.exists():
-                if progress['state']!='capturing': raise cold.RecoveryError('PREIMAGE_CHANGED')
-                pending('container:'+n)
-                _copy_blob(engine,base/'copies'/token(n),saved_container)
-            _container(saved_container,leaf,m['stored']['objects/'+token(n)])
-        if progress['state']=='capturing':
-            check_scope()
-            for n,leaf in m['current'].items():
-                if leaf is None: continue
-                if n in family.NAMES: check_scope()
-                saved=engine.directory/'custody-originals'/token(n)
-                if _leaf(saved) is None:
-                    pending('move:'+n)
-                    family._move(engine,root/n,saved,leaf)
-            check_scope()
-            progress['state']='custody_committed';pending(None)
-        # Coherent OLD family first; never invoke SQLite between generations.
-        order=[n for n in family.NAMES if n in m['old']]+[n for n in m['old'] if n not in family.NAMES]
-        check_scope()
-        for n in order:
-            old=m['old'][n];target=root/n
-            if old is not None and n in family.NAMES: check_scope()
-            if old is None:
-                if os.path.lexists(target): raise cold.RecoveryError('TARGET_CHANGED')
-                continue
-            if n not in progress['restore']:
-                stage=base/'restore-staging'/token(n)
-                if n in family.NAMES and j['sqlite']:
-                    stage=engine.directory/'sqlite-quarantine'/n
-                    expected=old
-                else:
-                    if not stage.exists():
-                        pending('restore-copy:'+n)
-                        _copy_blob(engine,base/'old'/token(n),stage,decode=True)
-                    expected=_leaf(stage)
-                    if expected['sha256']!=old['sha256']: raise cold.RecoveryError('PREIMAGE_CHANGED')
-                progress['restore'][n]=expected
-                pending('restore:'+n)
-            expected=progress['restore'][n]
-            if os.path.lexists(target):
-                if _leaf(target)!=expected: raise cold.RecoveryError('TARGET_CHANGED')
-                continue
-            source=(engine.directory/'sqlite-quarantine'/n if n in family.NAMES and j['sqlite'] else base/'restore-staging'/token(n))
-            pending('restore:'+n)
-            family._move(engine,source,target,expected)
-        check_scope()
-        progress['state']='restored';pending(None)
-        engine._state('rolled_back')
-        return engine.status()
+    raise cold.RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')

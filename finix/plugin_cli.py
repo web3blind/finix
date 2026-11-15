@@ -26,26 +26,26 @@ def setup_parser(parser):
     start = operations.add_parser('start', help='Emit acknowledgement, then observe until terminal; keep terminal open')
     start.add_argument('--request-id', required=True, help='Canonical UUID; reuse only to replay that intent')
     operations.add_parser('status', help='Read current public job status; never starts work')
-    recovery = commands.add_parser('recovery', help='Local-owner recovery; restores into a new inert profile, then confirms serving')
+    recovery = commands.add_parser('recovery', help='Catalog preview; automatic recovery unavailable pending a public Hermes contract')
     recovery_ops = recovery.add_subparsers(dest='recovery_action', required=True)
     recovery_ops.add_parser('list', help='Discover committed encrypted copies without reading an identity')
     recovery_ops.add_parser('status', help='Read durable SOURCE operation without starting or reconnecting work')
-    restore = recovery_ops.add_parser('restore', help='Restore, safely import and start a unique recovered profile; keep terminal open')
-    restore.add_argument('--copy-id', required=True, help='Exact id returned by recovery list')
+    restore = recovery_ops.add_parser('restore', help='Unavailable: use standalone offline inert restore')
+    restore.add_argument('--copy-id', help='Exact id returned by recovery list')
     restore.add_argument('--request-id', help='Canonical intent UUID; exact replay never starts another operation')
-    restore.add_argument('--identity', required=True, help='Absolute local identity FILE; never key contents')
+    restore.add_argument('--identity', help='Absolute local identity FILE; never key contents')
     restore.add_argument('--acknowledge-incomplete', action='store_true', help='Explicitly accept an incomplete or unknown copy')
     default_prepare = recovery_ops.add_parser('default-prepare', help='Decrypt and seal true-default maintenance; does not stop anything')
-    default_prepare.add_argument('--copy-id', required=True)
-    default_prepare.add_argument('--identity', required=True, help='Local identity FILE, never key contents')
-    default_prepare.add_argument('--request-id', required=True, help='Fresh 32 lowercase hex intent; lost ACK permits exact preview status only')
+    default_prepare.add_argument('--copy-id')
+    default_prepare.add_argument('--identity', help='Local identity FILE, never key contents')
+    default_prepare.add_argument('--request-id', help='Fresh 32 lowercase hex intent; lost ACK permits exact preview status only')
     default_prepare.add_argument('--consent-prepare', action='store_true')
     for action in ('default-preview','default-preview-cancel'):
         command=recovery_ops.add_parser(action, help='Read or cancel the exact durable preview preparation; never decrypt again')
         command.add_argument('id')
     default_apply = recovery_ops.add_parser('default-apply', help='Separately confirm downtime and launch detached maintenance')
     default_apply.add_argument('id')
-    default_apply.add_argument('--confirmation', required=True)
+    default_apply.add_argument('--confirmation')
     default_apply.add_argument('--confirm', action='store_true')
     default_status = recovery_ops.add_parser('default-status', help='Read durable maintenance status')
     default_status.add_argument('id')
@@ -153,120 +153,28 @@ def _wizard(profile):
 
 
 def _default_recovery(profile, args):
-    from .default_recovery_api import DefaultRecoveryAPI, authority, new_service, public_error, RecoveryError
-    service = None
-    try:
-        api = DefaultRecoveryAPI()
-        authority(profile)
-        action = args.recovery_action
-        if action in ('default-preview','default-preview-cancel'):
-            from .default_preview_jobs import PreviewJobs
-            owner=PreviewJobs()
-            answer=owner.status(profile,args.id) if action=='default-preview' else owner.cancel(profile,args.id)
-        elif action == 'default-status':
-            answer = api.status(profile,args.id)
-        elif action == 'default-apply':
-            answer = api.apply(profile,args.id,args.confirmation,consent=args.confirm)
-        elif action == 'default-reopen':
-            answer = api.reopen(profile,args.id,consent=args.confirm)
-        else:
-            if args.consent_prepare is not True:
-                raise RecoveryError('CONSENT_REQUIRED')
-            from .default_preview_cli import start
-            answer=start(profile,args.request_id,args.copy_id,args.identity)
-        _emit(answer)
-        return 0
-    except Exception as exc:
-        _emit({'error':public_error(exc),'activated':False})
-        return 1
-    finally:
-        if service is not None:
-            service.close()
+    from .recovery_availability import capability
+    _emit(dict(capability(), activated=False))
+    return 1
 
 
 def _recovery(profile, args):
-    # This is an in-process native command, not an HTTP request. Authority is
-    # the SDK's effective local home plus native no-follow ownership checks.
-    from pathlib import Path
-    from hermes_constants import get_hermes_home
-    from .recovery import RecoveryError
-    from .recovery_import import RecoveryImportError
-    from .recovery_http import RecoveryHTTP, binding, operation_lock
+    from .recovery_availability import capability
+    if args.recovery_action not in ('list', 'status'):
+        _emit(dict(capability(), activated=False))
+        return 1
+    from .recovery_http import RecoveryHTTP, binding
+    adapter = RecoveryHTTP()
     service = None
     try:
-        home = core.checked_path(get_hermes_home())
-        if home != core.checked_path(profile.home):
-            raise RecoveryError('LOCAL_OWNER_REQUIRED')
-        adapter = RecoveryHTTP()
-        if args.recovery_action=='status':
+        service = adapter.service(profile)
+        if args.recovery_action == 'status':
             from .recovery_operations import RecoveryOperations
-            _emit(RecoveryOperations().current(adapter.service(profile)))
-            return 0
-        if args.recovery_action=='restore' and getattr(args,'request_id',None):
-            from .recovery_operations import RecoveryOperations
-            service=adapter.service(profile)
-            replay=RecoveryOperations().replay(service,request_id=args.request_id,
-                candidate_id=args.copy_id,acknowledge_incomplete=args.acknowledge_incomplete)
-            if replay is not None:
-                _emit(dict(replay,activated=False))
-                return 0
-        with core.locked(home):
-            pass
-        with operation_lock(profile):
-            service = adapter.service(profile)
-            items = service.catalog(profile.profile_id, binding(profile))
-        if args.recovery_action == 'list':
-            _emit(dict(profile_id=profile.profile_id, items=items))
-            return 0
-        from .recovery_http import explicit_path, trusted_file, MAX_KEY
-        from .recovery_operations import RecoveryOperations
-        import uuid,os
-        operations=RecoveryOperations()
-        selected = next((row for row in items if row['id'] == args.copy_id), None)
-        if selected is None:raise RecoveryError('INVALID_CANDIDATE')
-        if selected['complete'] is not True and not args.acknowledge_incomplete:
-            raise RecoveryError('INCOMPLETE_ACK_REQUIRED')
-        from .recovery_shared_host import check_bootstrap_compatibility
-        check_bootstrap_compatibility(service)
-        identity=explicit_path(args.identity)
-        with trusted_file(identity) as fd:
-            if not 0<os.fstat(fd).st_size<=MAX_KEY:raise RecoveryError('INVALID_IDENTITY')
-        intent=getattr(args,'request_id',None) or str(uuid.uuid4())
-        state=operations.begin(service,request_id=intent,candidate_id=args.copy_id,
-            acknowledge_incomplete=args.acknowledge_incomplete)
-        _emit(dict(state,activated=False))
-        key_sent=False
-        interrupted=False
-        try:
-            while state['state']=='running':
-                try:
-                    if not interrupted and state['phase']=='awaiting_key' and not key_sent:
-                        with trusted_file(identity) as fd:
-                            key=bytearray(core.read_regular(fd,MAX_KEY))
-                        operations.key(service,state['id'],request_id=str(uuid.uuid5(uuid.UUID(intent),'identity')),identity=key)
-                        key_sent=True
-                    time.sleep(.1)
-                    observed=operations.status(service,state['id'])
-                    if observed!=state:_emit(dict(observed,activated=False))
-                    state=observed
-                except KeyboardInterrupt:
-                    interrupted=True
-                    if state.get('cancellable'):
-                        operations.cancel(service,state['id'])
-                    else:
-                        _emit(dict(id=state['id'],state='running',phase=state['phase'],error='NOT_CANCELLABLE',activated=False))
-            if state['state']=='succeeded':
-                answer=state['receipt'];name=answer['name']
-                _emit(dict(answer,id=state['id'],state='succeeded',activated=True,
-                    use_command=['hermes','--profile',name],chat_verified=False))
-                return 0
-            _emit(dict(id=state['id'],state=state['state'],error=state.get('error','CANCELLED' if state['state']=='cancelled' else 'RECOVERY_INTERRUPTED'),activated=False))
-            return 130 if interrupted and state['state']=='cancelled' else 1
-        finally:
-            operations.close()
-    except (RecoveryError, RecoveryImportError) as exc:
-        _emit(dict(error=exc.code, activated=False))
-        return 1
+            _emit(dict(capability(), retained_operation=RecoveryOperations().current(service)))
+        else:
+            _emit(dict(profile_id=profile.profile_id,
+                       items=service.catalog(profile.profile_id, binding(profile))))
+        return 0
     except Exception:
         _emit(dict(error='RECOVERY_FAILED', activated=False))
         return 1
@@ -276,6 +184,10 @@ def _recovery(profile, args):
 
 
 def run(args, profile_factory=None):
+    if getattr(args, 'finix_action', None) == 'recovery' and getattr(args, 'recovery_action', None) not in ('list', 'status'):
+        from .recovery_availability import capability
+        _emit(dict(capability(), activated=False))
+        return 1
     if profile_factory is None:
         from .integration import current_profile
         profile_factory = current_profile

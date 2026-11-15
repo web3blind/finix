@@ -1,4 +1,4 @@
-"""Job-bound true-default PROFILE DATA recovery; never rename the SDK root.
+"""Historical default recovery journal readers. Runtime mutation is retired.
 
 Shared resources are retained, not cloned. Journaled per-file publication is not
 an ACID directory transaction. Preimages require separately authorized cleanup.
@@ -15,7 +15,7 @@ import weakref
 from . import core
 from .preview_budget import check as _preview_check, PreviewBudgetError
 from .recovery_import import _members, RUNTIME_ROOTS, RUNTIME_FILES
-from .recovery_activation import profile_digest
+from .recovery_import import profile_digest
 
 class RecoveryError(core.FinixError):
     def __init__(self, code):
@@ -95,19 +95,7 @@ def _workspace_kept(kept):
 
 
 def _check_current_workspace(p):
-    expected=_workspace_kept(p['kept_target'])
-    if not expected:return
-    from .default_recovery_lifecycle import _current_workspace_skill
-    from .workspace_skill_transport import NativeBinding
-    try:
-        # Check original native membership BEFORE reading a new selection or
-        # rediscovering sources; changed objects cannot become fresh authority.
-        with NativeBinding(Path(p['root']),next(iter(expected.values()))['binding']):
-            if _current_workspace_skill(Path(p['root']))!=expected:
-                raise RecoveryError('CURRENT_WORKSPACE_SKILL_CHANGED_REPREPARE_REQUIRED')
-    except (RecoveryError, PreviewBudgetError):raise
-    except Exception:
-        raise RecoveryError('CURRENT_WORKSPACE_SKILL_CHANGED_REPREPARE_REQUIRED') from None
+    raise RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
 
 
 def _identity(path):
@@ -185,76 +173,7 @@ def _runtime_executable():
 
 
 def _sqlite_generation(path, sqlite_temp_dir):
-    """Seal the v2 auxiliary-lifecycle policy using a bounded DISK snapshot.
-
-    Only the SDK-exclusive apply boundary authorizes lifecycle transitions.
-    The physical post-reader generation is bound separately before mutation.
-    """
-    import inspect
-    import sqlite3
-    import sys
-    from . import streaming
-    from . import sqlite_family
-    from gateway.runtime_ownership import exclusive_maintenance,live_runtime_owner
-    path=core.checked_path(path)
-    if path.name!='state.db': raise RecoveryError('UNSUPPORTED_SQLITE_TARGET')
-    # The SDK dashboard gives this package a loader-specific module prefix.
-    # Pin producer roles and source bytes, not that ephemeral import spelling.
-    producers={
-        'finix.streaming._connect_source':streaming._connect_source,
-        'finix.streaming._sqlite_backup':streaming._sqlite_backup,
-        'finix.streaming.sqlite_payload':streaming.sqlite_payload,
-        'finix.streaming.sqlite_stage':streaming.sqlite_stage,
-        'finix.sqlite_family.physical':sqlite_family.physical,
-        'finix.sqlite_family._wal_metadata':sqlite_family._wal_metadata,
-        'finix.sqlite_family._admitted_leaf':sqlite_family._admitted_leaf,
-        'gateway.runtime_ownership.exclusive_maintenance':exclusive_maintenance,
-        'gateway.runtime_ownership.live_runtime_owner':live_runtime_owner}
-    if os.name=='nt':
-        from . import windows_native as win
-        producers['finix.windows_native.connect_source']=win.connect_source
-    pins={name:hashlib.sha256(inspect.getsource(fn).encode()).hexdigest()
-          for name,fn in producers.items()}
-    def scope():
-        from .sqlite_family import physical
-        return physical(path)
-    with ExitStack() as guards:
-        _retain(guards,path.parent,path.parent)
-        companions=scope()
-        with core.regular_input(path) as fd:
-            info=os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:
-                raise RecoveryError('UNSAFE_LINK')
-            identity=[info.st_dev,info.st_ino]
-            if os.name=='nt':
-                parent=guards.enter_context(win.directory(path.parent))
-            else:
-                parent=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
-                guards.callback(os.close,parent)
-            digest=hashlib.sha256();source_pragmas={};snapshot_metadata={}
-            def inspect_snapshot(db):
-                snapshot_metadata['protected_content_sha256']=sqlite_family.protected_content(db)
-            with streaming.sqlite_payload(fd,parent,path.name,sqlite_temp_dir,None,None,
-                    metadata=source_pragmas,snapshot_inspect=inspect_snapshot) as (stream,size):
-                count=0
-                while chunk:=stream.read(1024*1024):
-                    _preview_check()
-                    digest.update(chunk);count+=len(chunk)
-                if count!=size: raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
-            protected=snapshot_metadata['protected_content_sha256']
-            final=os.fstat(fd)
-            if final.st_nlink!=1 or identity!=[final.st_dev,final.st_ino] or _identity(path)!=identity:
-                raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
-        scope()  # reader is CLOSED: validate its newly derived auxiliaries too
-    executable=_runtime_executable()
-    return dict(kind=sqlite_family.POLICY,native_identity=identity,
-        snapshot_sha256=digest.hexdigest(),protected_content_sha256=protected,source_pragmas=source_pragmas,capture_algorithm_version='guarded-disk-online-backup-v1',
-        producer_pins=dict(sqlite_version=sqlite3.sqlite_version,functions=pins,helper_module=_sqlite_helper_pin(),
-            runtime=dict(executable=str(executable),
-                         executable_leaf=_leaf(executable),
-                         python_version=sys.version)),
-        family_names=['state.db','state.db-wal','state.db-shm','state.db-journal'],
-        shm_authority='non-data-runtime-derived')
+    raise RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
 
 
 def _verify_sqlite_generation(path, sqlite_temp_dir, sealed):
@@ -287,11 +206,8 @@ def _move_noreplace(a,name,b,destination):
     os.fsync(a);os.fsync(b)
 
 def _root(root):
-    from hermes_constants import get_default_hermes_root
-    from hermes_cli.profiles import get_profile_dir
-    root=core.checked_path(root)
-    if not os.path.samefile(root,get_default_hermes_root()) or not os.path.samefile(root,get_profile_dir('default')):
-        raise RecoveryError('WRONG_DEFAULT_ROOT')
+    root = core.checked_path(root)
+    _private(root)
     return root
 
 def _private(path):
@@ -488,123 +404,10 @@ def _validate_plan(p):
         validate_policy(p)
 
 def verified_import(service,job_id,*,profile_id,activation,name):
-    """Issue authority from a verified handoff into a separate private inert copy.
-
-    Service lacks ciphertext digest in handoff: seal verified CONTENT inventory,
-    never mislabel it ciphertext_sha256. Legacy role is unknown, never guessed.
-    """
-    from .recovery import RecoveryService
-    if type(service) is not RecoveryService: raise RecoveryError('INVALID_CAPABILITY')
-    from hermes_cli.profiles import get_profile_dir
-    with service._lock:
-        handoff=service.handoff(job_id,profile_id,activation)
-        with ExitStack() as stack:
-            raw=_inventory(Path(handoff['profile_root']),stack)
-            content={n:d for n,(p,d) in raw.items()}
-        # Stock import_profile publishes world-accessible ACLs on native Windows.
-        # Do not weaken admission or adopt that publication. Build a private inert
-        # verified copy from the sealed RecoveryService handoff instead.
-        from .recovery_import import _safe_config, _safe_env, _read, MAX_CONFIG, PARKED_ROOTS
-        from hermes_cli.profiles import validate_profile_name
-        validate_profile_name(name)
-        if name=='default': raise RecoveryError('INVALID_NAME')
-        base=core.private_dir(service.profile/'cache/finix/default-copies')
-        target=core.private_dir(base/uuid.uuid4().hex)
-        with ExitStack() as anchors:
-            raw=_inventory(Path(handoff['profile_root']),anchors)
-            for relative,(path,digest) in raw.items():
-                first=relative.split('/')[0].casefold()
-                destination=relative
-                if first in RUNTIME_ROOTS or relative.casefold() in RUNTIME_FILES:
-                    destination='.finix-paused/'+relative
-                elif first in PARKED_ROOTS or first in {'skills','cron','shared','plugin-data'}:
-                    destination='.finix-paused/'+relative
-                if relative=='config.yaml':
-                    original=_read(path,MAX_CONFIG)
-                    _copy(path,target/'.finix-paused/config.yaml')
-                    with core.regular_output(target/relative) as fd:
-                        os.write(fd,_safe_config(original));os.fsync(fd)
-                elif relative=='.env':
-                    original=_read(path,MAX_CONFIG)
-                    _copy(path,target/'.finix-paused/.env')
-                    with core.regular_output(target/relative) as fd:
-                        os.write(fd,_safe_env(original));os.fsync(fd)
-                else:
-                    _copy(path,target/destination)
-                    if core.digest_file(target/destination)!=digest: raise RecoveryError('SOURCE_CHANGED')
-        cap=VerifiedImport()
-        _CAPABILITIES[cap]=dict(service=service,job=job_id,profile_id=profile_id,
-            activation=activation,source=target,identity=_identity(target),
-            digest=profile_digest(target),content_digest=_digest(content),
-            retained_source_shared_files=sum(n.split('/')[0].casefold() in SHARED for n in raw))
-        return cap
+    raise RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
 
 def prepare(verified_import_capability,canonical_default_root,*,journal_root,intent,runtime_attempt_policy=None):
-    if runtime_attempt_policy not in (None,'runtime-attempt-preserve-v1'):
-        raise RecoveryError('INVALID_RUNTIME_ATTEMPT_POLICY')
-    if not isinstance(verified_import_capability,VerifiedImport) or verified_import_capability not in _CAPABILITIES:
-        raise RecoveryError('INVALID_CAPABILITY')
-    cap=_CAPABILITIES[verified_import_capability]
-    if intent!='replace-real-default': raise RecoveryError('REPLACE_DEFAULT_INTENT_REQUIRED')
-    root=_root(canonical_default_root);_private(root)
-    source=cap['source']
-    cap['service'].handoff(cap['job'],cap['profile_id'],cap['activation'])
-    if _identity(source)!=cap['identity'] or profile_digest(source)!=cap['digest']:
-        raise RecoveryError('SOURCE_CHANGED')
-    journal_root=core.checked_path(journal_root)
-    if journal_root!=root/'cache/finix/default-recovery': raise RecoveryError('UNSAFE_JOURNAL')
-    if source.stat().st_dev!=root.stat().st_dev: raise RecoveryError('CROSS_VOLUME')
-    with ExitStack() as stack:
-        stack.enter_context(core.locked(root))
-        _retain(stack,root,root)
-        inventory=_inventory(source,stack)
-        if runtime_attempt_policy is None and any(n.startswith('recovery-custody/') for n in inventory):
-            raise RecoveryError('RUNTIME_ATTEMPT_NOT_AUTHORIZED')
-        selected={n:(p,d) for n,(p,d) in inventory.items()
-            if n.split('/')[0].casefold() not in SHARED and n.casefold() not in RUNTIME_FILES}
-        if 'config.yaml' not in selected: raise RecoveryError('CONFIG_REQUIRED')
-        for name in selected:
-            destination=core.checked_path(root/name)
-            if destination.exists() and not destination.is_file(): raise RecoveryError('TARGET_CONFLICT')
-        # Create and admit the private parent explicitly: Path.mkdir(parents=True)
-        # applies mode only to its leaf, not to missing intermediate directories.
-        core.private_dir(journal_root)
-        _private(journal_root)
-        job=uuid.uuid4().hex
-        directory=core.private_dir(journal_root/job)
-        _private(directory)
-        payload=core.private_dir(directory/'payload')
-        for name,(path,digest) in selected.items():
-            _preview_check()
-            _copy(path,payload/name)
-            if core.digest_file(payload/name)!=digest: raise RecoveryError('SOURCE_CHANGED')
-        target_owned=_owned_inventory(root,stack)
-        entries={n:d for n,(p,d) in selected.items()}
-        from .sqlite_family import prepare_policy
-        sqlite_families=prepare_policy(root,entries,directory)
-        _preview_check()
-        kept=_kept_inventory(root,entries)
-        retained=cap.get('current_workspace_skill',{})
-        kept.update(retained)
-        _check_current_workspace(dict(root=str(root),kept_target=kept))
-        plan=dict(version=3,id=job,root=str(root),root_identity=_identity(root),
-            source=str(source),source_identity=cap['identity'],source_digest=cap['digest'],
-            content_digest=cap['content_digest'],epoch=uuid.uuid4().hex,
-            entries={n:d for n,(p,d) in selected.items()},role='default',
-            retained_source_shared_files=cap['retained_source_shared_files'],
-            shared_policy='preserve-existing-report-source-not-promoted',
-            replacement_policy=REPLACEMENT_POLICY,replacement_roots=sorted(PROFILE_REPLACEMENT_ROOTS),
-            target_owned=target_owned,deletions={n:d for n,d in target_owned.items() if n not in entries and n not in retained},
-            deletion_leaves={n:_leaf(root/n) for n in target_owned if n not in entries and n not in retained},
-            kept_target=kept,kept_target_count=len(kept),kept_target_digest=_digest(kept),
-            target_entries={n:core.digest_file(root/n) if (root/n).exists() else None for n in entries},
-            sqlite_families=sqlite_families)
-        if runtime_attempt_policy is not None:
-            from .runtime_attempt import policy
-            plan.update(version=4,runtime_attempt=policy(root,job,plan))
-        core.atomic_json(directory/'plan.json',plan)
-        core.atomic_json(directory/'status.json',dict(state='prepared',error=None))
-        return DefaultRecovery(directory,_digest(plan))
+    raise RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
 
 class DefaultRecovery:
     def __init__(self,directory,plan_digest):
@@ -739,112 +542,7 @@ class DefaultRecovery:
                 os.unlink(captured,dir_fd=q.fd);os.fsync(q.fd)
                 guard.check();q.check()
     def apply(self,consent):
-        """Synchronous controller operation; NOT safe to invoke in an HTTP handler.
-
-        Current release gate: a live owner is refused, never automatically stopped.
-        Detached-controller admission and scoped writer quiescence remain blocked.
-        Cold-root transactions are functional, with retained rollback preimages.
-        """
-        p=self._plan()
-        if consent!=self.consent(): raise RecoveryError('CONSENT_REQUIRED')
-        root=_root(p['root'])
-        if _identity(root)!=p['root_identity']: raise RecoveryError('ROOT_CHANGED')
-        _check_current_workspace(p)
-        source=Path(p['source'])
-        if _identity(source)!=p['source_identity'] or profile_digest(source)!=p['source_digest']:
-            raise RecoveryError('SOURCE_CHANGED')
-        for name,digest in p['entries'].items():
-            if core.digest_file(self.directory/'payload'/name)!=digest: raise RecoveryError('PAYLOAD_CHANGED')
-        from gateway.runtime_ownership import exclusive_maintenance,live_runtime_owner
-        from .backup_jobs import file_lease
-        if live_runtime_owner(root) is not None:
-            raise RecoveryError('SDK_SCOPED_STOP_NOT_VERIFIED')
-        with file_lease(self.directory/'worker.lock'):
-            if self.status()['state'] in {'succeeded','published_offline'}:
-                if p['sqlite_families']:
-                    from . import sqlite_family
-                    with exclusive_maintenance([root],purpose='finix-default-recovery-readback'):
-                        bound=self._journal(p)['sqlite']
-                        actual=sqlite_family._placement(self,p,bound)
-                        if (actual['state.db'][0]!=bound['manifest']['incoming']
-                            or any(actual[n][0] is not None for n in sqlite_family.NAMES[1:])):
-                            raise RecoveryError('TARGET_CHANGED')
-                for name,digest in p['entries'].items():
-                    if core.digest_file(root/name)!=digest: raise RecoveryError('TARGET_CHANGED')
-                if any((root/n).exists() for n in p['deletions']): raise RecoveryError('TARGET_CHANGED')
-                return self.status()
-            if self.status()['state']!='prepared': raise RecoveryError('ROLLBACK_REQUIRED')
-            with exclusive_maintenance([root],purpose='finix-default-recovery'),ExitStack() as anchors:
-                root_anchor=anchors.enter_context(core.locked(root))
-                self._fence(p,anchors)
-                _check_current_workspace(p)
-                _private(root)
-                # Re-census only after actual SDK exclusive quiescence. Consent
-                # authorizes this exact old inventory, not a later generation.
-                if _owned_inventory(root,anchors)!=p['target_owned']:
-                    raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
-                expected=dict(p['target_entries'],**p['deletions'])
-                from . import sqlite_family
-                family=sqlite_family.bind(self,p) if p['sqlite_families'] else None
-                if any(_leaf(root/n)!=leaf for n,leaf in p['deletion_leaves'].items()):
-                    raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
-                for name,digest in expected.items():
-                    if name in p['sqlite_families']: continue
-                    target=core.checked_path(root/name)
-                    if (core.digest_file(target) if target.exists() else None)!=digest:
-                        raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
-                old={}
-                preimages=core.private_dir(self.directory/'preimages')
-                # Capture ALL preimages before the first profile-data replacement.
-                for name in dict(p['entries'],**p['deletions']):
-                    if name in p['sqlite_families']:
-                        leaf=family['manifest']['members'][name]
-                        old[name]=leaf['sha256'] if leaf else None
-                        continue
-                    target=core.checked_path(root/name)
-                    if target.exists():
-                        with core.regular_input(target) as fd:
-                            if os.fstat(fd).st_nlink!=1: raise RecoveryError('UNSAFE_LINK')
-                        old[name]=core.digest_file(target)
-                        _copy(target,preimages/name)
-                        if core.digest_file(preimages/name)!=old[name]: raise RecoveryError('TARGET_CHANGED')
-                    else: old[name]=None
-                    if old[name]!=expected[name]: raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
-                if _owned_inventory(root,anchors)!=p['target_owned']:
-                    raise RecoveryError('TARGET_CHANGED_REPREPARE_REQUIRED')
-                if p['version']==4:
-                    from .runtime_attempt import preserve_incoming
-                    preserve_incoming(self,p)
-                journal=dict(version=3 if p['version']==4 else 2,plan_digest=self.plan_digest,old=old,pending=[],published=[],sqlite=family)
-                _write(self.directory/'journal.json',journal)
-                self._state('publishing')
-                try:
-                    if family: sqlite_family.publish(self,p,journal)
-                    for name,digest in dict(p['entries'],**{n:None for n in p['deletions']}).items():
-                        if name in p['sqlite_families']: continue
-                        journal['pending']=[name]
-                        _write(self.directory/'journal.json',journal)
-                        if digest is None:
-                            self._delete(root/name)
-                            if (root/name).exists(): raise RecoveryError('PUBLISH_VERIFY_FAILED')
-                        else:
-                            self._publish(self.directory/'payload'/name,root/name)
-                            if core.digest_file(root/name)!=digest: raise RecoveryError('PUBLISH_VERIFY_FAILED')
-                        journal['published'].append(name);journal['pending']=[]
-                        _write(self.directory/'journal.json',journal)
-                    _check_current_workspace(p)
-                    # No readiness claim from data-only publication. A full adapter
-                    # must prove SDK ready and exact default role before success.
-                    self._state('published_offline')
-                    return self.status()
-                except Exception:
-                    try:
-                        self._restore(root,journal,root_anchor)
-                        self._state('rolled_back')
-                    except Exception:
-                        self._state('rollback_failed','ROLLBACK_FAILED')
-                        raise RecoveryError('ROLLBACK_FAILED') from None
-                    raise RecoveryError('APPLY_ROLLED_BACK') from None
+        raise RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
     def _journal(self,p):
         j=_load(self.directory/'journal.json')
         from . import sqlite_family
@@ -920,30 +618,9 @@ class DefaultRecovery:
                 if core.digest_file(target)!=old: raise RecoveryError('ROLLBACK_VERIFY_FAILED')
         self._restoring=False
     def rollback(self,consent):
-        if (self.directory/'success-commit.json').exists(): raise RecoveryError('SUCCESS_ALREADY_COMMITTED')
-        if (self.directory/'ready-observed.json').exists(): raise RecoveryError('SUCCESS_RECONCILIATION_REQUIRED')
-        if (self.directory/'attempt-start.json').exists(): raise RecoveryError('RUNTIME_ATTEMPT_PRESERVATION_REQUIRED')
-        if consent!=self.consent(): raise RecoveryError('CONSENT_REQUIRED')
-        p=self._plan();root=_root(p['root'])
-        if _identity(root)!=p['root_identity']: raise RecoveryError('ROOT_CHANGED')
-        from gateway.runtime_ownership import exclusive_maintenance,live_runtime_owner
-        from .backup_jobs import file_lease
-        if live_runtime_owner(root) is not None: raise RecoveryError('SDK_SCOPED_STOP_NOT_VERIFIED')
-        with file_lease(self.directory/'worker.lock'),exclusive_maintenance([root],purpose='finix-default-rollback'),ExitStack() as anchors:
-            root_anchor=anchors.enter_context(core.locked(root))
-            self._fence(p,anchors)
-            if self.status()['state']=='rolled_back': return self.status()
-            journal=self._journal(p)
-            try:
-                self._restore(root,journal,root_anchor)
-            except Exception:
-                self._state('rollback_failed','ROLLBACK_FAILED')
-                raise
-            self._state('rolled_back')
-            return self.status()
+        raise RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
     def rollback_attempt(self,consent,attempt):
-        from .runtime_attempt import rollback
-        return rollback(self,consent,attempt)
+        raise RecoveryError('PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE')
     def _plan(self):
         p=_load(self.directory/'plan.json')
         if not _hex(self.plan_digest) or _digest(p)!=self.plan_digest: raise RecoveryError('PLAN_CHANGED')

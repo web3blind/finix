@@ -1,6 +1,6 @@
-"""Google Workspace storage using the owning profile's credential-owning helper.
+"""Google Drive storage through the owning profile's Hermes-managed OAuth grant.
 
-No credential files are opened by Finix. Local readiness never contacts Google.
+Finix does not open vendor credential files or execute another tool's helpers.
 The private ledger, not remote names/listings, is the authority for retention.
 """
 
@@ -36,6 +36,26 @@ class WorkspaceError(core.FinixError):
     def __init__(self, code):
         self.code = code
         super().__init__('Workspace ' + code + ': use hermes auth add finix:google in this profile; legacy Workspace data requires explicit migration; no fallback attempted')
+
+
+class RemovedWorkspaceTransport(core.FinixError):
+    code = 'WORKSPACE_SKILL_TRANSPORT_REMOVED'
+
+    def __init__(self):
+        super().__init__(self.code + ': the external Workspace skill transport was removed. '
+                         'Settings, journals and ciphertext are unchanged. Recover old ciphertext '
+                         'through an explicitly selected local recovery source using the original '
+                         'recovery key. For new backups, authorize finix:google in this profile '
+                         'and explicitly select Google Drive, or select rclone. A new drive.file '
+                         'grant does not grant access to the old app\'s objects; no automatic migration occurs.')
+
+
+def require_workspace_transport(config):
+    transport = config.get('workspace_transport', 'finix')
+    if transport == 'skill':
+        raise RemovedWorkspaceTransport()
+    if transport != 'finix':
+        raise WorkspaceError('UNSUPPORTED_TRANSPORT')
 
 
 def identifier(value):

@@ -9,7 +9,7 @@ const remedies = Object.freeze({
   RCLONE_PROVIDER_FAILED: 'rclone не завершил подключение к сервису. Проверьте сеть и доступность сервиса, затем начните заново.',
   CONNECTION_TIMEOUT: 'Время подключения истекло. Начните заново.',
   CONNECTION_UNSUPPORTED: 'Этот шаг авторизации не поддерживается мастером. Настройте именованный remote вручную.',
-  GOOGLE_WORKSPACE_SKILL_SETUP_REQUIRED: 'Нужен настроенный и авторизованный доверенный Google Workspace SKILL в выбранном профиле. Настройте его отдельно и повторите проверку. Мастер не запускает OAuth; текущее хранилище сохранено.',
+  WORKSPACE_SKILL_TRANSPORT_REMOVED: 'The external Workspace skill transport was removed. Existing settings, journals and ciphertext are preserved. Explicitly select finix:google or rclone for new backups; retrieve old ciphertext with the original provider access and use local recovery. No automatic migration occurs.',
   GOOGLE_ACCOUNT_CHANGED: 'The Google account changed after verification. Cancel and explicitly check the intended profile account again. Existing storage is unchanged.',
   GOOGLE_AUTH_SETUP_REQUIRED: 'Google sign-in is not verified. Run hermes auth add finix:google in the selected profile, then check again. Legacy Workspace grants are not reused.',
   CONNECTION_BUSY: 'Другое подключение уже выполняется. Обновите его статус или отмените его.',
@@ -37,7 +37,7 @@ const sessionMessage = session => {
     default: return 'Выберите сервис, подтвердите локальный браузер и разрешения, затем нажмите «Начать подключение». Вход сам по себе не загружает копию.';
   }
 };
-const isRclone = provider => provider !== 'workspace' && provider !== 'workspace-skill';
+const isRclone = provider => ['yandex', 'onedrive', 'dropbox'].includes(provider);
 const current = () => ({ profile: sdk.host.state.profile.get(), epoch: sdk.gatewayActivationEpoch?.() });
 export function createCloud(ctx, enabled = () => true) {
   const state = sdk.atom({ data: null, provider: 'workspace', consent: false,
@@ -112,6 +112,7 @@ export function createCloud(ctx, enabled = () => true) {
     isCurrent: () => !disposed && owner !== null && owner.profile === current().profile && owner.epoch === current().epoch,
     select: provider => {
       if (state.get().busy && !state.get().loading) return;
+      if (provider !== 'workspace' && !isRclone(provider)) return;
       set({ provider, data: null, consent: false, local: false });
       return refresh();
     }, open: () => run(async () => {
@@ -140,11 +141,11 @@ export function Cloud({ cloud, enabled = true }) {
     button('Обновить подключение', a.refresh),
     jsxs('label', { children: ['Облачный сервис', jsx('select', { value: s.provider, disabled: (s.busy && !s.loading) || active,
       onChange: e => a.select(e.currentTarget.value),
-      children: Object.entries({ workspace: 'Google Drive', 'workspace-skill': 'Google Drive (Google Workspace SKILL)', yandex: 'Яндекс Диск', onedrive: 'OneDrive', dropbox: 'Dropbox' }).map(([value, label]) => jsx('option', { value, children: label }, value)) })] }),
+      children: Object.entries({ workspace: 'Google Drive', yandex: 'Яндекс Диск', onedrive: 'OneDrive', dropbox: 'Dropbox' }).map(([value, label]) => jsx('option', { value, children: label }, value)) })] }),
 
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.local, disabled: s.busy || active,
       onChange: e => a.set({ local: e.currentTarget.checked }) }), 'Браузер на машине backend или собственный SSH-туннель к его loopback уже настроен'] }),
-    jsx('p', { children: s.provider === 'workspace-skill' ? 'Google Workspace SKILL может иметь более широкие права, чем Finix drive.file, включая чтение, изменение и удаление файлов всего диска. Проверка не запускает OAuth и не загружает копию.' : s.provider === 'workspace' ? 'Google uses only the Finix drive.file grant: files created or explicitly opened by this app, not full-Drive access. This check never starts OAuth or uploads a backup.' : 'rclone provider permissions may include reading, changing and deleting files across the drive. Signing in does not upload a backup.' }),
+    jsx('p', { children: s.provider === 'workspace' ? 'Google uses only the Finix drive.file grant: files created or explicitly opened by this app, not full-Drive access. This check never starts OAuth or uploads a backup.' : 'rclone provider permissions may include reading, changing and deleting files across the drive. Signing in does not upload a backup.' }),
     jsxs('label', { children: [jsx('input', { type: 'checkbox', checked: s.consent, disabled: s.busy || active,
       onChange: e => a.set({ consent: e.currentTarget.checked }) }), 'Подтверждаю подключение выбранного сервиса и возможные широкие права доступа'] }),
     button('Начать подключение', () => a.action('start'), !s.data || !s.local || !s.consent || active),
@@ -157,8 +158,8 @@ export function Cloud({ cloud, enabled = true }) {
     button('Отменить подключение', () => a.action('cancel'), !active),
     jsxs('details', { children: [
       jsx('summary', { children: 'Помощь: удалённый backend и первый вход Google' }),
-      s.provider !== 'workspace-skill' && jsx('p', { children: 'For rclone, the browser must reach backend loopback port 53682 on the same machine or through your own SSH tunnel. No public callback is created.' }),
-      jsx('p', { children: s.provider === 'workspace-skill' ? 'Google Workspace SKILL должен быть настроен и авторизован в выбранном профиле заранее. Finix проверяет только его подтверждённую учётную запись; мастер не настраивает SKILL и не запускает вход Google. Разрешение finix:google не используется. Finix по-прежнему создаёт снимок, шифрует и проверяет копию; SKILL только передаёт файлы. Хранилище меняется лишь после явного применения.' : 'Google uses only Finix-declared OAuth with drive.file scope. Run hermes auth add finix:google in the selected profile before checking this connection. Hermes owns credentials; no Workspace-skill grant is reused. Legacy backups and settings are preserved and require explicit migration.' })
+      isRclone(s.provider) && jsx('p', { children: 'For rclone, the browser must reach backend loopback port 53682 on the same machine or through your own SSH tunnel. No public callback is created.' }),
+      jsx('p', { children: 'Google uses only Finix-declared OAuth with drive.file scope. Run hermes auth add finix:google in the selected profile before checking this connection. Hermes owns credentials; no Workspace-skill grant is reused. Legacy backups and settings are preserved and require explicit migration.' })
     ] }),
     jsx('p', { role: 'status', 'aria-live': 'polite', children: s.message })
   ] });

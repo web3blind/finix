@@ -1,18 +1,8 @@
-"""Pinned detached CLI entry. No serialized key/service/capability is admitted."""
-from pathlib import Path
-import sys
-
-
+"""Retired preview worker: no SDK loading, key access, or state adoption."""
 def main():
-    sdk,job,nonce=sys.argv[1:]
-    sys.path[:0]=[str(Path(__file__).resolve().parent.parent),sdk]
-    from finix.integration import current_profile
-    from finix.default_recovery_api import authority,identifier
-    from finix.default_preview_jobs import PreviewJobs
-    from finix.default_preview_cli import execute
-    profile=current_profile()
-    authority(profile);identifier(job);identifier(nonce)
-    PreviewJobs().claim(profile,job,nonce,lambda:execute(profile,job))
+    from finix.recovery_availability import require_public_contract
+    require_public_contract()
 
 
-if __name__=='__main__':main()
+if __name__ == '__main__':
+    main()

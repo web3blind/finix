@@ -249,14 +249,8 @@ class Profile:
 
     def workspace(self):
         cfg = self.config()
-        transport = cfg.get('workspace_transport', 'finix')
-        if transport == 'skill':
-            from .workspace_skill_transport import WorkspaceSkillDrive
-            return WorkspaceSkillDrive(self.home, self.profile_id, self.root / 'workspace-skill',
-                                       account_digest=cfg.get('workspace_account'))
-        if transport != 'finix':
-            raise core.FinixError('Unsupported Google Drive authorization transport')
-        from .workspace_drive import WorkspaceDrive
+        from .workspace_drive import WorkspaceDrive, require_workspace_transport
+        require_workspace_transport(cfg)
         return WorkspaceDrive(self.home, self.profile_id, self.root / 'workspace',
                               account_digest=cfg.get('workspace_account'))
 
@@ -303,7 +297,12 @@ class Profile:
             result['managed_connector'] = {'ready': False, 'code': 'BACKEND_REMOVED',
                 'action': 'Managed Drive is unsupported. Explicitly select Google Drive or rclone; existing data and settings are preserved.'}
         if cfg['storage'] == 'workspace':
-            result['workspace'] = self.workspace().status()
+            from .workspace_drive import RemovedWorkspaceTransport
+            try:
+                result['workspace'] = self.workspace().status()
+            except RemovedWorkspaceTransport as exc:
+                result['workspace'] = {'ready': False, 'code': exc.code,
+                                       'action': str(exc), 'live_google_verified': False}
         if cfg['storage'] == 'rclone':
             from .rclone_storage import RcloneError
             try:
@@ -384,6 +383,9 @@ class Profile:
             cfg = self.config()
             if cfg['storage'] == 'connector-drive':
                 raise core.FinixError('Managed Drive backend removed; select supported storage explicitly. Existing data is preserved.')
+            if cfg['storage'] == 'workspace':
+                from .workspace_drive import require_workspace_transport
+                require_workspace_transport(cfg)
             now = time.time()
             if scheduled and (not cfg['interval_hours'] or cfg['next_run'] > now):
                 return {'skipped': True}

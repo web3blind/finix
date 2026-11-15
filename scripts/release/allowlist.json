@@ -40,8 +40,6 @@
   "finix/connector_drive.py",
   "finix/core.py",
   "finix/default_recovery.py",
-  "finix/default_recovery_lifecycle.py",
-  "finix/default_recovery_worker.py",
   "finix/default_recovery_api.py",
   "finix/preview_budget.py",
   "finix/default_preview_jobs.py",
@@ -53,7 +51,6 @@
   "finix/plugin_cli.py",
   "finix/rclone_storage.py",
   "finix/recovery.py",
-  "finix/recovery_activation.py",
   "finix/recovery_api.py",
   "finix/recovery_contract.py",
   "finix/recovery_http.py",
@@ -67,8 +64,7 @@
   "finix/windows_native.py",
   "finix/workspace_drive.py",
   "finix/workspace_helper.py",
-  "finix/workspace_skill_transport.py",
-  "finix/workspace_skill_worker.py",
+
   "docs/google-workspace-skill.md",
   "package-lock.json",
   "package.json",
@@ -87,9 +83,9 @@
   "web/style.css",
   "finix/sqlite_family.py",
   "finix/portable_history.py",
-  "finix/recovery_pipeline.py",
-  "finix/recovery_shared_host.py",
   "finix/recovery_operations.py",
   "finix/runtime_attempt.py",
-  "finix/custody_payload.py"
+  "finix/custody_payload.py",
+  "finix/recovery_availability.py",
+  "docs/recovery-catalog-retirement.md"
 ]

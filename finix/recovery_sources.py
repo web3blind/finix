@@ -51,14 +51,16 @@ def register_cloud(service,profile):
             if adapter.binding() != expected['binding']:
                 raise RecoveryError('INVALID_SOURCE')
     elif kind == 'workspace':
+        from .workspace_drive import require_workspace_transport
+        require_workspace_transport(cfg)
         adapter = profile.workspace()
         path = adapter.state/'workspace.json'
         saved = read_journal(path)
         if saved is None:
             return
         transport = cfg.get('workspace_transport', 'finix')
-        authority = {'finix': 'finix:google', 'skill': 'google-workspace-skill:drive'}.get(transport)
-        if (authority is None or saved.get('credential_authority') != authority
+        authority = 'finix:google'
+        if (saved.get('credential_authority') != authority
                 or getattr(adapter, 'credential_authority', 'finix:google') != authority):
             return  # Different transports never adopt each other's journals.
         selected_account = cfg.get('workspace_account')

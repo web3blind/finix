@@ -23,7 +23,6 @@ from . import core
 from .rclone_storage import child_env, relative_root
 
 PROVIDERS = {'workspace': 'Google Drive',
-             'workspace-skill': 'Google Drive (Google Workspace skill)',
              'yandex': 'Yandex Disk', 'onedrive': 'OneDrive', 'dropbox': 'Dropbox'}
 TTL = 300
 
@@ -36,8 +35,8 @@ class ConnectionError(core.FinixError):
 
 def _google_runner(provider, home):
     if provider == 'workspace-skill':
-        from .workspace_skill_transport import WorkspaceSkillRunner
-        return WorkspaceSkillRunner(home)
+        from .workspace_drive import RemovedWorkspaceTransport
+        raise RemovedWorkspaceTransport()
     if provider == 'workspace':
         from .workspace_drive import WorkspaceRunner
         return WorkspaceRunner(home)
@@ -45,8 +44,7 @@ def _google_runner(provider, home):
 
 
 def _google_setup_code(provider):
-    return ('GOOGLE_WORKSPACE_SKILL_SETUP_REQUIRED' if provider == 'workspace-skill'
-            else 'GOOGLE_AUTH_SETUP_REQUIRED')
+    return 'GOOGLE_AUTH_SETUP_REQUIRED'
 
 
 def safe_url(provider, url):
@@ -61,7 +59,7 @@ def safe_url(provider, url):
     query = parse_qs(u.query, keep_blank_values=True)
     if any(k in query for k in ('code', 'access_token', 'refresh_token', 'id_token')):
         return False
-    if provider in {'workspace', 'workspace-skill'}:
+    if provider not in {'yandex', 'onedrive', 'dropbox'}:
         return False  # The selected credential owner handles Google authorization.
     return (u.scheme == 'http' and u.netloc == '127.0.0.1:53682' and u.path == '/auth'
             and set(query) == {'state'} and len(query['state']) == 1
@@ -126,6 +124,9 @@ class Connections:
             return self.view(profile)
 
     def _start(self, profile, provider, folder, confirmed, local_browser):
+        if provider == 'workspace-skill':
+            from .workspace_drive import RemovedWorkspaceTransport
+            raise RemovedWorkspaceTransport()
         if provider not in PROVIDERS:
             raise ConnectionError('UNKNOWN_PROVIDER')
         if not confirmed:
@@ -138,7 +139,7 @@ class Connections:
         if any(s['public']['status'] in {'working', 'authorize', 'choice', 'verified'}
                for s in self.sessions.values()):
             raise ConnectionError('CONNECTION_BUSY')
-        if provider in {'workspace', 'workspace-skill'}:
+        if provider == 'workspace':
             try:
                 account = _google_runner(provider, profile.home)('identity')['account_id']
                 if not isinstance(account, str) or not account:
@@ -285,7 +286,13 @@ class Connections:
         shutil.rmtree(s['stage'], ignore_errors=True)
 
     def _apply(self, profile, s):
-        if s['public']['provider'] in {'workspace', 'workspace-skill'}:
+        provider = s['public']['provider']
+        if provider == 'workspace-skill':
+            from .workspace_drive import RemovedWorkspaceTransport
+            raise RemovedWorkspaceTransport()
+        if provider not in PROVIDERS:
+            raise ConnectionError('UNKNOWN_PROVIDER')
+        if provider == 'workspace':
             try:
                 account = _google_runner(s['public']['provider'], profile.home)('identity')['account_id']
                 digest = hashlib.sha256(account.encode()).hexdigest()
@@ -310,9 +317,9 @@ class Connections:
             if owned and job.get('binding') != before_binding:
                 if not jobs._transition(profile, job, before_binding):
                     raise ConnectionError('SETTINGS_CHANGED')
-            if s['public']['provider'] in {'workspace', 'workspace-skill'}:
+            if s['public']['provider'] == 'workspace':
                 cfg['storage'] = 'workspace'
-                cfg['workspace_transport'] = ('skill' if s['public']['provider'] == 'workspace-skill' else 'finix')
+                cfg['workspace_transport'] = 'finix'
                 cfg['workspace_account'] = digest
             else:
                 from .rclone_storage import config_path

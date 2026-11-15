@@ -23,4 +23,4 @@ def public_job(service, identifier, profile_id, state):
                 progress=100 if status == 'succeeded' else (min(90,int(90*state.get('download_bytes',0)/max(1,state.get('download_total',1)))) if status=='running' else 0),
                 error=state.get('error'), code=state.get('error'),
                 complete=result.get('complete'), omitted_count=result.get('omitted_count'),
-                can_import=ready, extras_policy='separate_manual_import_only')
+                can_import=False, import_error='PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE', extras_policy='separate_manual_import_only')

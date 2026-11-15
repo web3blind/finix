@@ -15,11 +15,6 @@ class PreparationCancellationTests(unittest.TestCase):
             except preview_budget.PreviewBudgetError as exc:
                 self.fail('Elapsed time must not terminate preparation: ' + exc.code)
 
-    def test_cloud_worker_has_no_default_wall_clock_limit(self):
-        import inspect
-        from finix.workspace_skill_transport import WorkspaceSkillRunner
-        self.assertIsNone(inspect.signature(WorkspaceSkillRunner).parameters['timeout'].default)
-
     def test_rclone_transfer_has_no_default_wall_clock_limit(self):
         import inspect
         from finix.rclone_storage import RcloneRunner

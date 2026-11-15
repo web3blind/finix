@@ -114,8 +114,11 @@ class SetupFlow:
     def check_and_run(self, progress=None, cancel=None, *, resume=False):
         # Never leave an earlier success usable after a new failed check.
         with core.locked(self.profile.directories()):
-            self.receipt_path.unlink(missing_ok=True)
             before_cfg = self.profile.config()
+            if before_cfg.get('storage') == 'workspace':
+                from .workspace_drive import require_workspace_transport
+                require_workspace_transport(before_cfg)
+            self.receipt_path.unlink(missing_ok=True)
             if before_cfg.get('storage') not in {'local', 'drive', 'workspace', 'rclone'}:
                 raise core.FinixError('Select a supported storage backend before checking')
             before = self._binding(before_cfg)

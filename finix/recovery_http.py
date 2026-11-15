@@ -14,7 +14,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Request, Response
 from . import core, cloud_files
 from .recovery import RecoveryService, RecoveryError, CommittedSource, _ManagedDestination
-from .recovery_import import RecoveryImporter, RecoveryImportError
+from .recovery_import import RecoveryImportError
 from .recovery_contract import public_job
 from .setup_flow import SetupFlow
 from starlette.concurrency import run_in_threadpool
@@ -302,19 +302,22 @@ from .recovery_sources import register_cloud
 
 
 def create_router(current_profile):
+    from .recovery_availability import capability, CODE
+    from .recovery_operations import RecoveryOperations
     router = APIRouter(prefix='/recovery')
     adapter = RecoveryHTTP()
-    def guard(request,response):
+    operations = RecoveryOperations()
+    router.recovery_operations = operations
+
+    def guard(request, response):
         response.headers['Cache-Control'] = 'no-store'
         if not local_request(request):
-            fail('LOCAL_DESKTOP_REQUIRED',403)
-        try:
-            profile = current_profile()
-            if not re.fullmatch(r'[a-f0-9]{64}',profile.profile_id):
-                fail('PROFILE_UNAVAILABLE')
-            return profile
-        except Exception:
+            fail('LOCAL_DESKTOP_REQUIRED', 403)
+        profile = current_profile()
+        if not re.fullmatch(r'[a-f0-9]{64}', profile.profile_id):
             fail('PROFILE_UNAVAILABLE')
+        return profile
+
     @contextmanager
     def closed_errors():
         try:
@@ -322,85 +325,34 @@ def create_router(current_profile):
         except HTTPException:
             raise
         except (RecoveryError, RecoveryImportError) as exc:
-            fail(exc.code,404 if exc.code == 'NOT_FOUND' else 409)
+            fail(exc.code, 404 if exc.code == 'NOT_FOUND' else 409)
         except Exception:
             fail('RESTORE_FAILED')
 
-    from .recovery_operations import RecoveryOperations
-    operations = RecoveryOperations()
-    router.recovery_operations = operations
+    @router.get('/capabilities')
+    def capabilities(request: Request, response: Response):
+        profile = guard(request, response)
+        return dict(capability(), code_version='recovery-v1',
+                    operation_protocol='recovery-operations-v1',
+                    profile_id=profile.profile_id, local_only=True)
 
-    def operation_service(profile):
-        # Reuse an already admitted service without holding adapter state across
-        # SDK work; creation is short and contains no archive import/start.
-        with state_lock(adapter):
-            return adapter.service(profile)
-
-    @router.post('/operations')
-    async def operation_begin(request: Request,response: Response):
-        profile=guard(request,response)
-        with closed_errors():
-            raw=await bounded_body(request,4096)
-            try:body=json.loads(raw)
-            except (ValueError,UnicodeError):fail('INVALID_REQUEST',422)
-            required={'profile_id','candidate_id','consent_restore','request_id'}
-            if (not isinstance(body,dict) or not required<=set(body)
-                    or set(body)-required-{'acknowledge_incomplete'}
-                    or body.get('consent_restore') is not True
-                    or type(body.get('acknowledge_incomplete',False)) is not bool):fail('INVALID_REQUEST',422)
-            if body['profile_id']!=profile.profile_id:fail('STALE_PROFILE')
-            service=operation_service(profile)
-            return operations.begin(service,request_id=body['request_id'],candidate_id=body['candidate_id'],
-                acknowledge_incomplete=body.get('acknowledge_incomplete',False))
+    @router.get('/default/capabilities')
+    def default_capabilities(request: Request, response: Response):
+        profile = guard(request, response)
+        return dict(capability(), code_version='default-recovery-v1',
+                    profile_id=profile.profile_id, local_only=True)
 
     @router.get('/operations/current')
-    def operation_current(request: Request,response: Response):
-        profile=guard(request,response)
-        with closed_errors():return operations.current(operation_service(profile))
+    def operation_current(request: Request, response: Response):
+        profile = guard(request, response)
+        with closed_errors():
+            return operations.current(adapter.service(profile))
 
     @router.get('/operations/{identifier}')
-    def operation_status(identifier: str,request: Request,response: Response):
-        profile=guard(request,response)
-        with closed_errors():return operations.status(operation_service(profile),identifier)
-
-    @router.post('/operations/{identifier}/cancel')
-    def operation_cancel(identifier: str,request: Request,response: Response):
-        profile=guard(request,response)
-        with closed_errors():return operations.cancel(operation_service(profile),identifier)
-
-    @router.post('/operations/{identifier}/key')
-    async def operation_key(identifier: str,request: Request,response: Response):
-        profile=guard(request,response)
+    def operation_status(identifier: str, request: Request, response: Response):
+        profile = guard(request, response)
         with closed_errors():
-            from .recovery_shared_host import check_bootstrap_compatibility
-            check_bootstrap_compatibility(operation_service(profile))
-            data=await bounded_body(request,MAX_BODY)
-            identity=None
-            try:
-                identity=bytearray(key_part(data,request.headers.get('content-type','')))
-                phase_id=request.query_params.get('request_id')
-                header_id=request.headers.get('X-Finix-Request-Id')
-                if phase_id is not None and header_id is not None and phase_id!=header_id:
-                    fail('INVALID_REQUEST_ID',422)
-                return operations.key(operation_service(profile),identifier,
-                    request_id=phase_id if phase_id is not None else header_id,identity=identity)
-            finally:
-                data[:]=b'\x00'*len(data)
-                if identity is not None:identity[:]=b'\x00'*len(identity)
-
-    @router.get('/capabilities')
-    def capabilities(request: Request,response: Response):
-        profile = guard(request,response)
-        with closed_errors():
-            from .recovery_shared_host import check_bootstrap_compatibility
-            condition = check_bootstrap_compatibility(adapter.service(profile))
-        return dict(code_version='recovery-v1',operation_protocol='recovery-operations-v1',profile_id=profile.profile_id,local_only=True,
-                    bootstrap_condition=condition,
-                    local_request=True,destination_policy='same_volume_only',same_volume_only=True,
-                    destination_action='Choose an empty folder on the same volume as the local profile.',
-                    max_key_bytes=MAX_KEY,
-                    source_limits={'drive':'committed_journal_required_no_cloud_scans'},
-                    supported_sources=['local','rclone','workspace','drive'])
+            return operations.status(adapter.service(profile), identifier)
 
     @router.get('/catalog')
     def catalog(request: Request,response: Response):
@@ -447,421 +399,22 @@ def create_router(current_profile):
                                   omitted_count=completion.get('omitted_count')))
             return dict(profile_id=profile.profile_id,items=items)
 
-    @router.post('/prepare-auto')
-    async def prepare_auto(request: Request,response: Response):
-        profile = guard(request,response)
-        with closed_errors():
-            raw = await bounded_body(request,4096)
-            try:
-                body = json.loads(raw)
-            except (ValueError,UnicodeError):
-                fail('INVALID_REQUEST',422)
-            required={'profile_id','candidate_id','consent_restore'}
-            if (not isinstance(body,dict) or not required<=set(body)
-                    or set(body)-required-{'request_id','acknowledge_incomplete'}
-                    or body.get('consent_restore') is not True or not isinstance(body.get('candidate_id'),str)):
-                fail('INVALID_REQUEST',422)
-            if body['profile_id'] != profile.profile_id:fail('STALE_PROFILE')
-            if not body.get('request_id'):fail('OPERATION_PROTOCOL_REQUIRED')
-            return operations.begin(operation_service(profile),request_id=body['request_id'],
-                candidate_id=body['candidate_id'],acknowledge_incomplete=body.get('acknowledge_incomplete',False))
 
-    def prepare_auto_sync(profile,body,default_only=False):
-        from hermes_cli import profiles as host
-        with closed_errors(),state_lock(adapter),operation_lock(profile):
-            if default_only:
-                from .default_recovery_api import new_service
-                service = new_service(profile)
-            else:
-                service = adapter.service(profile)
-            for job in adapter.jobs.values():
-                if job['profile_id'] == profile.profile_id and adapter.view(job)['state'] in {'awaiting_key','running'}:
-                    fail('BUSY')
-            rows = service.catalog(profile.profile_id,service.activation)
-            candidate = next((r for r in rows if r['id'] == body['candidate_id']),None)
-            if candidate is None:
-                fail('INVALID_CANDIDATE')
-            name = None
-            for _ in range(32):
-                proposed = 'recovered-' + uuid.uuid4().hex[:16]
-                host.validate_profile_name(proposed)
-                if (not core.checked_path(host.get_profile_dir(proposed)).exists()
-                        and not any(j.get('auto_name') == proposed for j in adapter.jobs.values())):
-                    name = proposed
-                    break
-            if name is None:
-                fail('PROFILE_EXISTS')
-            identifier = uuid.uuid4().hex
-            while len(adapter.jobs) >= 32:
-                oldest = next(iter(adapter.jobs))
-                if adapter.view(adapter.jobs[oldest])['state'] in {'awaiting_key','running'}:
-                    fail('BUSY')
-                del adapter.jobs[oldest]
-            destination = service.allocate_destination(profile.profile_id,service.activation)
-            adapter.jobs[identifier] = dict(id=identifier,profile_id=profile.profile_id,service=service,
-                service_id=None,state='awaiting_key',candidate=candidate['id'],destination=destination,
-                auto_name=name,catalog_complete=candidate['complete'],created=time.monotonic())
-            return dict(id=identifier,profile_id=profile.profile_id,state='awaiting_key',name=name)
+    async def unavailable(request: Request, response: Response):
+        # Refuse before reading any body, key, path, or persisted operation.
+        guard(request, response)
+        fail(CODE)
 
-    @router.post('/prepare')
-    async def prepare(request: Request,response: Response):
-        profile = guard(request,response)
-        # Path-based extraction is not the whole Restore authority protocol.
-        # Retain a closed compatibility refusal rather than an alternate owner.
-        fail('OPERATION_PROTOCOL_REQUIRED')
-        with closed_errors():
-            raw = await bounded_body(request,16384)
-            try:
-                body = json.loads(raw)
-            except (ValueError,UnicodeError):
-                fail('INVALID_REQUEST',422)
-            allowed = {'profile_id','candidate_id','archive_path','destination_path','consent_local','activation'}
-            if (not isinstance(body,dict) or set(body)-allowed or body.get('consent_local') is not True
-                    or not isinstance(body.get('destination_path'),str)
-                    or bool(body.get('candidate_id')) == bool(body.get('archive_path'))):
-                fail('INVALID_REQUEST',422)
-            if body.get('profile_id') != profile.profile_id:
-                fail('STALE_PROFILE')
-            return await run_in_threadpool(prepare_sync,profile,body)
-
-    def prepare_sync(profile,body):
-        with closed_errors(),state_lock(adapter),operation_lock(profile):
-            service = adapter.service(profile)
-            if body.get('activation') is not None and body['activation'] != service.activation:
-                fail('STALE_PROFILE')
-            for j in adapter.jobs.values():
-                if j['profile_id'] == profile.profile_id and adapter.view(j)['state'] in {'awaiting_key','running'}:
-                    fail('BUSY')
-            destination = service._destination(body['destination_path'])
-            if body.get('archive_path'):
-                candidate = add_explicit_archive(service,body['archive_path'])
-            else:
-                service.catalog(profile.profile_id,service.activation)
-                candidate = body['candidate_id']
-                if not isinstance(candidate,str) or candidate not in service._catalog:
-                    fail('INVALID_CANDIDATE')
-            identifier = uuid.uuid4().hex
-            while len(adapter.jobs) >= 32:
-                oldest = next(iter(adapter.jobs))
-                if adapter.view(adapter.jobs[oldest])['state'] in {'awaiting_key','running'}:
-                    fail('BUSY')
-                del adapter.jobs[oldest]
-            job = dict(id=identifier,profile_id=profile.profile_id,service=service,service_id=None,
-                       state='awaiting_key',candidate=candidate,destination=destination,created=time.monotonic())
-            adapter.jobs[identifier] = job
-            return adapter.view(job)
-
-    @router.get('/jobs/{identifier}')
-    def status(identifier: str,request: Request,response: Response):
-        profile = guard(request,response)
-        with closed_errors(),state_lock(adapter):
-            if identifier not in adapter.jobs:
-                return operations.status(adapter.service(profile),identifier)
-            return adapter.view(adapter.lookup(profile,identifier))
-
-    @router.post('/jobs/{identifier}/cancel')
-    def cancel(identifier: str,request: Request,response: Response):
-        profile = guard(request,response)
-        with closed_errors(),state_lock(adapter):
-            if identifier not in adapter.jobs:
-                return operations.cancel(adapter.service(profile),identifier)
-            job = adapter.lookup(profile,identifier)
-            if job.get('pipeline_state'):
-                fail('NOT_CANCELLABLE')
-            if job['service_id']:
-                job['service'].cancel(job['service_id'])
-            else:
-                job['state'] = 'cancelled'
-            return adapter.view(job)
-
-    @router.post('/jobs/{identifier}/key')
-    async def key(identifier: str,request: Request,response: Response):
-        profile = guard(request,response)
-        if identifier not in adapter.jobs:
-            return await operation_key(identifier,request,response)
-        with closed_errors():
-            with state_lock(adapter):
-                job = adapter.lookup(profile,identifier)
-                if adapter.view(job)['state'] != 'awaiting_key':
-                    fail('INVALID_STATE')
-            with operation_lock(profile):
-                pass
-            data = await bounded_body(request,MAX_BODY)
-            try:
-                identity = key_part(data,request.headers.get('content-type',''))
-                with state_lock(adapter):
-                    job = adapter.lookup(guard(request,response),identifier)
-                    if adapter.view(job)['state'] != 'awaiting_key':
-                        fail('INVALID_STATE')
-                    job['service_id'] = job['service'].start(job['candidate'],identity=io.BytesIO(identity),
-                        destination=job['destination'],profile_id=profile.profile_id,activation=job['service'].activation)
-                    return adapter.view(job)
-            finally:
-                data[:] = b'\x00'*len(data)
-                identity = None
-    @router.post('/jobs/{identifier}/import-auto')
-    async def import_auto(identifier: str,request: Request,response: Response):
-        profile = guard(request,response)
-        with closed_errors():
-            raw = await bounded_body(request,4096)
-            try:
-                body = json.loads(raw)
-            except (ValueError,UnicodeError):
-                fail('INVALID_REQUEST',422)
-            if (not isinstance(body,dict) or not {'profile_id','consent_restore'} <= set(body)
-                    or set(body)-{'profile_id','consent_restore','acknowledge_incomplete'}
-                    or body.get('consent_restore') is not True
-                    or type(body.get('acknowledge_incomplete',False)) is not bool):
-                fail('INVALID_REQUEST',422)
-            if body['profile_id'] != profile.profile_id:
-                fail('STALE_PROFILE')
-            state=operations.status(operation_service(profile),identifier)
-            return state.get('receipt') if state['state']=='succeeded' else state
-
-    def import_auto_sync(profile,identifier,acknowledge_incomplete):
-        from .recovery_pipeline import complete_restore
-        # Short ownership admission only. No adapter state lock across SDK work.
-        with closed_errors(),state_lock(adapter):
-            job = adapter.lookup(profile,identifier)
-            if job.get('backend_receipt'):
-                return job['backend_receipt']
-            if not job.get('auto_name') or job.get('pipeline_state'):
-                fail('RECOVERY_INTERRUPTED' if job.get('pipeline_state') == 'interrupted' else 'BUSY')
-            view = adapter.view(job)
-            if not job['service_id'] or view['state'] != 'succeeded':
-                fail('CONFIG_NOT_READY')
-            if job['catalog_complete'] is True and view['complete'] is not True:
-                fail('COMPLETENESS_CHANGED')
-            if job['catalog_complete'] is not True and not acknowledge_incomplete:
-                fail('INCOMPLETE_ACK_REQUIRED')
-            job.update(pipeline_state='running',pipeline_phase='importing')
-        def phase(value):
-            with adapter.lock:
-                job['pipeline_phase'] = value
-        try:
-            with closed_errors(),operation_lock(profile):
-                result = complete_restore(job['service'],job['service_id'],
-                    profile_id=profile.profile_id,activation=binding(profile),
-                    name=job['auto_name'],acknowledge_incomplete=acknowledge_incomplete,phase=phase)
-            with adapter.lock:
-                job.update(backend_receipt=result,pipeline_state='succeeded',pipeline_phase='backend_target_ready')
-            return result
-        except BaseException:
-            with adapter.lock:
-                job.update(pipeline_state='interrupted',pipeline_phase=job.get('pipeline_phase','importing'))
-            raise
-
-    @router.post('/jobs/{identifier}/import')
-    async def import_profile(identifier: str,request: Request,response: Response):
-        profile = guard(request,response)
-        fail('OPERATION_PROTOCOL_REQUIRED')
-        with closed_errors():
-            raw = await bounded_body(request,4096)
-            try:
-                body = json.loads(raw)
-            except (ValueError,UnicodeError):
-                fail('INVALID_REQUEST',422)
-            if (not isinstance(body,dict) or not {'profile_id','name','consent_import'} <= set(body)
-                    or set(body) - {'profile_id','name','consent_import','acknowledge_incomplete'}
-                    or type(body.get('acknowledge_incomplete',False)) is not bool
-                    or body.get('consent_import') is not True or not isinstance(body.get('name'),str)):
-                fail('INVALID_REQUEST',422)
-            if body['profile_id'] != profile.profile_id:
-                fail('STALE_PROFILE')
-            return await run_in_threadpool(import_sync,profile,identifier,body['name'],body.get('acknowledge_incomplete',False))
-
-    def import_sync(profile,identifier,name,acknowledge_incomplete,automatic=False):
-        with closed_errors(),state_lock(adapter),operation_lock(profile):
-            job = adapter.lookup(profile,identifier)
-            if job.get('auto_name') and (not automatic or name != job['auto_name']):
-                fail('INVALID_STATE')
-            if not job['service_id'] or not adapter.view(job)['can_import']:
-                fail('CONFIG_NOT_READY')
-            # Authority comes only from the authenticated owner and current server
-            # binding. Neither request paths nor a client activation fence are used.
-            result = RecoveryImporter(job['service']).import_job(job['service_id'],
-                profile_id=profile.profile_id,activation=binding(profile),name=name,
-                consent_import=True,acknowledge_incomplete=acknowledge_incomplete)
-            from hermes_cli import profiles as host
-            from .recovery_activation import profile_digest
-            target = core.checked_path(host.get_profile_dir(name))
-            job['imported'] = dict(name=name,target=target,digest=profile_digest(target),started=False)
-            if automatic:
-                # Keep the handoff until start has checked it. Failed/abandoned
-                # starts get ten minutes to retry while this process is alive.
-                def expire():
-                    with adapter.lock:
-                        try:
-                            job['service'].cleanup_managed_result(job['service_id'])
-                        except Exception:
-                            # Unsafe identity changes must never authorize deletion.
-                            job['cleanup_failed'] = True
-                timer = threading.Timer(600,expire)
-                timer.daemon = True
-                job['cleanup_timer'] = timer
-                timer.start()
-            return result
-
-    @router.post('/jobs/{identifier}/start')
-    async def start_profile(identifier: str,request: Request,response: Response):
-        profile=guard(request,response)
-        fail('OPERATION_PROTOCOL_REQUIRED')
-        with closed_errors():
-            raw=await bounded_body(request,4096)
-            try:
-                body=json.loads(raw)
-            except (ValueError,UnicodeError):
-                fail('INVALID_REQUEST',422)
-            if (not isinstance(body,dict) or set(body)!={'profile_id','name','consent_start'}
-                    or body['consent_start'] is not True or not isinstance(body['name'],str)):
-                fail('INVALID_REQUEST',422)
-            if body['profile_id']!=profile.profile_id:
-                fail('STALE_PROFILE')
-            return await run_in_threadpool(start_sync,profile,identifier,body['name'])
-
-    def start_sync(profile,identifier,name):
-        from .recovery_activation import start_imported
-        with closed_errors(),state_lock(adapter),operation_lock(profile):
-            job=adapter.lookup(profile,identifier)
-            service=job['service']
-            if job.get('backend_receipt'):
-                if name != job['auto_name']:
-                    fail('INVALID_NAME')
-                from .recovery_pipeline import _OWNED_TARGETS
-                owned=_OWNED_TARGETS.get((id(service),job['service_id']))
-                if owned is None:
-                    fail('RECOVERY_INTERRUPTED')
-                owned.ready(timeout=3)
-                return job['backend_receipt']
-            with service._lock:
-                if not job.get('imported'):
-                    fail('IMPORT_REQUIRED')
-                service.handoff(job['service_id'],profile.profile_id,binding(profile))
-                answer = start_imported(service,job['imported'],name)
-                if job.get('auto_name'):
-                    service.cleanup_managed_result(job['service_id'])
-                    job.get('cleanup_timer',None) and job['cleanup_timer'].cancel()
-                return answer
-
-    # Default-only maintenance is headless, host-authenticated and review-gated.
-    from .default_recovery_api import DefaultRecoveryAPI, authority, public_error
-    default_api = DefaultRecoveryAPI()
-
-    @contextmanager
-    def default_errors():
-        try:
-            yield
-        except HTTPException:
-            raise
-        except Exception as exc:
-            fail(public_error(exc))
-
-    async def default_body(request,profile,fields):
-        raw = await bounded_body(request,4096)
-        try:
-            body=json.loads(raw,object_pairs_hook=__import__('importlib').import_module(__package__+'.default_recovery')._pairs)
-        except Exception:
-            fail('INVALID_REQUEST',422)
-        if not isinstance(body,dict) or set(body) != {'profile_id'} | set(fields):
-            fail('INVALID_REQUEST',422)
-        if body['profile_id'] != profile.profile_id:
-            fail('STALE_PROFILE')
-        return body
-
-    @router.get('/default/capabilities')
-    def default_capabilities(request: Request,response: Response):
-        profile=guard(request,response)
-        refusal=None
-        current_root_token=None
-        from . import default_recovery_api as maintenance
-        try:
-            from . import default_recovery_lifecycle as life
-            scope=maintenance._DefaultAuthority(profile)
-            scope.check()
-            root=scope.root
-            life.preflight(root,trusted_finix=True)
-            if not life._exact(life.identify(root),root):
-                refusal='OWNER_NOT_VERIFIED'
-            else:
-                scope.check()
-                current_root_token=maintenance.token({'root_identity': scope.identity})
-        except Exception as exc:
-            refusal=public_error(exc)
-        # Read the single reviewed gate dynamically; never capture a second flag.
-        return dict(code_version='default-recovery-v1',preview_contract='default-preview-job-v1',supported=refusal is None,refusal=refusal,
-                    serverRootToken=current_root_token,profile_id=profile.profile_id if refusal is None else None,local_only=refusal is None,
-                    apply_enabled=maintenance.DEFAULT_APPLY_REVIEWED,active_shared_autoruns_supported=False,
-                    explanation='Active shared autoruns, supervisors and sibling-serving multiplexers are unsupported; refusal occurs before shutdown.')
-
-    @router.post('/default/prepare-auto')
-    async def default_prepare_auto(request: Request,response: Response):
-        profile=guard(request,response)
-        with default_errors():
-            authority(profile)
-            body=await default_body(request,profile,{'candidate_id','consent_restore'})
-            if body['consent_restore'] is not True or not isinstance(body['candidate_id'],str) or len(body['candidate_id'])>128:
-                fail('INVALID_REQUEST',422)
-            return await run_in_threadpool(prepare_auto_sync,profile,body,True)
-
-    @router.post('/default/prepare')
-    async def default_prepare(request: Request,response: Response):
-        profile=guard(request,response)
-        with default_errors():
-            body=await default_body(request,profile,{'recovery_job','consent_prepare','preview_contract'})
-            from .default_recovery_api import identifier as valid_id
-            from .default_preview_jobs import PreviewJobs, CONTRACT
-            valid_id(body['recovery_job'])
-            if body['preview_contract'] != CONTRACT:
-                fail('INVALID_REQUEST',422)
-            if body['consent_prepare'] is not True:
-                fail('CONSENT_REQUIRED')
-            def execute():
-                # The durable owner holds operation_lock, not the adapter state
-                # mutex. Retain the exact service reference under a short lock.
-                with state_lock(adapter):
-                    job=adapter.lookup(profile,body['recovery_job'])
-                    if not job['service_id'] or adapter.view(job)['state'] != 'succeeded':
-                        fail('CONFIG_NOT_READY')
-                    if adapter.view(job)['complete'] is not True:
-                        fail('INCOMPLETE_ACK_REQUIRED')
-                    service, service_id = job['service'], job['service_id']
-                return default_api.prepare(profile,service,service_id,consent=True)
-            return await run_in_threadpool(PreviewJobs().begin,profile,body['recovery_job'],execute)
-
-    @router.get('/default/preview/{identifier}')
-    def default_preview(identifier: str,request: Request,response: Response):
-        profile=guard(request,response)
-        with default_errors():
-            from .default_preview_jobs import PreviewJobs
-            return PreviewJobs().status(profile,identifier)
-
-    @router.post('/default/preview/{identifier}/cancel')
-    async def default_preview_cancel(identifier: str,request: Request,response: Response):
-        profile=guard(request,response)
-        with default_errors():
-            await default_body(request,profile,set())
-            from .default_preview_jobs import PreviewJobs
-            return await run_in_threadpool(PreviewJobs().cancel,profile,identifier)
-
-    @router.post('/default/apply')
-    async def default_apply(request: Request,response: Response):
-        profile=guard(request,response)
-        with default_errors():
-            body=await default_body(request,profile,{'id','confirmation','consent_apply'})
-            return await run_in_threadpool(default_api.apply,profile,body['id'],body['confirmation'],consent=body['consent_apply'])
-
-    @router.get('/default/status/{identifier}')
-    def default_status(identifier: str,request: Request,response: Response):
-        profile=guard(request,response)
-        with default_errors():
-            return default_api.status(profile,identifier)
-
-    @router.post('/default/reopen')
-    async def default_reopen(request: Request,response: Response):
-        profile=guard(request,response)
-        with default_errors():
-            body=await default_body(request,profile,{'id','consent_reopen'})
-            return await run_in_threadpool(default_api.reopen,profile,body['id'],consent=body['consent_reopen'])
-
-    router.recovery_adapter = adapter
+    for path in (
+        '/operations', '/operations/{identifier}/key', '/operations/{identifier}/cancel',
+        '/prepare', '/prepare-auto', '/jobs/{identifier}/key',
+        '/jobs/{identifier}/cancel', '/jobs/{identifier}/import',
+        '/jobs/{identifier}/import-auto', '/jobs/{identifier}/start',
+        '/default/prepare-auto', '/default/prepare', '/default/apply',
+        '/default/reopen', '/default/preview/{identifier}/cancel',
+    ):
+        router.add_api_route(path, unavailable, methods=['POST'])
+    for path in ('/jobs/{identifier}', '/default/status/{identifier}',
+                 '/default/preview/{identifier}'):
+        router.add_api_route(path, unavailable, methods=['GET'])
     return router

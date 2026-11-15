@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 const scope = () => ({ profile: sdk.host.state.profile.get(), source: sdk.host.activeConnectionId?.(), connection: sdk.host.state.connectionId?.get(), epoch: sdk.gatewayActivationEpoch?.() });
 const equal = (a,b) => a.profile===b.profile && a.source===b.source && a.connection===b.connection && a.epoch===b.epoch;
 const remedies = {
+  WORKSPACE_SKILL_TRANSPORT_REMOVED: 'The Workspace skill transport was removed. Settings and existing backups are preserved. Explicitly connect finix:google or select another supported backend; old grants and backup journals are not migrated.',
   SETUP_CHECK_FAILED: 'Проверка не завершена. Расписание не включено. Обновите состояние и проверьте подключение; ключ менять не нужно.',
   SETUP_SOURCE_CHANGED: 'Данные профиля изменились во время копирования. Дождитесь завершения записи приложениями и повторите проверку. Расписание не включено.',
   SETUP_READBACK_FAILED: 'Проверка чтением из хранилища не пройдена. Копия не подтверждена. Проверьте доступ и свободное место в облаке; расписание не включено.',

@@ -1,156 +1,124 @@
-"""Explicit transport selection; never adopt another authorization namespace."""
-import sys
+"""Removal fails closed before helpers, journal reads or settings writes."""
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
-from finix import integration, workspace_drive, connections, recovery_sources
+from unittest.mock import Mock, patch
+
+from finix import connections, integration, recovery_sources, workspace_drive
 
 
-class WorkspaceSkillSelection(unittest.TestCase):
-    def profile(self, transport=None):
-        cfg = {'workspace_account': 'a' * 64}
-        if transport is not None:
-            cfg['workspace_transport'] = transport
-        return SimpleNamespace(home=Path('fixture-home'), profile_id='b' * 64,
-                               root=Path('fixture-state'), config=lambda: cfg)
+class WorkspaceSkillRemoval(unittest.TestCase):
+    def profile(self, root, transport='skill'):
+        cfg = {'storage': 'workspace', 'workspace_transport': transport,
+               'workspace_account': 'a' * 64}
+        return SimpleNamespace(home=root / 'home', root=root / 'state',
+                               profile_id='b' * 64, config=lambda: cfg)
 
-    def selected(self, transport=None):
-        def sdk(*args, **kwargs):
-            return SimpleNamespace(kind='sdk', args=args, kwargs=kwargs)
-        def skill(*args, **kwargs):
-            return SimpleNamespace(kind='skill', args=args, kwargs=kwargs)
-        module = SimpleNamespace(WorkspaceSkillDrive=skill)
-        with patch.object(workspace_drive, 'WorkspaceDrive', sdk), patch.dict(
-                sys.modules, {'finix.workspace_skill_transport': module}):
-            return integration.Profile.workspace(self.profile(transport))
+    def test_legacy_config_preserves_settings_journals_and_ciphertext(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = self.profile(root)
+            profile.root.mkdir()
+            old = profile.root / 'workspace-skill'
+            old.mkdir()
+            fixtures = {profile.root / 'settings.json': json.dumps(profile.config()).encode(),
+                        old / 'workspace.json': b'{"credential_authority":"google-workspace-skill:drive"}',
+                        old / 'pending.json': b'{"phase":"uncertain"}',
+                        old / 'backup.age': b'preserved ciphertext'}
+            for path, data in fixtures.items():
+                path.write_bytes(data)
+            with patch.object(workspace_drive, 'WorkspaceDrive') as own:
+                with self.assertRaises(workspace_drive.RemovedWorkspaceTransport) as caught:
+                    integration.Profile.workspace(profile)
+                own.assert_not_called()
+            self.assertEqual(caught.exception.code, 'WORKSPACE_SKILL_TRANSPORT_REMOVED')
+            self.assertIn('no automatic migration', str(caught.exception))
+            self.assertEqual({p: p.read_bytes() for p in fixtures}, fixtures)
+            self.assertFalse((profile.root / 'workspace').exists())
 
-    def test_explicit_skill_transport_uses_separate_state_namespace(self):
-        result = self.selected('skill')
-        self.assertEqual(result.kind, 'skill')
-        self.assertEqual(result.args[2], Path('fixture-state') / 'workspace-skill')
-        self.assertEqual(result.kwargs['account_digest'], 'a' * 64)
+    def test_unknown_and_malformed_transports_never_fall_back(self):
+        for value in ('unknown', '', None, False, [], {}):
+            with self.subTest(value=value), patch.object(workspace_drive, 'WorkspaceDrive') as own:
+                with self.assertRaises(workspace_drive.WorkspaceError) as caught:
+                    integration.Profile.workspace(self.profile(Path('fixture'), value))
+                self.assertEqual(caught.exception.code, 'UNSUPPORTED_TRANSPORT')
+                own.assert_not_called()
 
-    def test_existing_config_keeps_declared_finix_transport(self):
-        result = self.selected()
-        self.assertEqual(result.kind, 'sdk')
-        self.assertEqual(result.args[2], Path('fixture-state') / 'workspace')
+    def test_supported_and_missing_selectors_keep_own_google_namespace(self):
+        for explicit in (True, False):
+            profile = self.profile(Path('fixture'), 'finix')
+            if not explicit:
+                del profile.config()['workspace_transport']
+            with patch.object(workspace_drive, 'WorkspaceDrive') as own:
+                integration.Profile.workspace(profile)
+                own.assert_called_once_with(profile.home, profile.profile_id,
+                    profile.root / 'workspace', account_digest='a' * 64)
 
-    def test_unknown_transport_refuses_without_fallback(self):
-        with self.assertRaises(integration.core.FinixError):
-            self.selected('unknown-provider')
+    def test_removed_recovery_refuses_before_adapter_or_journal_access(self):
+        profile = self.profile(Path('fixture'))
+        profile.workspace = Mock(side_effect=AssertionError('must not construct adapter'))
+        service = SimpleNamespace(add_source=Mock())
+        with patch.object(recovery_sources, 'read_journal') as read:
+            with self.assertRaises(workspace_drive.RemovedWorkspaceTransport):
+                recovery_sources.register_cloud(service, profile)
+            read.assert_not_called()
+        profile.workspace.assert_not_called()
+        service.add_source.assert_not_called()
 
-    def test_skill_connection_is_explicit_and_checks_identity_without_oauth(self):
-        profile = self.profile()
+    def test_scheduled_backup_refuses_before_pausing_schedule_or_capturing(self):
+        from contextlib import nullcontext
+        profile = self.profile(Path('fixture'))
+        profile.directories = lambda: profile.root
+        with patch.object(integration.core, 'locked', return_value=nullcontext()), patch.object(
+                integration.core, 'atomic_json') as write, patch.object(integration.core, 'backup') as capture:
+            with self.assertRaises(workspace_drive.RemovedWorkspaceTransport):
+                integration.Profile.backup(profile, scheduled=True)
+            write.assert_not_called()
+            capture.assert_not_called()
+
+    def test_old_authority_journal_is_not_adopted_by_own_google(self):
+        profile = self.profile(Path('fixture'), 'finix')
+        profile.workspace = lambda: SimpleNamespace(state=profile.root / 'workspace')
+        service = SimpleNamespace(add_source=Mock())
+        with patch.object(recovery_sources, 'read_journal', return_value={
+                'credential_authority': 'google-workspace-skill:drive'}):
+            recovery_sources.register_cloud(service, profile)
+        service.add_source.assert_not_called()
+
+    def test_supported_connection_choices_and_removed_start(self):
         manager = connections.Connections()
-        calls = []
-        def factory(home):
-            self.assertEqual(home, profile.home)
-            def request(operation):
-                calls.append(operation)
-                return {'account_id': 'synthetic-requester-123'}
-            return request
-        module = SimpleNamespace(WorkspaceSkillRunner=factory)
-        with patch.dict(sys.modules, {'finix.workspace_skill_transport': module}):
-            manager._start(profile, 'workspace-skill', 'Finix', True, True)
-        self.assertEqual(calls, ['identity'])
+        profile = self.profile(Path('fixture'))
+        self.assertEqual({p['id'] for p in manager.view(profile)['providers']},
+                         {'workspace', 'yandex', 'onedrive', 'dropbox'})
+        with patch.object(connections, '_google_runner') as own:
+            with self.assertRaises(workspace_drive.RemovedWorkspaceTransport):
+                manager._start(profile, 'workspace-skill', 'Finix', True, True)
+            own.assert_not_called()
+        self.assertEqual(manager.sessions, {})
+        with self.assertRaises(workspace_drive.RemovedWorkspaceTransport):
+            manager._apply(profile, {'public': {'provider': 'workspace-skill'}})
+
+    def test_google_connection_still_uses_own_identity_without_subprocess(self):
+        profile = self.profile(Path('fixture'), 'finix')
+        manager = connections.Connections()
+        runner = Mock(return_value={'account_id': 'synthetic-account'})
+        with patch.object(workspace_drive, 'WorkspaceRunner', return_value=runner) as factory:
+            manager._start(profile, 'workspace', 'Finix', True, True)
+        factory.assert_called_once_with(profile.home)
+        runner.assert_called_once_with('identity')
         session = manager.sessions[profile.profile_id]
-        self.assertEqual(session['public']['provider'], 'workspace-skill')
         self.assertEqual(session['public']['status'], 'verified')
         self.assertIsNone(session['process'])
-        self.assertEqual(profile.config(), {'workspace_account': 'a' * 64})
+        self.assertEqual(profile.config()['workspace_transport'], 'finix')
 
-    def test_skill_connection_rechecks_account_before_apply(self):
-        profile = self.profile()
-        manager = connections.Connections()
-        current = ['synthetic-requester-123']
-        def factory(home):
-            return lambda operation: {'account_id': current[0]}
-        module = SimpleNamespace(WorkspaceSkillRunner=factory)
-        with patch.dict(sys.modules, {'finix.workspace_skill_transport': module}):
-            manager._start(profile, 'workspace-skill', 'Finix', True, True)
-            current[0] = 'different-synthetic-requester'
-            with self.assertRaises(connections.ConnectionError) as caught:
-                manager._apply(profile, manager.sessions[profile.profile_id])
-        self.assertEqual(caught.exception.code, 'GOOGLE_ACCOUNT_CHANGED')
-        self.assertEqual(profile.config(), {'workspace_account': 'a' * 64})
-
-    def test_skill_recovery_reads_only_its_own_authority_and_state(self):
-        cfg = {'storage': 'workspace', 'workspace_transport': 'skill',
-               'workspace_account': 'a' * 64}
-        authority = 'google-workspace-skill:drive'
-        binding = {'provider': authority}
-        adapter = SimpleNamespace(state=Path('fixture-state/workspace-skill'),
-            credential_authority=authority, _binding=lambda: binding,
-            descriptor=lambda row: row)
-        profile = SimpleNamespace(profile_id='b' * 64, config=lambda: cfg,
-                                  workspace=lambda: adapter)
-        saved = {'records': [], 'profile_id': profile.profile_id, 'folder_id': 'fixture-folder',
-                 'owners': ['synthetic-owner'], 'account': cfg['workspace_account'],
-                 'binding': binding, 'credential_authority': authority}
-        registered = []
-        service = SimpleNamespace(activation='fixture-epoch', add_source=registered.append)
-        with patch.object(recovery_sources, 'read_journal', return_value=saved) as read, patch.object(
-                recovery_sources, 'committed_journal_source', side_effect=lambda **kw: kw):
-            recovery_sources.register_cloud(service, profile)
-        read.assert_called_once_with(adapter.state / 'workspace.json')
-        self.assertEqual(len(registered), 1)
-        self.assertEqual(registered[0]['expected_binding']['credential_authority'], authority)
-        cfg['workspace_transport'] = 'finix'
-        with self.assertRaises(recovery_sources.RecoveryError):
-            registered[0]['validate_record']({'size': 1, 'folder_id': 'fixture-folder',
-                                              'owners': ['synthetic-owner']})
-        cfg['workspace_transport'] = 'skill'
-        saved['credential_authority'] = 'finix:google'
-        registered.clear()
-        with patch.object(recovery_sources, 'read_journal', return_value=saved):
-            recovery_sources.register_cloud(service, profile)
-        self.assertEqual(registered, [])
-
-    def test_cli_accepts_explicit_skill_transport_and_owning_home(self):
-        import argparse
-        from finix.connect_cli import add_parser
-        parser = argparse.ArgumentParser()
-        add_parser(parser.add_subparsers(dest='command', required=True))
-        args = parser.parse_args(['connect', 'workspace-skill', '--home', 'fixture-home',
-                                  '--mode', 'local', '--confirm'])
-        self.assertEqual(args.service, 'workspace-skill')
-        self.assertEqual(args.home, 'fixture-home')
-        self.assertTrue(args.confirm)
-        self.assertFalse(args.open_browser)
-
-    def test_skill_runtime_dependencies_and_payload_are_declared(self):
-        import tomllib
-        import yaml
-        root = Path(__file__).resolve().parents[1]
-        package = tomllib.loads((root / 'pyproject.toml').read_text(encoding='utf-8'))
-        manifest = yaml.safe_load((root / 'plugin.yaml').read_text(encoding='utf-8'))
-        for name in ('google-api-python-client', 'google-auth-oauthlib'):
-            self.assertTrue(any(row.startswith(name) for row in package['project']['dependencies']))
-            self.assertTrue(any(row.startswith(name) for row in manifest['python_dependencies']))
-        payload = package['tool']['setuptools']['data-files']
-        for name in ('finix/workspace_skill_transport.py', 'finix/workspace_skill_worker.py'):
-            self.assertIn(name, payload['share/finix/finix'])
-        self.assertIn('docs/google-workspace-skill.md', payload['share/finix/docs'])
-
-    def test_skill_transport_does_not_accept_rclone_authorization_urls(self):
-        self.assertFalse(connections.safe_url('workspace-skill',
-            'http://127.0.0.1:53682/auth?state=synthetic'))
-
-    def test_skill_worker_preserves_origin_markers_but_not_ambient_secrets(self):
-        import os
-        from finix import workspace_skill_transport as transport
-        markers = {'HERMES_GATEWAY_SESSION': 'synthetic-gateway',
-                   'HERMES_SESSION_PLATFORM': 'desktop',
-                   'HERMES_SINGLE_QUERY_SESSION': 'synthetic-query',
-                   'HERMES_CRON_SESSION': '0',
-                   'HERMES_INTERACTIVE': '0'}
-        with patch.dict(os.environ, dict(markers, FINIX_TEST_PRIVATE_TOKEN='synthetic-secret')):
-            env = transport.child_environment(Path('fixture-home'))
-        for name, value in markers.items():
-            self.assertEqual(env.get(name), value)
-        self.assertNotIn('FINIX_TEST_PRIVATE_TOKEN', env)
-        self.assertEqual(env['HERMES_HOME'], str(Path('fixture-home')))
+    def test_only_rclone_providers_accept_bounded_authorization_url(self):
+        url = 'http://127.0.0.1:53682/auth?state=synthetic'
+        for provider in ('workspace', 'workspace-skill', 'unknown'):
+            self.assertFalse(connections.safe_url(provider, url))
+        for provider in ('yandex', 'onedrive', 'dropbox'):
+            self.assertTrue(connections.safe_url(provider, url))
 
 
 if __name__ == '__main__':
