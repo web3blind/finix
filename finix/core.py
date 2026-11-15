@@ -317,20 +317,26 @@ def _pm_runtime_alias(rootfd, parent, relative, info, *, ancestry):
                 config[key] = value
             version = config.get('version_info', '')
             home = config.get('home', '')
-            # SDK pm.packages.Python: POSIX binary_rel = bin/python3; the
-            # default store entry is python-<version+build>-<target>. No arbitrary
-            # home/target supplied by a forged config gains an exclusion.
-            if (re.fullmatch(r'3[.][0-9]+[.][0-9]+', version) is None
-                    or re.fullmatch(r'/[^\n]+/tools/python-' + re.escape(version)
-                                    + r'[+][0-9]+-linux-(?:x64|arm64)/bin', home) is None
+            # Both SDK-managed tool archives and uv-managed Python are used by
+            # released bootstrap. Their parent location is configurable; neither
+            # layout authorizes following a target or discarding regular payloads.
+            packaged = re.fullmatch(
+                r'/[^\n]+/python-' + re.escape(version)
+                + r'[+][0-9]+-linux-(?:x64|arm64)/bin', home)
+            uv_managed = re.fullmatch(
+                r'/[^\n]+/cpython-' + re.escape(version)
+                + r'-linux-(?:x86_64|aarch64)-gnu/bin', home)
+            if (re.fullmatch(r'3[.][0-9]+(?:[.][0-9]+)?', version) is None
+                    or not (packaged or uv_managed)
                     or not safe_name(home[1:])
                     or config.get('implementation') != 'CPython'
                     or config.get('include-system-site-packages') != 'false'
                     or config.get('relocatable') != 'true'):
                 return False
-            targets = {'lib64': 'lib', 'bin/python': home + '/python3',
-                       'bin/python3': 'python',
-                       'bin/python' + version.rsplit('.', 1)[0]: 'python'}
+            minor = '.'.join(version.split('.')[:2])
+            executable = 'python3' if packaged else 'python' + minor
+            targets = {'lib64': 'lib', 'bin/python': home + '/' + executable,
+                       'bin/python3': 'python', 'bin/python' + minor: 'python'}
             target = os.readlink(relative.rsplit('/', 1)[-1], dir_fd=parent)
             return (targets.get(match[2]) == target
                     and fingerprint(info) == fingerprint(os.stat(

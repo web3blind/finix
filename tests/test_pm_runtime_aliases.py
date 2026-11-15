@@ -101,6 +101,48 @@ class PMRuntimeRegularPayloadTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'posix', 'native Linux symlink and descriptor contract')
 class PMRuntimeAliasTests(unittest.TestCase):
+    def test_released_sdk_runtime_locations_preserve_payload(self):
+        layouts = (
+            ('/synthetic-owner/.cache/hermes-runtime/python-3.14.9+1-linux-x64/bin',
+             '3.14.9', 'python3'),
+            ('/synthetic-owner/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin',
+             '3.14', 'python3.14'),
+            ('/synthetic-owner/.cache/hermes-runtime/python-3.14.9+1-linux-arm64/bin',
+             '3.14.9', 'python3'),
+            ('/synthetic-owner/.local/share/uv/python/cpython-3.14-linux-aarch64-gnu/bin',
+             '3.14', 'python3.14'),
+        )
+        for home, version, executable in layouts:
+            with self.subTest(home=home), fixture() as (base, source):
+                runtime(source)
+                config = source / PREFIX / 'pyvenv.cfg'
+                config.write_text(config.read_text().replace(HOME, home).replace(
+                    'version_info = 3.14.9', 'version_info = ' + version))
+                primary = source / PREFIX / 'bin/python'
+                primary.unlink()
+                primary.symlink_to(home + '/' + executable)
+                sentinels = (PREFIX + '/notes.txt', 'installs/user-data',
+                             f'installs/{INSTALL}/pm-runtime/selected.json')
+                for name in sentinels:
+                    put(source, name)
+                expected = {str(p.relative_to(source)): p.read_bytes()
+                            for p in source.rglob('*') if p.is_file() and not p.is_symlink()}
+                discovered = scan(source)
+                self.assertEqual(set(discovered), set(expected))
+                for name in ALIASES:
+                    self.assertNotIn(PREFIX + '/' + name, discovered)
+                    self.assertTrue(core.allowed(PREFIX + '/' + name))
+                output = io.BytesIO()
+                with core.locked(source) as anchor:
+                    streaming.write_archive(anchor, output, core.private_dir(base / 'staging'))
+                restored = core.validate_archive(output.getvalue())
+                self.assertEqual(restored, expected)
+                # Even in a recognized layout, an unexpected target is never followed.
+                primary.unlink()
+                primary.symlink_to('/etc/passwd')
+                with self.assertRaises(core.FinixError):
+                    scan(source)
+
     def test_generation_and_bin_replacement_cannot_supply_alias_metadata(self):
         from unittest.mock import patch
         for member in ('', '/bin'):
