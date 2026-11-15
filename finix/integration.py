@@ -704,6 +704,23 @@ def current_profile():
     return Profile(get_hermes_home())
 
 
+def _private_chat_reply(profile):
+    """Use only the captured owning profile's explicit display preference."""
+    from .extra_sources import read_config
+    language = None
+    try:
+        config, _ = read_config(profile.home)
+        display = config.get('display')
+        if isinstance(display, dict):
+            language = display.get('language')
+    except (ImportError, OSError, ValueError, core.FinixError):
+        pass  # A locale failure must not weaken the private-chat refusal.
+    normalized = language.strip().lower().replace('_', '-') if isinstance(language, str) else ''
+    if normalized in ('ru', 'ru-ru'):
+        return 'Finix connect: PRIVATE_CHAT_REQUIRED; подключайте облако только в личном чате владельца.'
+    return "Finix connect: PRIVATE_CHAT_REQUIRED; connect cloud storage only in the owner's private chat."
+
+
 def command(raw_args, *, owner_id='', owner_platform='', platform='', source=None, connection_commands=None, bound_profile=None, **kwargs):
     """Only adapter-attested identities may use chat operations, including status."""
     if (not owner_id or not owner_platform or source is None or platform != owner_platform
@@ -716,7 +733,7 @@ def command(raw_args, *, owner_id='', owner_platform='', platform='', source=Non
             return json.dumps(profile.status())
         if args and args[0] == 'connect':
             if getattr(source, 'chat_type', '') != 'dm':
-                return 'Finix connect: PRIVATE_CHAT_REQUIRED; подключайте облако только в личном чате владельца.'
+                return _private_chat_reply(profile)
             from .connect_commands import default_commands
             from .connections import ConnectionError
             try:
