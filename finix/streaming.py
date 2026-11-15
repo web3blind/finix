@@ -409,10 +409,10 @@ def _source_namespace(rootfd):
         home = Path(os.readlink('/proc/self/fd/' + str(rootfd)))
         info = os.fstat(rootfd)
         identity = (info.st_dev, info.st_ino)
-    name = profile_name_for_home(home)
-    if name is None:
-        return None
     try:
+        name = profile_name_for_home(home)
+        if name is None:
+            return None
         # This is Finix's serialized namespace policy, not a private SDK validator.
         if not isinstance(name, str) or not core.re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', name):
             raise ValueError()
@@ -430,7 +430,7 @@ def _source_namespace(rootfd):
                     raise ValueError()
             finally:
                 os.close(fd)
-    except (ValueError, OSError):
+    except (TypeError, ValueError, OSError):
         raise core.FinixError('HISTORY_SOURCE_BINDING_REQUIRED') from None
     return name
 

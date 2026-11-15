@@ -33,6 +33,7 @@ jobs:
         run: |
           npm ci
           node scripts/build-desktop.mjs
+          git diff --exit-code -- desktop/plugin.js
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: finix-desktop-${{ runner.os }}-${{ github.sha }}
@@ -66,7 +67,11 @@ jobs:
       - name: Desktop locale, transport and recovery contracts
         run: node --experimental-vm-modules --test tests-desktop/i18n-default.test.mjs tests-desktop/workspace-skill-ui.test.mjs tests-desktop/public-recovery-unavailable.test.mjs
   sdk-validation:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
 
     steps:
@@ -80,6 +85,7 @@ jobs:
         run: |
           npm ci
           node scripts/build-desktop.mjs
+          git diff --exit-code -- desktop/plugin.js
           python -c "import shutil; shutil.rmtree('node_modules')"
       - name: Validate with released Hermes and its package manager
         shell: bash
@@ -98,6 +104,7 @@ jobs:
           bash scripts/run-in-hermes-env python "$GITHUB_WORKSPACE/.github/public-sdk-probe.py" --project "$GITHUB_WORKSPACE"
           bash scripts/run-in-hermes-env python hermes plugins validate "$GITHUB_WORKSPACE" --install-deps --json | tee "$RUNNER_TEMP/finix-sdk-validation.json"
       - name: Real SDK portable-history preparation without retired runtime fixtures
+        if: runner.os == 'Linux'
         shell: bash
         env:
           HOME: ${{ runner.temp }}/finix-ci-user
@@ -106,12 +113,16 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/hermes-sdk"
-          bash scripts/run-in-hermes-env python -m pm.build_env --source . --out "$RUNNER_TEMP/finix-sdk-tests" --group dev --group test
+          bash scripts/run-in-hermes-env python -m pm.build_env --source . --out "$RUNNER_TEMP/finix-sdk-test-base" --group dev --group test
+          # Rebuild a separate test environment through PM, with the plugin's
+          # declared PyYAML dependency. Never pip-mutate either SDK environment.
+          "$RUNNER_TEMP/finix-sdk-test-base/bin/python" -c 'import importlib.metadata as m; from pathlib import Path; import sys; Path(sys.argv[1]).write_text("\n".join(sorted(d.metadata["Name"] + "==" + d.version for d in m.distributions() if d.metadata["Name"].lower().replace("_", "-") != "hermes-agent")) + "\n")' "$RUNNER_TEMP/finix-sdk-test-requirements.txt"
+          bash scripts/run-in-hermes-env python -m pm.build_env --requirements "$RUNNER_TEMP/finix-sdk-test-requirements.txt" --requirement "PyYAML>=6.0,<7.0" --out "$RUNNER_TEMP/finix-sdk-tests"
           HERMES_PYTHON="$RUNNER_TEMP/finix-sdk-tests/bin/python" scripts/run_tests.sh "$GITHUB_WORKSPACE/tests/test_portable_history.py" -- -o "pythonpath=$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: finix-sdk-validation-${{ github.sha }}
+          name: finix-sdk-validation-${{ runner.os }}-${{ github.sha }}
           path: ${{ runner.temp }}/finix-sdk-validation.json
           if-no-files-found: warn
           retention-days: 7

@@ -47,9 +47,9 @@ class PreparationCancellationIntegrationTests(unittest.TestCase):
 
     def test_public_prepare_refuses_before_cancellation_or_work(self):
         from finix.default_recovery_api import DefaultRecoveryAPI
-        from finix.recovery_import import RecoveryImportError
+        from finix.default_recovery import RecoveryError
         active = [False]
-        with self.assertRaisesRegex(RecoveryImportError, '^PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE$'):
+        with self.assertRaisesRegex(RecoveryError, '^PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE$'):
             with preview_budget.scope(cancelled=lambda: active[0]):
                 active[0] = True
                 DefaultRecoveryAPI().prepare(None, None, 'b' * 32, consent=True)

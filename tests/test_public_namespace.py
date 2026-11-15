@@ -12,7 +12,7 @@ from finix import core, streaming
 
 @unittest.skipUnless(os.name == 'posix', 'Native POSIX retained descriptor test')
 class PublicNamespaceTests(unittest.TestCase):
-    def probe(self, *, name: str | None = 'default', other=False):
+    def probe(self, *, name: str | None = 'default', other=False, api_failure=None):
         with tempfile.TemporaryDirectory(dir=os.environ.get('RUNNER_TEMP')) as tmp:
             root = Path(tmp) / 'profile'
             alternate = Path(tmp) / 'alternate'
@@ -23,6 +23,10 @@ class PublicNamespaceTests(unittest.TestCase):
                 profile_name_for_home=lambda home: name,
                 get_default_hermes_root=lambda *, home: alternate if other else root,
                 named_profile_home=lambda home: alternate if other else root)
+            if api_failure:
+                def incompatible(*args, **kwargs):
+                    raise TypeError('untrusted dependency details')
+                public.__dict__[api_failure] = incompatible
             retired = ModuleType('hermes_cli.profiles')
             def forbidden(attr):
                 raise AssertionError('Private profile API was accessed: ' + attr)
@@ -55,6 +59,14 @@ class PublicNamespaceTests(unittest.TestCase):
 
     def test_unknown_source_has_no_namespace_authority(self):
         self.assertIsNone(self.probe(name=None))
+
+    def test_incompatible_public_api_returns_closed_code(self):
+        for name, api in (('default', 'profile_name_for_home'),
+                          ('default', 'get_default_hermes_root'),
+                          ('fixture', 'named_profile_home')):
+            with self.subTest(api=api):
+                with self.assertRaisesRegex(core.FinixError, '^HISTORY_SOURCE_BINDING_REQUIRED$'):
+                    self.probe(name=name, api_failure=api)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,17 @@
-# Ordinary Restore security contract — first integration slice
+# Historical automatic-recovery security contract — retired
+
+This entire document records the former private-integration implementation, not
+the current SDK-only candidate. Its importer, lifecycle, source-pin, runtime
+bootstrap, writer-coordination and activation contracts are retired. Names such
+as `RecoveryImporter`, `HOST_SOURCE_PINS` and `LIFECYCLE_PINS` below are historical
+evidence, not supported APIs or instructions for reenabling recovery.
+
+Current automatic import/activation and physical-default Prepare/Apply/rollback
+refuse with `PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE` before key access or mutation.
+Retained records are historical only and are never resumed or adopted. Encrypted
+backup and inert extraction remain separate data operations; see `docs/SAFETY.md`,
+`docs/PUBLICATION-STATUS.md` and `docs/TEST-SDK.md` for current limits and evidence.
+This archival contract does not establish current default-recovery acceptance.
 
 ## Current SDK writer coordination files
 
