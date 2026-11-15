@@ -7,6 +7,15 @@ import { jsx as reactJsx, jsxs as reactJsxs } from "react/jsx-runtime";
 
 // desktop/src/messages.mjs
 var english = Object.freeze({
+  "\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u0438\u043C\u043F\u043E\u0440\u0442 \u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0435 \u043F\u0440\u043E\u0444\u0438\u043B\u044F \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B: \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0440\u0430\u043A\u0442 Hermes \u0434\u043B\u044F \u0430\u0442\u043E\u043C\u0430\u0440\u043D\u043E\u0439 \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438. \u041A\u043B\u044E\u0447 \u043D\u0435 \u0437\u0430\u043F\u0440\u0430\u0448\u0438\u0432\u0430\u0435\u0442\u0441\u044F. \u041A\u043E\u043F\u0438\u0438 \u043C\u043E\u0436\u043D\u043E \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u043D\u0438\u0436\u0435; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0435 \u043E\u0444\u043B\u0430\u0439\u043D-\u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0432 \u043F\u0443\u0441\u0442\u0443\u044E \u043F\u0430\u043F\u043A\u0443. \u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 \u043D\u0435 \u0432\u043E\u0437\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u044E\u0442\u0441\u044F.": "Automatic profile import and activation are unavailable: a public Hermes atomic-publication contract is required. No recovery key is requested. Browse backups below and use separate offline recovery into an empty directory. Retained operations are not resumed.",
+  "\u0417\u0430\u043C\u0435\u043D\u0430 \u0444\u0438\u0437\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E default \u0438 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u043E\u0442\u043A\u0430\u0442 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B: Hermes \u043D\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442 \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u0443\u044E \u0443\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u0443\u044E \u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u043A\u0443 \u0432\u0441\u0435\u0445 \u043F\u0438\u0441\u0430\u0442\u0435\u043B\u0435\u0439 \u0438 \u0442\u043E\u0447\u043D\u0443\u044E \u0442\u0440\u0430\u043D\u0437\u0430\u043A\u0446\u0438\u043E\u043D\u043D\u0443\u044E \u0437\u0430\u043C\u0435\u043D\u0443. \u041A\u043B\u044E\u0447 \u043D\u0435 \u0437\u0430\u043F\u0440\u0430\u0448\u0438\u0432\u0430\u0435\u0442\u0441\u044F. \u041F\u0440\u0435\u0436\u043D\u0438\u0435 \u0436\u0443\u0440\u043D\u0430\u043B\u044B \u0438 \u0434\u0430\u043D\u043D\u044B\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B; \u0432\u043E\u0437\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0437\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E. \u041E\u0444\u043B\u0430\u0439\u043D-\u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0432 \u043F\u0443\u0441\u0442\u0443\u044E \u043F\u0430\u043F\u043A\u0443 \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u043C.": "Physical default replacement and automatic rollback are unavailable: Hermes provides no public held lease for all writers and exact transactional replacement. No recovery key is requested. Existing journals and data are preserved; resumption is blocked. Offline recovery into an empty directory remains available.",
+  " \u041A\u0430\u0442\u0430\u043B\u043E\u0433 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0432 \u044D\u0442\u043E\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438.": " The catalog is unavailable on this connection.",
+  "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 default": "Default recovery",
+  " \u2014 \u043F\u043E\u043B\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F": " \u2014 complete backup",
+  " \u2014 \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0430": " \u2014 completeness not verified",
+  "\u0422\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442 \u043D\u0430\u0432\u044B\u043A\u0430 Workspace \u0443\u0434\u0430\u043B\u0451\u043D. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u043A\u043E\u043F\u0438\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u042F\u0432\u043D\u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 finix:google \u0438\u043B\u0438 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0440\u0443\u0433\u043E\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u043E\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435; \u043F\u0440\u0435\u0436\u043D\u0438\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u0438 \u0436\u0443\u0440\u043D\u0430\u043B\u044B \u043A\u043E\u043F\u0438\u0439 \u043D\u0435 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u044F\u0442\u0441\u044F.": "The Workspace skill transport was removed. Settings and existing backups are preserved. Explicitly connect finix:google or select another supported backend; old grants and backup journals are not migrated.",
+  "\u0412\u043D\u0435\u0448\u043D\u0438\u0439 \u0442\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442 \u043D\u0430\u0432\u044B\u043A\u0430 Workspace \u0443\u0434\u0430\u043B\u0451\u043D. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438, \u0436\u0443\u0440\u043D\u0430\u043B\u044B \u0438 \u0448\u0438\u0444\u0440\u043E\u0442\u0435\u043A\u0441\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u0414\u043B\u044F \u043D\u043E\u0432\u044B\u0445 \u043A\u043E\u043F\u0438\u0439 \u044F\u0432\u043D\u043E \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 finix:google \u0438\u043B\u0438 rclone; \u043F\u0440\u0435\u0436\u043D\u0438\u0439 \u0448\u0438\u0444\u0440\u043E\u0442\u0435\u043A\u0441\u0442 \u0441\u043A\u0430\u0447\u0430\u0439\u0442\u0435 \u0447\u0435\u0440\u0435\u0437 \u0438\u0441\u0445\u043E\u0434\u043D\u043E\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u0435 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435. \u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u0430 \u043D\u0435\u0442.": "The external Workspace skill transport was removed. Settings, journals and ciphertext are preserved. Explicitly select finix:google or rclone for new backups; retrieve old ciphertext through the original provider connection and use local recovery. No automatic migration occurs.",
+  "\u0414\u043B\u044F Google \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043E\u0431\u044A\u044F\u0432\u043B\u0435\u043D\u043D\u044B\u0439 Finix OAuth \u0441 \u043F\u0440\u0430\u0432\u0430\u043C\u0438 drive.file. \u041F\u0435\u0440\u0435\u0434 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u043E\u0439 \u0432\u044B\u043F\u043E\u043B\u043D\u0438\u0442\u0435 hermes auth add finix:google \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435. \u0423\u0447\u0451\u0442\u043D\u044B\u043C\u0438 \u0434\u0430\u043D\u043D\u044B\u043C\u0438 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 Hermes; \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435 \u043D\u0430\u0432\u044B\u043A\u0430 Workspace \u043D\u0435 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F. \u041F\u0440\u0435\u0436\u043D\u0438\u0435 \u043A\u043E\u043F\u0438\u0438 \u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B; \u043F\u0435\u0440\u0435\u043D\u043E\u0441 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u044F\u0432\u043D\u043E\u0433\u043E \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F.": "Google uses only the Finix-declared OAuth client with drive.file scope. Run hermes auth add finix:google in the selected profile before checking. Hermes owns credentials; the Workspace skill grant is not reused. Existing backups and settings are preserved; migration requires an explicit action.",
   "\u041D\u0443\u0436\u0435\u043D \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u0439 \u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0434\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u044B\u0439 Google Workspace SKILL \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0435\u0433\u043E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443. \u041C\u0430\u0441\u0442\u0435\u0440 \u043D\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 OAuth; \u0442\u0435\u043A\u0443\u0449\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E.": "A configured and authorized trusted Google Workspace SKILL is required in the selected profile. Set it up separately and check again. This wizard does not start OAuth; current storage is preserved.",
   "Google Workspace SKILL \u043C\u043E\u0436\u0435\u0442 \u0438\u043C\u0435\u0442\u044C \u0431\u043E\u043B\u0435\u0435 \u0448\u0438\u0440\u043E\u043A\u0438\u0435 \u043F\u0440\u0430\u0432\u0430, \u0447\u0435\u043C Finix drive.file, \u0432\u043A\u043B\u044E\u0447\u0430\u044F \u0447\u0442\u0435\u043D\u0438\u0435, \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0438 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0432\u0441\u0435\u0433\u043E \u0434\u0438\u0441\u043A\u0430. \u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 OAuth \u0438 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442 \u043A\u043E\u043F\u0438\u044E.": "Google Workspace SKILL may have broader permissions than Finix drive.file, including reading, changing and deleting files across the entire drive. This check does not start OAuth or upload a backup.",
   "Google Workspace SKILL \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D \u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435 \u0437\u0430\u0440\u0430\u043D\u0435\u0435. Finix \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0433\u043E \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u0443\u044E \u0443\u0447\u0451\u0442\u043D\u0443\u044E \u0437\u0430\u043F\u0438\u0441\u044C; \u043C\u0430\u0441\u0442\u0435\u0440 \u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u0430\u0438\u0432\u0430\u0435\u0442 SKILL \u0438 \u043D\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0432\u0445\u043E\u0434 Google. \u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435 finix:google \u043D\u0435 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F. Finix \u043F\u043E-\u043F\u0440\u0435\u0436\u043D\u0435\u043C\u0443 \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u0441\u043D\u0438\u043C\u043E\u043A, \u0448\u0438\u0444\u0440\u0443\u0435\u0442 \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u0442 \u043A\u043E\u043F\u0438\u044E; SKILL \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0435\u0440\u0435\u0434\u0430\u0451\u0442 \u0444\u0430\u0439\u043B\u044B. \u0425\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u043B\u0438\u0448\u044C \u043F\u043E\u0441\u043B\u0435 \u044F\u0432\u043D\u043E\u0433\u043E \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u044F.": "Google Workspace SKILL must already be configured and authorized in the selected profile. Finix checks only its verified account; this wizard does not set up the SKILL or start Google sign-in. The finix:google grant is not used. Finix still captures, encrypts and verifies the backup; the SKILL only transfers files. Storage changes only after explicit Apply.",
@@ -223,12 +232,11 @@ function createLocale(ctx) {
   });
   return controller;
 }
-var scopedLanguage = () => current?.view() ?? null;
 function useLocalized(pinned = null) {
-  const host8 = sdk.useI18n?.();
+  const host7 = sdk.useI18n?.();
   if (current) sdk.useValue(current.state);
   const bound = pinned === "en" || pinned === "ru" ? pinned : current?.view() ?? (typeof sdk.useI18n === "function" ? null : "en");
-  const language = bound === null ? null : host8 && !host8.isLoadingConfig && host8.locale === bound ? host8.locale : bound;
+  const language = bound === null ? null : host7 && !host7.isLoadingConfig && host7.locale === bound ? host7.locale : bound;
   const text = (v) => Array.isArray(v) ? v.map(text) : translate(v, language);
   const wrap = (fn) => (type, props, key) => {
     if (type === "section" && language === null) return fn("section", { "aria-busy": true, children: reactJsx("p", { role: "status", "aria-live": "polite", children: "Finix\u2026" }) }, key);
@@ -242,8 +250,8 @@ function useLocalized(pinned = null) {
 }
 
 // desktop/src/plugin.mjs
-import { jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
-import { useEffect as useEffect5 } from "react";
+import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+import { useEffect as useEffect3 } from "react";
 
 // node_modules/@noble/hashes/utils.js
 function isBytes(a) {
@@ -265,10 +273,10 @@ function abytes(value, length, title = "") {
   const bytes = isBytes(value);
   const ofLen = length !== void 0 ? ` of length ${length}` : "";
   const got = bytes ? `length=${value.length}` : `type=${typeof value}`;
-  const message = atitle(title) + "expected Uint8Array" + ofLen + ", got " + got;
+  const message3 = atitle(title) + "expected Uint8Array" + ofLen + ", got " + got;
   if (!bytes)
-    throw new TypeError(message);
-  throw new RangeError(message);
+    throw new TypeError(message3);
+  throw new RangeError(message3);
 }
 function ahash(h) {
   if (typeof h !== "function" || typeof h.create !== "function")
@@ -340,37 +348,37 @@ function bytesToHex(bytes) {
   abytes(bytes);
   if (hasHexBuiltin)
     return bytes.toHex();
-  let hex2 = "";
+  let hex = "";
   for (let i = 0; i < bytes.length; i++) {
-    hex2 += hexes[bytes[i]];
+    hex += hexes[bytes[i]];
   }
-  return hex2;
+  return hex;
 }
 function asciiToBase16(ch) {
   return ch >= 48 && ch <= 57 ? ch - 48 : ch >= 65 && ch <= 70 ? ch - (65 - 10) : ch >= 97 && ch <= 102 ? ch - (97 - 10) : void 0;
 }
-function hexToBytes(hex2) {
-  if (typeof hex2 !== "string")
-    throw new TypeError("hex string expected, got " + typeof hex2);
+function hexToBytes(hex) {
+  if (typeof hex !== "string")
+    throw new TypeError("hex string expected, got " + typeof hex);
   if (hasHexBuiltin) {
     try {
-      return Uint8Array.fromHex(hex2);
+      return Uint8Array.fromHex(hex);
     } catch (error) {
       if (error instanceof SyntaxError)
         throw new RangeError(error.message);
       throw error;
     }
   }
-  const hl = hex2.length;
+  const hl = hex.length;
   const al = hl / 2;
   if (hl % 2)
     throw new RangeError("hex string expected, got unpadded hex of length " + hl);
   const array = new Uint8Array(al);
   for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
-    const n1 = asciiToBase16(hex2.charCodeAt(hi));
-    const n2 = asciiToBase16(hex2.charCodeAt(hi + 1));
+    const n1 = asciiToBase16(hex.charCodeAt(hi));
+    const n2 = asciiToBase16(hex.charCodeAt(hi + 1));
     if (n1 === void 0 || n2 === void 0) {
-      const char = hex2[hi] + hex2[hi + 1];
+      const char = hex[hi] + hex[hi + 1];
       throw new RangeError('hex string expected, got non-hex character "' + char + '" at index ' + hi);
     }
     array[ai] = n1 * 16 + n2;
@@ -514,7 +522,7 @@ var _HMAC = class {
   }
 };
 var hmac = /* @__PURE__ */ (() => {
-  const hmac_ = ((hash, key, message) => new _HMAC(hash, key).update(message).digest());
+  const hmac_ = ((hash, key, message3) => new _HMAC(hash, key).update(message3).digest());
   hmac_.create = (hash, key) => new _HMAC(hash, key);
   return hmac_;
 })();
@@ -1483,10 +1491,10 @@ function abytes3(value, length, title = "") {
   const bytes = isBytes3(value);
   const ofLen = length !== void 0 ? ` of length ${length}` : "";
   const got = bytes ? `length=${value.length}` : `type=${typeof value}`;
-  const message = atitle2(title) + "expected Uint8Array" + ofLen + ", got " + got;
+  const message3 = atitle2(title) + "expected Uint8Array" + ofLen + ", got " + got;
   if (!bytes)
-    throw new TypeError(message);
-  throw new RangeError(message);
+    throw new TypeError(message3);
+  throw new RangeError(message3);
 }
 var aobject2 = (value, label) => {
   if (value === null || typeof value !== "object" || Array.isArray(value))
@@ -2243,11 +2251,11 @@ function bytesToHex2(bytes) {
   abytes4(bytes);
   if (hasHexBuiltin2)
     return bytes.toHex();
-  let hex2 = "";
+  let hex = "";
   for (let i = 0; i < bytes.length; i++) {
-    hex2 += hexes2[bytes[i]];
+    hex += hexes2[bytes[i]];
   }
-  return hex2;
+  return hex;
 }
 var asciis = { _0: 48, _9: 57, A: 65, F: 70, a: 97, f: 102 };
 function asciiToBase162(ch) {
@@ -2259,21 +2267,21 @@ function asciiToBase162(ch) {
     return ch - (asciis.a - 10);
   return;
 }
-function hexToBytes2(hex2) {
-  if (typeof hex2 !== "string")
-    throw new Error("hex string expected, got " + typeof hex2);
+function hexToBytes2(hex) {
+  if (typeof hex !== "string")
+    throw new Error("hex string expected, got " + typeof hex);
   if (hasHexBuiltin2)
-    return Uint8Array.fromHex(hex2);
-  const hl = hex2.length;
+    return Uint8Array.fromHex(hex);
+  const hl = hex.length;
   const al = hl / 2;
   if (hl % 2)
     throw new Error("hex string expected, got unpadded hex of length " + hl);
   const array = new Uint8Array(al);
   for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
-    const n1 = asciiToBase162(hex2.charCodeAt(hi));
-    const n2 = asciiToBase162(hex2.charCodeAt(hi + 1));
+    const n1 = asciiToBase162(hex.charCodeAt(hi));
+    const n2 = asciiToBase162(hex.charCodeAt(hi + 1));
     if (n1 === void 0 || n2 === void 0) {
-      const char = hex2[hi] + hex2[hi + 1];
+      const char = hex[hi] + hex[hi + 1];
       throw new Error('hex string expected, got non-hex character "' + char + '" at index ' + hi);
     }
     array[ai] = n1 * 16 + n2;
@@ -2334,13 +2342,13 @@ function abignumber(n) {
   return n;
 }
 function numberToHexUnpadded(num) {
-  const hex2 = abignumber(num).toString(16);
-  return hex2.length & 1 ? "0" + hex2 : hex2;
+  const hex = abignumber(num).toString(16);
+  return hex.length & 1 ? "0" + hex : hex;
 }
-function hexToNumber(hex2) {
-  if (typeof hex2 !== "string")
-    throw new Error("hex string expected, got " + typeof hex2);
-  return hex2 === "" ? _0n : BigInt("0x" + hex2);
+function hexToNumber(hex) {
+  if (typeof hex !== "string")
+    throw new Error("hex string expected, got " + typeof hex);
+  return hex === "" ? _0n : BigInt("0x" + hex);
 }
 function bytesToNumberBE(bytes) {
   return hexToNumber(bytesToHex2(bytes));
@@ -2628,7 +2636,7 @@ var FIELD_FIELDS = [
   "sqrN"
 ];
 function validateField(field) {
-  const initial3 = {
+  const initial2 = {
     ORDER: "bigint",
     BYTES: "number",
     BITS: "number"
@@ -2636,7 +2644,7 @@ function validateField(field) {
   const opts2 = FIELD_FIELDS.reduce((map, val) => {
     map[val] = "function";
     return map;
-  }, initial3);
+  }, initial2);
   validateObject(field, opts2);
   return field;
 }
@@ -3269,7 +3277,7 @@ var _HMAC2 = class {
     this.iHash.destroy();
   }
 };
-var hmac2 = (hash, key, message) => new _HMAC2(hash, key).update(message).digest();
+var hmac2 = (hash, key, message3) => new _HMAC2(hash, key).update(message3).digest();
 hmac2.create = (hash, key) => new _HMAC2(hash, key);
 
 // node_modules/@noble/post-quantum/node_modules/@noble/curves/abstract/weierstrass.js
@@ -3378,12 +3386,12 @@ var DER = {
       const { Err: E } = DER;
       if (num < _0n5)
         throw new E("integer: negative integers are not allowed");
-      let hex2 = numberToHexUnpadded(num);
-      if (Number.parseInt(hex2[0], 16) & 8)
-        hex2 = "00" + hex2;
-      if (hex2.length & 1)
+      let hex = numberToHexUnpadded(num);
+      if (Number.parseInt(hex[0], 16) & 8)
+        hex = "00" + hex;
+      if (hex.length & 1)
         throw new E("unexpected DER parsing assertion: unpadded hex");
-      return hex2;
+      return hex;
     },
     decode(data) {
       const { Err: E } = DER;
@@ -3598,8 +3606,8 @@ function weierstrass(params, extraOpts = {}) {
       P.assertValidity();
       return P;
     }
-    static fromHex(hex2) {
-      return Point.fromBytes(hexToBytes2(hex2));
+    static fromHex(hex) {
+      return Point.fromBytes(hexToBytes2(hex));
     }
     get x() {
       return this.toAffine().x;
@@ -3985,8 +3993,8 @@ function ecdsa(Point, hash, ecdsaOpts = {}) {
       const s = bytes.subarray(L, L * 2);
       return new Signature(Fn.fromBytes(r), Fn.fromBytes(s), recid);
     }
-    static fromHex(hex2, format) {
-      return this.fromBytes(hexToBytes2(hex2), format);
+    static fromHex(hex, format) {
+      return this.fromBytes(hexToBytes2(hex), format);
     }
     assertRecovery() {
       const { recovery } = this;
@@ -4051,14 +4059,14 @@ function ecdsa(Point, hash, ecdsaOpts = {}) {
     aInRange("num < 2^" + fnBits, num, _0n5, ORDER_MASK);
     return Fn.toBytes(num);
   }
-  function validateMsgAndHash(message, prehash) {
-    abytes4(message, void 0, "message");
-    return prehash ? abytes4(hash(message), void 0, "prehashed message") : message;
+  function validateMsgAndHash(message3, prehash) {
+    abytes4(message3, void 0, "message");
+    return prehash ? abytes4(hash(message3), void 0, "prehashed message") : message3;
   }
-  function prepSig(message, secretKey, opts2) {
+  function prepSig(message3, secretKey, opts2) {
     const { lowS, prehash, extraEntropy } = validateSigOpts(opts2, defaultSigOpts);
-    message = validateMsgAndHash(message, prehash);
-    const h1int = bits2int_modN(message);
+    message3 = validateMsgAndHash(message3, prehash);
+    const h1int = bits2int_modN(message3);
     const d = Fn.fromBytes(secretKey);
     if (!Fn.isValidNot0(d))
       throw new Error("invalid private key");
@@ -4091,16 +4099,16 @@ function ecdsa(Point, hash, ecdsaOpts = {}) {
     }
     return { seed, k2sig };
   }
-  function sign(message, secretKey, opts2 = {}) {
-    const { seed, k2sig } = prepSig(message, secretKey, opts2);
+  function sign(message3, secretKey, opts2 = {}) {
+    const { seed, k2sig } = prepSig(message3, secretKey, opts2);
     const drbg = createHmacDrbg(hash.outputLen, Fn.BYTES, hmac3);
     const sig = drbg(seed, k2sig);
     return sig.toBytes(opts2.format);
   }
-  function verify(signature, message, publicKey, opts2 = {}) {
+  function verify(signature, message3, publicKey, opts2 = {}) {
     const { lowS, prehash, format } = validateSigOpts(opts2, defaultSigOpts);
     publicKey = abytes4(publicKey, void 0, "publicKey");
-    message = validateMsgAndHash(message, prehash);
+    message3 = validateMsgAndHash(message3, prehash);
     if (!isBytes4(signature)) {
       const end = signature instanceof Signature ? ", use sig.toBytes()" : "";
       throw new Error("verify expects Uint8Array signature" + end);
@@ -4112,7 +4120,7 @@ function ecdsa(Point, hash, ecdsaOpts = {}) {
       if (lowS && sig.hasHighS())
         return false;
       const { r, s } = sig;
-      const h = bits2int_modN(message);
+      const h = bits2int_modN(message3);
       const is = Fn.inv(s);
       const u1 = Fn.create(h * is);
       const u2 = Fn.create(r * is);
@@ -4125,10 +4133,10 @@ function ecdsa(Point, hash, ecdsaOpts = {}) {
       return false;
     }
   }
-  function recoverPublicKey(signature, message, opts2 = {}) {
+  function recoverPublicKey(signature, message3, opts2 = {}) {
     const { prehash } = validateSigOpts(opts2, defaultSigOpts);
-    message = validateMsgAndHash(message, prehash);
-    return Signature.fromBytes(signature, "recovered").recoverPublicKey(message).toBytes();
+    message3 = validateMsgAndHash(message3, prehash);
+    return Signature.fromBytes(signature, "recovered").recoverPublicKey(message3).toBytes();
   }
   return Object.freeze({
     keygen,
@@ -5582,9 +5590,9 @@ function combineKeys(realSeedLen, expandSeed, ...ck) {
   function expandDecapsulationKey(seed) {
     abytes4(seed, realSeedLen);
     const expanded = seedCoder.decode(expandSeed(seed, seedCoder.bytesLen));
-    const keys2 = ck.map((i, j) => i.keygen(expanded[j]));
-    const secretKey = keys2.map((i) => i.secretKey);
-    const publicKey = keys2.map((i) => i.publicKey);
+    const keys = ck.map((i, j) => i.keygen(expanded[j]));
+    const secretKey = keys.map((i) => i.secretKey);
+    const publicKey = keys.map((i) => i.publicKey);
     return { secretKey, publicKey };
   }
   return {
@@ -5604,7 +5612,7 @@ function combineKeys(realSeedLen, expandSeed, ...ck) {
   };
 }
 function combineKEMS(realSeedLen, realMsgLen, expandSeed, combiner, ...kems) {
-  const keys2 = combineKeys(realSeedLen, expandSeed, ...kems);
+  const keys = combineKeys(realSeedLen, expandSeed, ...kems);
   const ctCoder = splitLengths(kems, "cipherText");
   const pkCoder = splitLengths(kems, "publicKey");
   const msgCoder = splitLengths(kems, "msg");
@@ -5613,13 +5621,13 @@ function combineKEMS(realSeedLen, realMsgLen, expandSeed, combiner, ...kems) {
   anumber4(realMsgLen);
   return {
     lengths: {
-      ...keys2.info.lengths,
+      ...keys.info.lengths,
       msg: realMsgLen,
       msgRand: msgCoder.bytesLen,
       cipherText: ctCoder.bytesLen
     },
-    getPublicKey: keys2.getPublicKey,
-    keygen: keys2.keygen,
+    getPublicKey: keys.getPublicKey,
+    keygen: keys.keygen,
     encapsulate(pk, randomness = randomBytes4(msgCoder.bytesLen)) {
       const pks = pkCoder.decode(pk);
       const rand = msgCoder.decode(randomness);
@@ -5635,7 +5643,7 @@ function combineKEMS(realSeedLen, realMsgLen, expandSeed, combiner, ...kems) {
     },
     decapsulate(ct, seed) {
       const cts = ctCoder.decode(ct);
-      const { publicKey, secretKey } = keys2.expandDecapsulationKey(seed);
+      const { publicKey, secretKey } = keys.expandDecapsulationKey(seed);
       const sharedSecret = kems.map((i, j) => i.decapsulate(cts[j], secretKey[j]));
       return combiner(publicKey, cts, sharedSecret);
     }
@@ -5769,7 +5777,7 @@ function afunction(value, title) {
 }
 var bytesToHex3 = bytesToHex;
 var concatBytes3 = (...arrays) => concatBytes(...arrays);
-var hexToBytes3 = (hex2) => hexToBytes(hex2);
+var hexToBytes3 = (hex) => hexToBytes(hex);
 var isBytes5 = isBytes;
 var randomBytes5 = (bytesLength) => randomBytes(bytesLength);
 var _0n7 = /* @__PURE__ */ BigInt(0);
@@ -5799,13 +5807,13 @@ function asafenumber(value, title = "") {
   }
 }
 function numberToHexUnpadded2(num) {
-  const hex2 = abignumber2(num).toString(16);
-  return hex2.length & 1 ? "0" + hex2 : hex2;
+  const hex = abignumber2(num).toString(16);
+  return hex.length & 1 ? "0" + hex : hex;
 }
-function hexToNumber2(hex2) {
-  if (typeof hex2 !== "string")
-    throw new TypeError("hex string expected, got " + typeof hex2);
-  return hex2 === "" ? _0n7 : BigInt("0x" + hex2);
+function hexToNumber2(hex) {
+  if (typeof hex !== "string")
+    throw new TypeError("hex string expected, got " + typeof hex);
+  return hex === "" ? _0n7 : BigInt("0x" + hex);
 }
 function bytesToNumberBE2(bytes) {
   return hexToNumber2(bytesToHex(bytes));
@@ -5819,10 +5827,10 @@ function numberToBytesBE2(n, len) {
     throw new Error("zero output length is invalid");
   n = abignumber2(n);
   const expectedLen = len * 2;
-  const hex2 = n.toString(16);
-  if (hex2.length > expectedLen)
+  const hex = n.toString(16);
+  if (hex.length > expectedLen)
     throw new RangeError("number is too large");
-  return hexToBytes(hex2.padStart(expectedLen, "0"));
+  return hexToBytes(hex.padStart(expectedLen, "0"));
 }
 function numberToBytesLE2(n, len) {
   return numberToBytesBE2(n, len).reverse();
@@ -6849,12 +6857,12 @@ var _DER = {
       abignumber2(num);
       if (num < _0n10)
         throw new E("integer: negative integers are not allowed");
-      let hex2 = numberToHexUnpadded2(num);
-      if (Number.parseInt(hex2[0], 16) & 8)
-        hex2 = "00" + hex2;
-      if (hex2.length & 1)
+      let hex = numberToHexUnpadded2(num);
+      if (Number.parseInt(hex[0], 16) & 8)
+        hex = "00" + hex;
+      if (hex.length & 1)
         throw new E("unexpected DER parsing assertion: unpadded hex");
-      return hex2;
+      return hex;
     },
     decode(data) {
       const { Err: E } = _DER;
@@ -7112,8 +7120,8 @@ function weierstrass2(params, extraOpts = {}) {
       P.assertValidity();
       return P;
     }
-    static fromHex(hex2) {
-      return Point.fromBytes(hexToBytes3(hex2));
+    static fromHex(hex) {
+      return Point.fromBytes(hexToBytes3(hex));
     }
     get x() {
       return this.toAffine().x;
@@ -7554,8 +7562,8 @@ function ecdsa2(Point, hash, ecdsaOpts = {}) {
       const s = bytes.subarray(L, L * 2);
       return new Signature(Fn.fromBytes(r), Fn.fromBytes(s), recid);
     }
-    static fromHex(hex2, format) {
-      return this.fromBytes(hexToBytes3(hex2), format);
+    static fromHex(hex, format) {
+      return this.fromBytes(hexToBytes3(hex), format);
     }
     assertRecovery() {
       const { recovery } = this;
@@ -7624,14 +7632,14 @@ function ecdsa2(Point, hash, ecdsaOpts = {}) {
     aInRange2("num < 2^" + fnBits, num, _0n11, ORDER_MASK);
     return Fn.toBytes(num);
   }
-  function validateMsgAndHash(message, prehash) {
-    abytes5(message, void 0, "message");
-    return prehash ? abytes5(hash_(message), void 0, "prehashed message") : message;
+  function validateMsgAndHash(message3, prehash) {
+    abytes5(message3, void 0, "message");
+    return prehash ? abytes5(hash_(message3), void 0, "prehashed message") : message3;
   }
-  function prepSig(message, secretKey, opts3) {
+  function prepSig(message3, secretKey, opts3) {
     const { lowS, prehash, extraEntropy } = validateSigOpts2(opts3, defaultSigOpts);
-    message = validateMsgAndHash(message, prehash);
-    const h1int = bits2int_modN(message);
+    message3 = validateMsgAndHash(message3, prehash);
+    const h1int = bits2int_modN(message3);
     const d = Fn.fromBytes(secretKey);
     if (!Fn.isValidNot0(d))
       throw new Error("invalid private key");
@@ -7673,16 +7681,16 @@ function ecdsa2(Point, hash, ecdsaOpts = {}) {
     }
     return { seed, k2sig };
   }
-  function sign(message, secretKey, opts3 = {}) {
-    const { seed, k2sig } = prepSig(message, secretKey, opts3);
+  function sign(message3, secretKey, opts3 = {}) {
+    const { seed, k2sig } = prepSig(message3, secretKey, opts3);
     const drbg = createHmacDrbg2(hash_.outputLen, Fn.BYTES, hmac3);
     const sig = drbg(seed, k2sig);
     return sig.toBytes(opts3.format);
   }
-  function verify(signature, message, publicKey, opts3 = {}) {
+  function verify(signature, message3, publicKey, opts3 = {}) {
     const { lowS, prehash, format } = validateSigOpts2(opts3, defaultSigOpts);
     publicKey = abytes5(publicKey, void 0, "publicKey");
-    message = validateMsgAndHash(message, prehash);
+    message3 = validateMsgAndHash(message3, prehash);
     if (!isBytes5(signature)) {
       const end = signature instanceof Signature ? ", use sig.toBytes()" : "";
       throw new Error("verify expects Uint8Array signature" + end);
@@ -7696,7 +7704,7 @@ function ecdsa2(Point, hash, ecdsaOpts = {}) {
       if (lowS && sig.hasHighS())
         return false;
       const { r, s } = sig;
-      const h = bits2int_modN(message);
+      const h = bits2int_modN(message3);
       const is = Fn.inv(s);
       const u1 = Fn.create(h * is);
       const u2 = Fn.create(r * is);
@@ -7714,10 +7722,10 @@ function ecdsa2(Point, hash, ecdsaOpts = {}) {
       return false;
     }
   }
-  function recoverPublicKey(signature, message, opts3 = {}) {
+  function recoverPublicKey(signature, message3, opts3 = {}) {
     const { prehash } = validateSigOpts2(opts3, defaultSigOpts);
-    message = validateMsgAndHash(message, prehash);
-    return Signature.fromBytes(signature, "recovered").recoverPublicKey(message).toBytes();
+    message3 = validateMsgAndHash(message3, prehash);
+    return Signature.fromBytes(signature, "recovered").recoverPublicKey(message3).toBytes();
   }
   return Object.freeze({
     keygen,
@@ -7858,8 +7866,8 @@ function edwards(params, extraOpts = {}) {
         x = Fp.neg(x);
       return Point.fromAffine({ x, y });
     }
-    static fromHex(hex2, zip215 = false) {
-      return Point.fromBytes(hexToBytes3(hex2), zip215);
+    static fromHex(hex, zip215 = false) {
+      return Point.fromBytes(hexToBytes3(hex), zip215);
     }
     get x() {
       return this.toAffine().x;
@@ -8863,7 +8871,7 @@ var remedies = Object.freeze({
   RCLONE_PROVIDER_FAILED: "rclone \u043D\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043B \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u0441\u0435\u0440\u0432\u0438\u0441\u0443. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u0435\u0442\u044C \u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u044C \u0441\u0435\u0440\u0432\u0438\u0441\u0430, \u0437\u0430\u0442\u0435\u043C \u043D\u0430\u0447\u043D\u0438\u0442\u0435 \u0437\u0430\u043D\u043E\u0432\u043E.",
   CONNECTION_TIMEOUT: "\u0412\u0440\u0435\u043C\u044F \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0438\u0441\u0442\u0435\u043A\u043B\u043E. \u041D\u0430\u0447\u043D\u0438\u0442\u0435 \u0437\u0430\u043D\u043E\u0432\u043E.",
   CONNECTION_UNSUPPORTED: "\u042D\u0442\u043E\u0442 \u0448\u0430\u0433 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u043C\u0430\u0441\u0442\u0435\u0440\u043E\u043C. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u043D\u044B\u0439 remote \u0432\u0440\u0443\u0447\u043D\u0443\u044E.",
-  GOOGLE_WORKSPACE_SKILL_SETUP_REQUIRED: "\u041D\u0443\u0436\u0435\u043D \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u0439 \u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0434\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u044B\u0439 Google Workspace SKILL \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0435\u0433\u043E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443. \u041C\u0430\u0441\u0442\u0435\u0440 \u043D\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 OAuth; \u0442\u0435\u043A\u0443\u0449\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E.",
+  WORKSPACE_SKILL_TRANSPORT_REMOVED: "\u0412\u043D\u0435\u0448\u043D\u0438\u0439 \u0442\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442 \u043D\u0430\u0432\u044B\u043A\u0430 Workspace \u0443\u0434\u0430\u043B\u0451\u043D. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438, \u0436\u0443\u0440\u043D\u0430\u043B\u044B \u0438 \u0448\u0438\u0444\u0440\u043E\u0442\u0435\u043A\u0441\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u0414\u043B\u044F \u043D\u043E\u0432\u044B\u0445 \u043A\u043E\u043F\u0438\u0439 \u044F\u0432\u043D\u043E \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 finix:google \u0438\u043B\u0438 rclone; \u043F\u0440\u0435\u0436\u043D\u0438\u0439 \u0448\u0438\u0444\u0440\u043E\u0442\u0435\u043A\u0441\u0442 \u0441\u043A\u0430\u0447\u0430\u0439\u0442\u0435 \u0447\u0435\u0440\u0435\u0437 \u0438\u0441\u0445\u043E\u0434\u043D\u043E\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u0435 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435. \u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u0430 \u043D\u0435\u0442.",
   GOOGLE_ACCOUNT_CHANGED: "The Google account changed after verification. Cancel and explicitly check the intended profile account again. Existing storage is unchanged.",
   GOOGLE_AUTH_SETUP_REQUIRED: "Google sign-in is not verified. Run hermes auth add finix:google in the selected profile, then check again. Legacy Workspace grants are not reused.",
   CONNECTION_BUSY: "\u0414\u0440\u0443\u0433\u043E\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0443\u0436\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0435\u0433\u043E \u0441\u0442\u0430\u0442\u0443\u0441 \u0438\u043B\u0438 \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0435\u0433\u043E.",
@@ -8898,7 +8906,7 @@ var sessionMessage = (session) => {
       return "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0435\u0440\u0432\u0438\u0441, \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0431\u0440\u0430\u0443\u0437\u0435\u0440 \u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u0437\u0430\u0442\u0435\u043C \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041D\u0430\u0447\u0430\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435\xBB. \u0412\u0445\u043E\u0434 \u0441\u0430\u043C \u043F\u043E \u0441\u0435\u0431\u0435 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442 \u043A\u043E\u043F\u0438\u044E.";
   }
 };
-var isRclone = (provider) => provider !== "workspace" && provider !== "workspace-skill";
+var isRclone = (provider) => ["yandex", "onedrive", "dropbox"].includes(provider);
 var current2 = () => ({ profile: sdk2.host.state.profile.get(), epoch: sdk2.gatewayActivationEpoch?.() });
 function createCloud(ctx, enabled = () => true) {
   const state = sdk2.atom({
@@ -9006,6 +9014,7 @@ function createCloud(ctx, enabled = () => true) {
     isCurrent: () => !disposed && owner !== null && owner.profile === current2().profile && owner.epoch === current2().epoch,
     select: (provider) => {
       if (state.get().busy && !state.get().loading) return;
+      if (provider !== "workspace" && !isRclone(provider)) return;
       set({ provider, data: null, consent: false, local: false });
       return refresh();
     },
@@ -9018,7 +9027,7 @@ function createCloud(ctx, enabled = () => true) {
   };
 }
 function Cloud({ cloud, enabled = true }) {
-  const { jsx: jsx6, jsxs: jsxs6, language } = useLocalized();
+  const { jsx: jsx4, jsxs: jsxs4, language } = useLocalized();
   const value = sdk2.useValue(cloud.state), a = cloud;
   const s = a.isCurrent() ? value : { ...value, data: null, consent: false, local: false, message: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0435\u0440\u0432\u0438\u0441. \u0421\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442\u0441\u044F \u0434\u043B\u044F \u0442\u0435\u043A\u0443\u0449\u0435\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F." };
   const session = s.data?.session;
@@ -9028,47 +9037,47 @@ function Cloud({ cloud, enabled = true }) {
   useEffect(() => {
     if (enabled) void a.refresh();
   }, [a, enabled, profile, gateway, epoch]);
-  const button = (label, onClick, disabled = false) => jsx6(sdk2.Button, { type: "button", onClick, disabled: s.busy || disabled || !enabled, children: label });
+  const button = (label, onClick, disabled = false) => jsx4(sdk2.Button, { type: "button", onClick, disabled: s.busy || disabled || !enabled, children: label });
   const active2 = session && ["working", "authorize", "choice", "verified"].includes(session.status);
-  return jsxs6("section", { "aria-label": "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043E\u0431\u043B\u0430\u043A\u0430", children: [
-    !enabled && jsx6("p", { children: "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u0443\u0439\u0442\u0435 \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043B\u044E\u0447 \u043D\u0430 \u0448\u0430\u0433\u0435 1." }),
-    jsx6("h2", { children: "2. \u041E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 \u0441\u0435\u0440\u0432\u0438\u0441 \u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F" }),
-    jsx6("p", { children: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0435\u0440\u0432\u0438\u0441, \u043E\u0442\u043C\u0435\u0442\u044C\u0442\u0435 \u0434\u0432\u0430 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u044F \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041D\u0430\u0447\u0430\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435\xBB. \u041D\u043E\u0432\u044B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044E\u0442 \u043F\u0430\u043F\u043A\u0443 Finix. \u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u043D\u0435 \u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0434\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u0430 \u0438 \u044F\u0432\u043D\u043E\u0433\u043E \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u044F." }),
-    isRclone(s.provider) && a.isCurrent() && s.readiness && jsx6("p", { role: "status", children: s.readiness }),
+  return jsxs4("section", { "aria-label": "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043E\u0431\u043B\u0430\u043A\u0430", children: [
+    !enabled && jsx4("p", { children: "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u0443\u0439\u0442\u0435 \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043B\u044E\u0447 \u043D\u0430 \u0448\u0430\u0433\u0435 1." }),
+    jsx4("h2", { children: "2. \u041E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 \u0441\u0435\u0440\u0432\u0438\u0441 \u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F" }),
+    jsx4("p", { children: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0435\u0440\u0432\u0438\u0441, \u043E\u0442\u043C\u0435\u0442\u044C\u0442\u0435 \u0434\u0432\u0430 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u044F \u0438 \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041D\u0430\u0447\u0430\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435\xBB. \u041D\u043E\u0432\u044B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044E\u0442 \u043F\u0430\u043F\u043A\u0443 Finix. \u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u043D\u0435 \u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0434\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u0430 \u0438 \u044F\u0432\u043D\u043E\u0433\u043E \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u044F." }),
+    isRclone(s.provider) && a.isCurrent() && s.readiness && jsx4("p", { role: "status", children: s.readiness }),
     button("\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", a.refresh),
-    jsxs6("label", { children: ["\u041E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 \u0441\u0435\u0440\u0432\u0438\u0441", jsx6("select", {
+    jsxs4("label", { children: ["\u041E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 \u0441\u0435\u0440\u0432\u0438\u0441", jsx4("select", {
       value: s.provider,
       disabled: s.busy && !s.loading || active2,
       onChange: (e) => a.select(e.currentTarget.value),
-      children: Object.entries({ workspace: "Google Drive", "workspace-skill": "Google Drive (Google Workspace SKILL)", yandex: "\u042F\u043D\u0434\u0435\u043A\u0441 \u0414\u0438\u0441\u043A", onedrive: "OneDrive", dropbox: "Dropbox" }).map(([value2, label]) => jsx6("option", { value: value2, children: label }, value2))
+      children: Object.entries({ workspace: "Google Drive", yandex: "\u042F\u043D\u0434\u0435\u043A\u0441 \u0414\u0438\u0441\u043A", onedrive: "OneDrive", dropbox: "Dropbox" }).map(([value2, label]) => jsx4("option", { value: value2, children: label }, value2))
     })] }),
-    jsxs6("label", { children: [jsx6("input", {
+    jsxs4("label", { children: [jsx4("input", {
       type: "checkbox",
       checked: s.local,
       disabled: s.busy || active2,
       onChange: (e) => a.set({ local: e.currentTarget.checked })
     }), "\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u043D\u0430 \u043C\u0430\u0448\u0438\u043D\u0435 backend \u0438\u043B\u0438 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0439 SSH-\u0442\u0443\u043D\u043D\u0435\u043B\u044C \u043A \u0435\u0433\u043E loopback \u0443\u0436\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D"] }),
-    jsx6("p", { children: s.provider === "workspace-skill" ? "Google Workspace SKILL \u043C\u043E\u0436\u0435\u0442 \u0438\u043C\u0435\u0442\u044C \u0431\u043E\u043B\u0435\u0435 \u0448\u0438\u0440\u043E\u043A\u0438\u0435 \u043F\u0440\u0430\u0432\u0430, \u0447\u0435\u043C Finix drive.file, \u0432\u043A\u043B\u044E\u0447\u0430\u044F \u0447\u0442\u0435\u043D\u0438\u0435, \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0438 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0432\u0441\u0435\u0433\u043E \u0434\u0438\u0441\u043A\u0430. \u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 OAuth \u0438 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u0442 \u043A\u043E\u043F\u0438\u044E." : s.provider === "workspace" ? "Google uses only the Finix drive.file grant: files created or explicitly opened by this app, not full-Drive access. This check never starts OAuth or uploads a backup." : "rclone provider permissions may include reading, changing and deleting files across the drive. Signing in does not upload a backup." }),
-    jsxs6("label", { children: [jsx6("input", {
+    jsx4("p", { children: s.provider === "workspace" ? "Google uses only the Finix drive.file grant: files created or explicitly opened by this app, not full-Drive access. This check never starts OAuth or uploads a backup." : "rclone provider permissions may include reading, changing and deleting files across the drive. Signing in does not upload a backup." }),
+    jsxs4("label", { children: [jsx4("input", {
       type: "checkbox",
       checked: s.consent,
       disabled: s.busy || active2,
       onChange: (e) => a.set({ consent: e.currentTarget.checked })
     }), "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u044E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0438\u0441\u0430 \u0438 \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u044B\u0435 \u0448\u0438\u0440\u043E\u043A\u0438\u0435 \u043F\u0440\u0430\u0432\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u0430"] }),
     button("\u041D\u0430\u0447\u0430\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", () => a.action("start"), !s.data || !s.local || !s.consent || active2),
-    session?.url && jsx6("p", { children: "\u0421\u0441\u044B\u043B\u043A\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0438\u0441\u0430 (\u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0432 \u0434\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 backend \u0438\u043B\u0438 \u0447\u0435\u0440\u0435\u0437 SSH-\u0442\u0443\u043D\u043D\u0435\u043B\u044C):" }),
-    session?.url && jsx6("output", { style: { overflowWrap: "anywhere" }, children: session.url }),
+    session?.url && jsx4("p", { children: "\u0421\u0441\u044B\u043B\u043A\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0441\u0435\u0440\u0432\u0438\u0441\u0430 (\u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0432 \u0434\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 backend \u0438\u043B\u0438 \u0447\u0435\u0440\u0435\u0437 SSH-\u0442\u0443\u043D\u043D\u0435\u043B\u044C):" }),
+    session?.url && jsx4("output", { style: { overflowWrap: "anywhere" }, children: session.url }),
     session?.url && button("\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0432\u0445\u043E\u0434 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435", a.open),
-    session?.status === "choice" && jsx6("p", { children: `OneDrive: ${session.question}. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u0434\u0438\u0441\u043A\u0430/\u0442\u0438\u043F\u0430 \u0432 \u043F\u043E\u0440\u044F\u0434\u043A\u0435 rclone; \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u044B\u0439 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u043D\u0435\u044F\u0441\u0435\u043D, \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u043D\u044B\u0439 remote \u0432\u0440\u0443\u0447\u043D\u0443\u044E.` }),
+    session?.status === "choice" && jsx4("p", { children: `OneDrive: ${session.question}. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u0434\u0438\u0441\u043A\u0430/\u0442\u0438\u043F\u0430 \u0432 \u043F\u043E\u0440\u044F\u0434\u043A\u0435 rclone; \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u044B\u0439 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u043D\u0435\u044F\u0441\u0435\u043D, \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0438\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u043D\u044B\u0439 remote \u0432\u0440\u0443\u0447\u043D\u0443\u044E.` }),
     ...(session?.choices ?? []).map((c) => button(c.label, () => a.action("answer", { choice: c.id }))),
     button("\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", () => a.action("apply"), session?.status !== "verified"),
     button("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435", () => a.action("cancel"), !active2),
-    jsxs6("details", { children: [
-      jsx6("summary", { children: "\u041F\u043E\u043C\u043E\u0449\u044C: \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 backend \u0438 \u043F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 Google" }),
-      s.provider !== "workspace-skill" && jsx6("p", { children: "For rclone, the browser must reach backend loopback port 53682 on the same machine or through your own SSH tunnel. No public callback is created." }),
-      jsx6("p", { children: s.provider === "workspace-skill" ? "Google Workspace SKILL \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D \u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435 \u0437\u0430\u0440\u0430\u043D\u0435\u0435. Finix \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0433\u043E \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u0443\u044E \u0443\u0447\u0451\u0442\u043D\u0443\u044E \u0437\u0430\u043F\u0438\u0441\u044C; \u043C\u0430\u0441\u0442\u0435\u0440 \u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u0430\u0438\u0432\u0430\u0435\u0442 SKILL \u0438 \u043D\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0432\u0445\u043E\u0434 Google. \u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435 finix:google \u043D\u0435 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F. Finix \u043F\u043E-\u043F\u0440\u0435\u0436\u043D\u0435\u043C\u0443 \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u0441\u043D\u0438\u043C\u043E\u043A, \u0448\u0438\u0444\u0440\u0443\u0435\u0442 \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u0442 \u043A\u043E\u043F\u0438\u044E; SKILL \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0435\u0440\u0435\u0434\u0430\u0451\u0442 \u0444\u0430\u0439\u043B\u044B. \u0425\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u043B\u0438\u0448\u044C \u043F\u043E\u0441\u043B\u0435 \u044F\u0432\u043D\u043E\u0433\u043E \u043F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u044F." : "Google uses only Finix-declared OAuth with drive.file scope. Run hermes auth add finix:google in the selected profile before checking this connection. Hermes owns credentials; no Workspace-skill grant is reused. Legacy backups and settings are preserved and require explicit migration." })
+    jsxs4("details", { children: [
+      jsx4("summary", { children: "\u041F\u043E\u043C\u043E\u0449\u044C: \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u044B\u0439 backend \u0438 \u043F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434 Google" }),
+      isRclone(s.provider) && jsx4("p", { children: "For rclone, the browser must reach backend loopback port 53682 on the same machine or through your own SSH tunnel. No public callback is created." }),
+      jsx4("p", { children: "\u0414\u043B\u044F Google \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043E\u0431\u044A\u044F\u0432\u043B\u0435\u043D\u043D\u044B\u0439 Finix OAuth \u0441 \u043F\u0440\u0430\u0432\u0430\u043C\u0438 drive.file. \u041F\u0435\u0440\u0435\u0434 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u043E\u0439 \u0432\u044B\u043F\u043E\u043B\u043D\u0438\u0442\u0435 hermes auth add finix:google \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043F\u0440\u043E\u0444\u0438\u043B\u0435. \u0423\u0447\u0451\u0442\u043D\u044B\u043C\u0438 \u0434\u0430\u043D\u043D\u044B\u043C\u0438 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 Hermes; \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435 \u043D\u0430\u0432\u044B\u043A\u0430 Workspace \u043D\u0435 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F. \u041F\u0440\u0435\u0436\u043D\u0438\u0435 \u043A\u043E\u043F\u0438\u0438 \u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B; \u043F\u0435\u0440\u0435\u043D\u043E\u0441 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u044F\u0432\u043D\u043E\u0433\u043E \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F." })
     ] }),
-    jsx6("p", { role: "status", "aria-live": "polite", children: s.message })
+    jsx4("p", { role: "status", "aria-live": "polite", children: s.message })
   ] });
 }
 
@@ -9079,6 +9088,7 @@ import { useEffect as useEffect2 } from "react";
 var scope = () => ({ profile: sdk3.host.state.profile.get(), source: sdk3.host.activeConnectionId?.(), connection: sdk3.host.state.connectionId?.get(), epoch: sdk3.gatewayActivationEpoch?.() });
 var equal = (a, b) => a.profile === b.profile && a.source === b.source && a.connection === b.connection && a.epoch === b.epoch;
 var remedies2 = {
+  WORKSPACE_SKILL_TRANSPORT_REMOVED: "\u0422\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442 \u043D\u0430\u0432\u044B\u043A\u0430 Workspace \u0443\u0434\u0430\u043B\u0451\u043D. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u043A\u043E\u043F\u0438\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u042F\u0432\u043D\u043E \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 finix:google \u0438\u043B\u0438 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0440\u0443\u0433\u043E\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u043E\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435; \u043F\u0440\u0435\u0436\u043D\u0438\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u0438 \u0436\u0443\u0440\u043D\u0430\u043B\u044B \u043A\u043E\u043F\u0438\u0439 \u043D\u0435 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u044F\u0442\u0441\u044F.",
   SETUP_CHECK_FAILED: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430. \u0420\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435; \u043A\u043B\u044E\u0447 \u043C\u0435\u043D\u044F\u0442\u044C \u043D\u0435 \u043D\u0443\u0436\u043D\u043E.",
   SETUP_SOURCE_CHANGED: "\u0414\u0430\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0444\u0438\u043B\u044F \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438\u0441\u044C \u0432\u043E \u0432\u0440\u0435\u043C\u044F \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F. \u0414\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u0437\u0430\u043F\u0438\u0441\u0438 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u043C\u0438 \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443. \u0420\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u043E.",
   SETUP_READBACK_FAILED: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0447\u0442\u0435\u043D\u0438\u0435\u043C \u0438\u0437 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0430 \u043D\u0435 \u043F\u0440\u043E\u0439\u0434\u0435\u043D\u0430. \u041A\u043E\u043F\u0438\u044F \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0430. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0434\u043E\u0441\u0442\u0443\u043F \u0438 \u0441\u0432\u043E\u0431\u043E\u0434\u043D\u043E\u0435 \u043C\u0435\u0441\u0442\u043E \u0432 \u043E\u0431\u043B\u0430\u043A\u0435; \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u043E.",
@@ -9160,13 +9170,13 @@ function createSetup(ctx) {
     if (j !== null && (!j || typeof j.id !== "string" || !j.id || !["running", "succeeded", "incomplete", "failed", "interrupted"].includes(j.state) || !j.progress || typeof j.progress !== "object")) throw Error("contract");
     const prior = state.get();
     if (prior.job?.state === "running" && (!j || j.id !== prior.job.id)) throw Error("contract");
-    const message = prior.uncertain && !j ? "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430 \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E. \u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0441\u0435\u0440\u0432\u0435\u0440 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438; \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D." : summary(j), p = progress(j), key = `${j?.id}:${j?.state}:${phases[j?.phase] ?? "copy"}:${p === null ? "unknown" : Math.floor(p / 10)}`;
+    const message3 = prior.uncertain && !j ? "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u0437\u0430\u043F\u0443\u0441\u043A\u0430 \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E. \u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0441\u0435\u0440\u0432\u0435\u0440 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438; \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D." : summary(j), p = progress(j), key = `${j?.id}:${j?.state}:${phases[j?.phase] ?? "copy"}:${p === null ? "unknown" : Math.floor(p / 10)}`;
     const announce = prior.connection || key !== lastAnnouncement && (j?.state !== "running" || lastAnnouncement === "" || Date.now() - lastAnnouncedAt >= 1e4);
     if (announce) {
       lastAnnouncement = key;
       lastAnnouncedAt = Date.now();
     }
-    set({ job: j, capable: true, loaded: true, connection: false, uncertain: prior.uncertain && !j, message, ...announce ? { announcement: message } : {} });
+    set({ job: j, capable: true, loaded: true, connection: false, uncertain: prior.uncertain && !j, message: message3, ...announce ? { announcement: message3 } : {} });
     return true;
   }
   async function readSetup(r) {
@@ -9275,7 +9285,7 @@ function createSetup(ctx) {
   } };
 }
 function SetupCheck({ setup, enabled }) {
-  const { jsx: jsx6, jsxs: jsxs6, language } = useLocalized();
+  const { jsx: jsx4, jsxs: jsxs4, language } = useLocalized();
   sdk3.useGatewayActivationEpoch?.();
   sdk3.useValue(setup.state);
   sdk3.useValue(sdk3.host.state.profile);
@@ -9286,904 +9296,93 @@ function SetupCheck({ setup, enabled }) {
   }, [setup]);
   const watching = !s.loaded || running || s.connection || s.capable && (s.data?.check_running || s.data?.storage === "local" || !["check", "schedule", "complete"].includes(s.data?.stage));
   sdk3.useQuery?.({ queryKey: ["finix", "backup", ...v.scope], queryFn: v.refresh, enabled: !!watching, retry: false, refetchInterval: watching ? 2e3 : false, refetchOnWindowFocus: false });
-  const button = (label, fn, disabled = false) => jsx6(sdk3.Button, { type: "button", onClick: fn, disabled: s.busy || disabled, children: label });
+  const button = (label, fn, disabled = false) => jsx4(sdk3.Button, { type: "button", onClick: fn, disabled: s.busy || disabled, children: label });
   const counters = j?.progress, counts = counters ? `${number(counters.completed_bytes) ? counters.completed_bytes : "?"} / ${number(counters.total_bytes) ? counters.total_bytes : "?"} \u0431\u0430\u0439\u0442; ${number(counters.completed_files) ? counters.completed_files : "?"} / ${number(counters.total_files) ? counters.total_files : "?"} \u0444\u0430\u0439\u043B\u043E\u0432` : "";
   const elapsed = j && Number.isFinite(Date.parse(j.started_at)) ? Math.max(0, Math.floor(((running ? Date.now() : Date.parse(j.updated_at)) - Date.parse(j.started_at)) / 1e3)) : null;
   const updated = j && Number.isFinite(Date.parse(j.updated_at)) ? new Date(j.updated_at).toLocaleTimeString(language === "en" ? "en-US" : "ru-RU") : "\u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E";
-  return jsxs6("section", { "aria-label": "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0438 \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435", "aria-busy": s.busy, children: [
-    jsx6("h2", { children: "3. \u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430, \u043F\u0435\u0440\u0432\u0430\u044F \u043A\u043E\u043F\u0438\u044F \u0438 \u043F\u0435\u0440\u0438\u043E\u0434" }),
-    jsx6("p", { children: "\u041A\u043E\u043F\u0438\u044F \u0441\u043E\u0437\u0434\u0430\u0451\u0442\u0441\u044F \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435. \u0417\u0430\u043A\u0440\u044B\u0442\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u043E\u0442\u043C\u0435\u043D\u044F\u0435\u0442 \u0440\u0430\u0431\u043E\u0442\u0443; \u043F\u0440\u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0438 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u041F\u0440\u043E\u0446\u0435\u043D\u0442\u044B \u043E\u0442\u043D\u043E\u0441\u044F\u0442\u0441\u044F \u043A \u0442\u0435\u043A\u0443\u0449\u0435\u043C\u0443 \u044D\u0442\u0430\u043F\u0443; \u0432\u0441\u044F \u043A\u043E\u043F\u0438\u044F \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0447\u0442\u0435\u043D\u0438\u0435\u043C." }),
+  return jsxs4("section", { "aria-label": "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0438 \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435", "aria-busy": s.busy, children: [
+    jsx4("h2", { children: "3. \u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430, \u043F\u0435\u0440\u0432\u0430\u044F \u043A\u043E\u043F\u0438\u044F \u0438 \u043F\u0435\u0440\u0438\u043E\u0434" }),
+    jsx4("p", { children: "\u041A\u043E\u043F\u0438\u044F \u0441\u043E\u0437\u0434\u0430\u0451\u0442\u0441\u044F \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435. \u0417\u0430\u043A\u0440\u044B\u0442\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u043E\u0442\u043C\u0435\u043D\u044F\u0435\u0442 \u0440\u0430\u0431\u043E\u0442\u0443; \u043F\u0440\u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0438 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u041F\u0440\u043E\u0446\u0435\u043D\u0442\u044B \u043E\u0442\u043D\u043E\u0441\u044F\u0442\u0441\u044F \u043A \u0442\u0435\u043A\u0443\u0449\u0435\u043C\u0443 \u044D\u0442\u0430\u043F\u0443; \u0432\u0441\u044F \u043A\u043E\u043F\u0438\u044F \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0447\u0442\u0435\u043D\u0438\u0435\u043C." }),
     button("\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438", v.refresh),
     button("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0438 \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u043F\u0435\u0440\u0432\u0443\u044E \u043A\u043E\u043F\u0438\u044E", () => {
       if (enabled && !locked) return v.action("check");
     }, !enabled || locked || !s.capable || !s.data || s.data.check_running || s.data.storage === "local" || !["check", "schedule", "complete"].includes(s.data.stage)),
-    j && jsx6("p", { children: `${phase(j)}: ${p === null ? "\u043E\u0431\u044A\u0451\u043C \u043F\u043E\u043A\u0430 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D" : `${p}%${complete(j) ? " \u0432\u0441\u0435\u0439 \u043A\u043E\u043F\u0438\u0438" : " \u044D\u0442\u0430\u043F\u0430"}`} \u2014 ${counts}` }),
-    j && jsx6("progress", { "aria-label": "\u0425\u043E\u0434 \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u043E\u0433\u043E \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F: \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u044D\u0442\u0430\u043F", max: 100, ...p === null ? {} : { value: p, "aria-valuenow": p } }),
-    j && jsx6("p", { children: `\u041F\u0440\u043E\u0448\u043B\u043E: ${elapsed ?? "?"} \u0441. \u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435: ${updated}.` }),
-    ready(s) && !locked && jsxs6("div", { children: [
-      jsxs6("label", { children: ["\u041F\u0435\u0440\u0438\u043E\u0434 \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u043E\u0433\u043E \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F", jsx6(sdk3.Input ?? "input", { value: s.period, "aria-describedby": "finix-period-help", onChange: (e) => v.set({ period: e.currentTarget.value }) })] }),
-      jsx6("p", { id: "finix-period-help", children: "\u041F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0435 \u0446\u0435\u043B\u043E\u0435 \u0447\u0438\u0441\u043B\u043E \u0438 h (\u0447\u0430\u0441\u044B) \u0438\u043B\u0438 d (\u0434\u043D\u0438), \u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440 24h \u0438\u043B\u0438 7d. \u0420\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0441\u043B\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F." }),
+    j && jsx4("p", { children: `${phase(j)}: ${p === null ? "\u043E\u0431\u044A\u0451\u043C \u043F\u043E\u043A\u0430 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D" : `${p}%${complete(j) ? " \u0432\u0441\u0435\u0439 \u043A\u043E\u043F\u0438\u0438" : " \u044D\u0442\u0430\u043F\u0430"}`} \u2014 ${counts}` }),
+    j && jsx4("progress", { "aria-label": "\u0425\u043E\u0434 \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u043E\u0433\u043E \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F: \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u044D\u0442\u0430\u043F", max: 100, ...p === null ? {} : { value: p, "aria-valuenow": p } }),
+    j && jsx4("p", { children: `\u041F\u0440\u043E\u0448\u043B\u043E: ${elapsed ?? "?"} \u0441. \u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435: ${updated}.` }),
+    ready(s) && !locked && jsxs4("div", { children: [
+      jsxs4("label", { children: ["\u041F\u0435\u0440\u0438\u043E\u0434 \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u043E\u0433\u043E \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F", jsx4(sdk3.Input ?? "input", { value: s.period, "aria-describedby": "finix-period-help", onChange: (e) => v.set({ period: e.currentTarget.value }) })] }),
+      jsx4("p", { id: "finix-period-help", children: "\u041F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0435 \u0446\u0435\u043B\u043E\u0435 \u0447\u0438\u0441\u043B\u043E \u0438 h (\u0447\u0430\u0441\u044B) \u0438\u043B\u0438 d (\u0434\u043D\u0438), \u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440 24h \u0438\u043B\u0438 7d. \u0420\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0441\u043B\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F." }),
       button("\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0438 \u0432\u043A\u043B\u044E\u0447\u0438\u0442\u044C", () => v.action("schedule"), !/^[1-9][0-9]*[hd]$/.test(s.period))
     ] }),
-    jsx6("p", { children: s.message }),
-    jsx6("p", { role: "status", "aria-live": "polite", "aria-atomic": true, style: { position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }, children: s.announcement })
+    jsx4("p", { children: s.message }),
+    jsx4("p", { role: "status", "aria-live": "polite", "aria-atomic": true, style: { position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }, children: s.announcement })
   ] });
 }
 
 // desktop/src/recovery.mjs
 import * as sdk5 from "@hermes/plugin-sdk";
-import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
-import { useEffect as useEffect3 } from "react";
 
 // desktop/src/recovery-operation.mjs
 import * as sdk4 from "@hermes/plugin-sdk";
-var snapshot2 = () => ({ profile: sdk4.host.state.profile.get(), source: sdk4.host.activeConnectionId?.(), connection: sdk4.host.state.connectionId?.get(), epoch: sdk4.gatewayActivationEpoch?.() });
-var equal2 = (a, b) => a && b && Object.keys(a).every((k) => a[k] === b[k]);
-var local = (s) => s.source === "local" && s.connection === "local" && Number.isSafeInteger(s.epoch);
-var nameOK = (n) => typeof n === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(n) && n !== "default";
-var uuid = (n) => typeof n === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(n);
-var phases2 = /* @__PURE__ */ new Set(["preparing", "awaiting_key", "data_queued", "data_running", "importing", "target_bootstrap", "history_importing", "verifying_target", "cleanup", "backend_target_ready", "cancelled"]);
-var initial2 = () => ({ ready: false, items: [], candidate: null, key: false, busy: false, polling: false, cancellable: false, job: null, name: null, result: null, activated: false, message: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u043A\u043E\u043F\u0438\u0439\u2026" });
-var HINT = "recovery.selection.v1";
-var failureMessages = /* @__PURE__ */ new Map([["WRONG_KEY", "\u041A\u043B\u044E\u0447 \u043D\u0435 \u043F\u043E\u0434\u0445\u043E\u0434\u0438\u0442."], ["CORRUPT_ARCHIVE", "\u0410\u0440\u0445\u0438\u0432 \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0451\u043D."], ["TARGET_NOT_EMPTY", "\u041F\u0430\u043F\u043A\u0430 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043D\u0435 \u043F\u0443\u0441\u0442\u0430."], ["COMPLETENESS_CHANGED", "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u044B\u044F\u0432\u0438\u043B\u0430 \u043D\u0435\u043F\u043E\u043B\u043D\u0443\u044E \u0438\u043B\u0438 \u043D\u0435\u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u0443\u044E \u043A\u043E\u043F\u0438\u044E. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043A\u043B\u044E\u0447 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E \u0438 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u044C\u043D\u043E\u0439 \u043A\u043D\u043E\u043F\u043A\u043E\u0439."]]);
-var failureMessage = (code) => failureMessages.get(code) ?? "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043D\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u043E. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043A\u043B\u044E\u0447 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E.";
+var message = "\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u0438\u043C\u043F\u043E\u0440\u0442 \u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0435 \u043F\u0440\u043E\u0444\u0438\u043B\u044F \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B: \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0440\u0430\u043A\u0442 Hermes \u0434\u043B\u044F \u0430\u0442\u043E\u043C\u0430\u0440\u043D\u043E\u0439 \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438. \u041A\u043B\u044E\u0447 \u043D\u0435 \u0437\u0430\u043F\u0440\u0430\u0448\u0438\u0432\u0430\u0435\u0442\u0441\u044F. \u041A\u043E\u043F\u0438\u0438 \u043C\u043E\u0436\u043D\u043E \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u043D\u0438\u0436\u0435; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0435 \u043E\u0444\u043B\u0430\u0439\u043D-\u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0432 \u043F\u0443\u0441\u0442\u0443\u044E \u043F\u0430\u043F\u043A\u0443. \u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 \u043D\u0435 \u0432\u043E\u0437\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u044E\u0442\u0441\u044F.";
 function createRecovery(ctx) {
-  const state = sdk4.atom(initial2()), id = crypto.randomUUID();
-  const dismissed = /* @__PURE__ */ new Set();
-  let keyGeneration = 0;
-  let owner = snapshot2(), revision = 0, disposed = false, file = null, bytes = null, prior = null, transition = null, loading = false, polling = false, owned = null, intent = null, keySent = false, keyReading = false, cancelIntent = false, selecting = false, foreground = false, sendAuthorized = false, last = null;
-  const publish = (patch) => {
-    if (!disposed) state.set({ ...state.get(), ...patch });
-  };
-  function wipe() {
-    keyGeneration++;
-    if (bytes) new Uint8Array(bytes).fill(0);
-    bytes = null;
-    file = null;
-    publish({ key: false });
-  }
-  function reset() {
-    revision++;
-    wipe();
-    owner = snapshot2();
-    loading = false;
-    polling = false;
-    owned = null;
-    intent = null;
-    keySent = false;
-    sendAuthorized = false;
-    last = null;
-    cancelIntent = false;
-    prior = null;
-    foreground = false;
-    publish(initial2());
-  }
-  function fence(r = revision) {
-    if (disposed || r !== revision || !equal2(owner, snapshot2()) || !local(owner)) {
-      wipe();
-      throw Error("scope");
-    }
-  }
-  async function registry(r) {
-    fence(r);
-    const rows = await sdk4.host.connections();
-    fence(r);
-    if (!Array.isArray(rows) || rows.filter((x) => x.id === "local").length !== 1 || !rows.some((x) => x.id === "local" && x.kind === "local")) throw Error("locality");
-  }
-  function rest(r, path, options) {
-    fence(r);
-    if (foreground) throw Error("foreground");
-    return ctx.rest(path, options);
-  }
-  function uncertain(r) {
-    if (r !== revision || disposed) return;
-    wipe();
-    publish({ selectionFailed: foreground && !selecting, busy: true, polling: !foreground, cancellable: !selecting && state.get().cancellable, message: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0430. \u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u0442\u043E\u0447\u043D\u043E\u0433\u043E \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044F; \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D." });
-  }
-  function validate(v, { attach = false } = {}) {
-    if (!v || !/^[a-f0-9]{32}$/.test(v.id) || !uuid(v.request_id) || v.profile_id !== state.get().profileId || !["running", "succeeded", "cancelled", "failed", "interrupted", "manual_required"].includes(v.state) || !phases2.has(v.phase) || typeof v.cancellable !== "boolean" || typeof v.cancel_requested !== "boolean" || v.name !== void 0 && !nameOK(v.name)) throw Error("operation");
-    if (owned && (v.id !== owned.id || v.request_id !== owned.request_id || owned.name && v.name !== owned.name)) throw Error("foreign");
-    if (!attach && intent && v.request_id !== intent) throw Error("intent");
-    if (v.name === owner.profile) throw Error("target");
-    return v;
-  }
-  function observe(v) {
-    last = v;
-    owned = { id: v.id, request_id: v.request_id, name: v.name };
-    publish({ awaitingKey: v.phase === "awaiting_key" && !sendAuthorized && !keySent && !cancelIntent && !v.cancel_requested, job: v.id, name: v.name, busy: true, polling: true, cancellable: v.state === "running" && ["preparing", "awaiting_key", "data_queued", "data_running"].includes(v.phase) && v.cancellable && !v.cancel_requested, result: { state: v.state, phase: v.phase }, message: v.cancel_requested ? "\u041E\u0442\u043C\u0435\u043D\u0430 \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u0430. \u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0447\u0438\u043A\u0430." : v.phase === "awaiting_key" ? "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043A\u043B\u044E\u0447 \u0434\u043B\u044F \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438." : v.phase === "data_running" ? "\u0421\u043A\u0430\u0447\u0438\u0432\u0430\u043D\u0438\u0435 \u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043A\u043E\u043F\u0438\u0438\u2026" : "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0434\u0430\u043D\u043D\u044B\u0445\u2026" });
-  }
-  async function describe(r, name) {
-    const routes = await sdk4.host.profileRoutes();
-    fence(r);
-    const matches = Array.isArray(routes) ? routes.filter((x) => x.profile === name || x.targetProfile === name) : [];
-    if (matches.length !== 1) throw Error("route");
-    const route = matches[0];
-    if (route.mode !== "local" || route.connectionId !== "local" || route.profile !== name || route.targetProfile !== name) throw Error("route");
-    const value = await sdk4.host.requestProfile(route, "profiles.describe", { name });
-    fence(r);
-    if (value?.name !== name) throw Error("description");
-  }
-  async function activate(r, v) {
-    if (selecting || foreground) return;
-    const receipt = v.receipt, name = v.name;
-    if (v.phase !== "backend_target_ready" || !receipt || receipt.name !== name || receipt.served !== name || receipt.backend_target_ready !== true || receipt.archive_verified !== true || receipt.content_verified !== true || receipt.integrations_paused !== true || receipt.history_pending !== false || receipt.full_acceptance !== false || receipt.contract !== "sdk-new-content-copy-v1" || !nameOK(name)) throw Error("receipt");
-    if (!["ensureAgent", "profileRoutes", "requestProfile"].every((k) => typeof sdk4.host[k] === "function")) throw Error("sdk");
-    selecting = true;
-    publish({ polling: false, cancellable: false, message: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F\u2026" });
+  const state = sdk4.atom({ ready: false, items: [], busy: false, message, unavailable: true });
+  let disposed = false;
+  const scope3 = () => [sdk4.host.state.profile.get(), sdk4.host.activeConnectionId?.(), sdk4.host.state.connectionId?.get()];
+  let owner = scope3();
+  const same = () => owner.every((v, i) => v === scope3()[i]);
+  const actions = { load: async () => {
+    if (disposed || state.get().loaded) return null;
+    const active2 = scope3();
+    if (active2[1] !== "local" || active2[2] !== "local") return null;
     try {
-      await registry(r);
-      fence(r);
-    } catch (error) {
-      selecting = false;
-      throw error;
+      const catalog = await ctx.rest("/recovery/catalog");
+      if (disposed || !same()) return null;
+      const items = Array.isArray(catalog?.items) ? catalog.items.filter((x) => typeof x.id === "string" && typeof x.label === "string").map((x) => ({ id: x.id, label: x.label, complete: x.complete === true })) : [];
+      state.set({ ...state.get(), loaded: true, items, message });
+    } catch {
+      if (!disposed && same()) state.set({ ...state.get(), loaded: true, message: message + " \u041A\u0430\u0442\u0430\u043B\u043E\u0433 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0432 \u044D\u0442\u043E\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438." });
     }
-    prior = { ...owner };
-    ctx.storage?.set(HINT, { version: 1, source: owner.profile, connection: "local", profileId: state.get().profileId, id: v.id, phase: "selecting", target: name });
-    transition = { source: "local", profile: name };
-    foreground = true;
-    try {
-      await sdk4.host.ensureAgent("local", name);
-    } finally {
-      const now = snapshot2();
-      if (!disposed && r === revision && local(now) && now.profile === name) owner = now;
-      transition = null;
-      selecting = false;
-    }
-    fence(r);
-    if (owner.profile !== name) throw Error("selection");
-    await describe(r, name);
-    selecting = false;
-    ctx.storage?.set(HINT, { version: 1, source: prior.profile, connection: "local", profileId: state.get().profileId, id: v.id, phase: "connected", target: name });
-    publish({ activated: true, busy: false, polling: false, cancellable: false, message: "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C \u043E\u0442\u043A\u0440\u044B\u0442. \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u0430; \u0438\u043D\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438 \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u044B. \u041F\u043E\u043B\u043D\u043E\u0435 \u0442\u043E\u0436\u0434\u0435\u0441\u0442\u0432\u043E \u0430\u043A\u0442\u0438\u0432\u043D\u044B\u0445 \u043C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0445 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E." });
-  }
-  async function consume(r, v) {
-    if (selecting || foreground) return;
-    validate(v, { attach: !intent });
-    observe(v);
-    if (v.state === "running") {
-      if (cancelIntent && !v.cancel_requested && state.get().cancellable) {
-        const ack = await rest(r, `/recovery/operations/${v.id}/cancel`, { method: "POST" });
-        fence(r);
-        validate(ack);
-        observe(ack);
-        return;
-      }
-      if (v.phase === "awaiting_key" && !v.cancel_requested && !cancelIntent && file && sendAuthorized && !keySent && !keyReading) {
-        keyReading = true;
-        const selectedFile = file, generation = keyGeneration;
-        let buffer;
-        try {
-          buffer = await selectedFile.arrayBuffer();
-          fence(r);
-          if (cancelIntent || generation !== keyGeneration) return;
-          if (buffer.byteLength !== selectedFile.size || buffer.byteLength < 1 || buffer.byteLength > 16384) throw Error("size");
-          bytes = buffer;
-          await registry(r);
-          fence(r);
-          if (cancelIntent || generation !== keyGeneration) return;
-          keySent = true;
-          const request = crypto.randomUUID();
-          const ack = await rest(r, `/recovery/operations/${v.id}/key?request_id=${request}`, { method: "POST", upload: { filename: "recovery.txt", contentType: "text/plain", bytes }, timeoutMs: 3e4 });
-          fence(r);
-          validate(ack);
-          await consume(r, ack);
-        } finally {
-          if (buffer) new Uint8Array(buffer).fill(0);
-          keyReading = false;
-          wipe();
-        }
-      }
-      return;
-    }
-    wipe();
-    publish({ cancellable: false });
-    if (v.state === "succeeded") {
-      await activate(r, v);
-      return;
-    }
-    if (v.state === "interrupted" || v.state === "manual_required") {
-      publish({ busy: true, polling: false, message: "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0435\u0440\u0432\u0430\u043D\u043E. \u0418\u0441\u0445\u043E\u0434\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u0438 \u0447\u0430\u0441\u0442\u0438\u0447\u043D\u043E \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B. \u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u0440\u0443\u0447\u043D\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430; \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 \u0438\u043C\u043F\u043E\u0440\u0442 \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D." });
-      return;
-    }
-    if (v.state === "failed" && v.error === "COMPLETENESS_CHANGED") publish({ items: state.get().items.map((x) => x.id === state.get().candidate ? { ...x, complete: false } : x) });
-    owned = null;
-    intent = null;
-    keySent = false;
-    cancelIntent = false;
-    publish({ busy: false, polling: false, message: v.state === "cancelled" ? "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E." : failureMessage(v.error) });
-  }
-  const actions = {
-    load: async () => {
-      if (disposed || loading || state.get().ready || state.get().busy || state.get().activated) return null;
-      const r = revision;
-      let capabilityPending = false;
-      loading = true;
-      try {
-        await registry(r);
-        const hint = ctx.storage?.get(HINT, null);
-        if (hint?.version === 1 && hint.connection === "local" && hint.target === owner.profile && nameOK(hint.target)) {
-          await describe(r, owner.profile);
-          publish({ activated: true, message: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D \u043F\u0440\u043E\u0444\u0438\u043B\u044C " + owner.profile + ". \u0421\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u0430\u0440\u0445\u0438\u0432\u0430 \u0432 \u044D\u0442\u043E\u043C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0435\u0442\u0441\u044F." });
-          return null;
-        }
-        capabilityPending = true;
-        const cap = await rest(r, "/recovery/capabilities");
-        capabilityPending = false;
-        fence(r);
-        if (cap?.code_version !== "recovery-v1" || cap.operation_protocol !== "recovery-operations-v1" || cap.local_only !== true || typeof cap.profile_id !== "string" || !cap.profile_id) throw Error("contract");
-        publish({ profileId: cap.profile_id });
-        const condition = cap.bootstrap_condition;
-        if (condition != null && (condition.contract !== "cooperative-root-boundaries-v1" || condition.condition !== "no-concurrent-same-user-target-replacement" || condition.atomic_target_binding !== false)) throw Error("contract");
-        publish({ bootstrapCondition: condition?.contract ?? null });
-        const current3 = await rest(r, "/recovery/operations/current");
-        fence(r);
-        if (current3) {
-          validate(current3, { attach: true });
-          if (!["failed", "cancelled"].includes(current3.state) && !(current3.state === "succeeded" && dismissed.has(current3.id))) {
-            await consume(r, current3);
-            return null;
-          }
-        }
-        const catalog = await rest(r, "/recovery/catalog");
-        fence(r);
-        if (catalog?.profile_id !== cap.profile_id || !Array.isArray(catalog.items)) throw Error("catalog");
-        const items = catalog.items.filter((x) => typeof x.id === "string" && /^[a-f0-9]{64}$/.test(x.id) && typeof x.label === "string").map((x) => ({ ...x, complete: x.complete === true ? true : x.complete === false ? false : null }));
-        items.sort((a, b) => (Date.parse(b.created_at ?? b.date ?? "") || 0) - (Date.parse(a.created_at ?? a.date ?? "") || 0));
-        const selected = items.find((x) => x.complete === true) ?? items[0];
-        publish({ ready: true, items, candidate: selected?.id ?? null, message: items.length ? "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043A\u043E\u043F\u0438\u044E \u0438 \u0444\u0430\u0439\u043B \u043A\u043B\u044E\u0447\u0430." : "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u043A\u043E\u043F\u0438\u0439 \u043D\u0435\u0442. \u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u043E\u043A\u0430 \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E." });
-      } catch (error) {
-        if (capabilityPending && !owned && !intent && typeof error?.message === "string" && /^(?:Error invoking remote method 'hermes:api': Error: )?409: \{\s*"detail"\s*:\s*"PROFILE_UNAVAILABLE"\s*\}$/.test(error.message)) {
-          fence(r);
-          publish({ ready: false, message: "\u0428\u043B\u044E\u0437 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u044C \u043F\u0440\u043E\u0444\u0438\u043B\u044F (PROFILE_UNAVAILABLE). \u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D\u043E." });
-          throw Error("RECOVERY_PROFILE_UNAVAILABLE");
-        }
-        if (owned || intent) uncertain(r);
-        else if (r === revision) publish({ ready: false, message: "\u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0448\u043B\u044E\u0437 \u0441 \u043F\u0440\u043E\u0442\u043E\u043A\u043E\u043B\u043E\u043C recovery-operations-v1. \u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E." });
-      } finally {
-        if (r === revision) loading = false;
-      }
-      return null;
-    },
-    candidate: (value) => {
-      fence();
-      if (state.get().busy || !state.get().items.some((x) => x.id === value)) return;
-      wipe();
-      publish({ candidate: value, result: null });
-    },
-    key: (f) => {
-      fence();
-      const s = state.get();
-      if (s.busy && !s.awaitingKey || s.activated || prior || !s.ready && !s.awaitingKey) return;
-      wipe();
-      if (!f || !Number.isSafeInteger(f.size) || f.size < 1 || f.size > 16384) {
-        publish({ message: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0444\u0430\u0439\u043B \u043A\u043B\u044E\u0447\u0430 \u0440\u0430\u0437\u043C\u0435\u0440\u043E\u043C \u043D\u0435 \u0431\u043E\u043B\u0435\u0435 16 \u041A\u0438\u0411." });
-        return;
-      }
-      file = f;
-      publish({ key: true });
-    },
-    start: async (input) => {
-      const s = state.get();
-      if (s.awaitingKey && file && owned && !keySent && !keyReading && !cancelIntent) {
-        const r2 = revision;
-        sendAuthorized = true;
-        publish({ awaitingKey: false });
-        try {
-          await consume(r2, last);
-        } catch {
-          uncertain(r2);
-        }
-        return;
-      }
-      const selected = s.items.find((x) => x.id === s.candidate);
-      if (disposed || s.busy || s.activated || prior || !s.ready || !selected || !file || input?.candidate !== selected.id || input.complete !== selected.complete) return;
-      const r = revision;
-      intent = crypto.randomUUID();
-      sendAuthorized = true;
-      keySent = false;
-      cancelIntent = false;
-      publish({ busy: true, polling: true, cancellable: true, displayLanguage: scopedLanguage(), message: "\u041F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 \u043D\u043E\u0432\u043E\u0433\u043E \u043F\u0440\u043E\u0444\u0438\u043B\u044F\u2026" });
-      try {
-        await registry(r);
-        const value = await rest(r, "/recovery/operations", { method: "POST", body: { profile_id: s.profileId, candidate_id: selected.id, consent_restore: true, request_id: intent, acknowledge_incomplete: selected.complete !== true } });
-        fence(r);
-        await consume(r, value);
-      } catch {
-        uncertain(r);
-      }
-    },
-    poll: async () => {
-      if (disposed || polling || selecting || !state.get().busy || !state.get().polling || foreground) return null;
-      const r = revision;
-      polling = true;
-      try {
-        await registry(r);
-        fence(r);
-        if (selecting || foreground) return null;
-        const v = await rest(r, owned ? `/recovery/operations/${owned.id}` : "/recovery/operations/current");
-        fence(r);
-        await consume(r, v);
-      } catch {
-        uncertain(r);
-      } finally {
-        if (r === revision) polling = false;
-      }
-      return null;
-    },
-    cancel: async () => {
-      const s = state.get();
-      if (!s.busy || !s.cancellable || selecting || foreground) return;
-      cancelIntent = true;
-      wipe();
-      publish({ cancellable: false, message: "\u041E\u0442\u043C\u0435\u043D\u0430 \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u0430. \u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u044F \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0447\u0438\u043A\u0430." });
-      const r = revision;
-      if (!owned) return;
-      try {
-        await registry(r);
-        const ack = await rest(r, `/recovery/operations/${owned.id}/cancel`, { method: "POST" });
-        fence(r);
-        validate(ack);
-        await consume(r, ack);
-      } catch {
-        uncertain(r);
-      }
-    },
-    back: async () => {
-      if (!prior || state.get().busy && !state.get().selectionFailed) return;
-      const r = revision, target = prior;
-      publish({ busy: true });
-      try {
-        fence(r);
-        transition = { source: target.source, profile: target.profile };
-        try {
-          await sdk4.host.ensureAgent(target.source, target.profile);
-        } finally {
-          transition = null;
-        }
-        if (disposed || r !== revision) return;
-        const now = snapshot2();
-        if (now.source !== target.source || now.connection !== target.connection || now.profile !== target.profile) throw Error("rollback");
-        if (owned) dismissed.add(owned.id);
-        reset();
-      } catch {
-        uncertain(r);
-      }
-    },
-    clear: () => {
-      wipe();
-    }
-    // Unmount is not cancellation and cannot release backend ownership.
-  };
-  const expected = (now) => transition && now.source === transition.source && now.connection === transition.source && (now.profile === transition.profile || now.profile === owner.profile);
-  const subscriptions = [sdk4.host.state.profile, sdk4.host.state.connectionId, sdk4.host.state.gateway].map((store) => store?.subscribe?.(() => {
-    const now = snapshot2();
-    if (!equal2(owner, now) && !expected(now)) reset();
-  })).filter(Boolean);
+    return null;
+  }, clear: () => {
+  } };
   ctx.onDispose(() => {
     disposed = true;
-    revision++;
-    wipe();
-    subscriptions.forEach((stop) => stop());
   });
   return { state, actions, view() {
-    const now = snapshot2();
-    if (!equal2(owner, now) && !expected(now)) reset();
-    const r = revision;
-    return { value: { ...state.get(), rollback: !!prior, scope: [id, r, owner.profile, owner.source, owner.connection, owner.epoch] }, actions: Object.fromEntries(Object.entries(actions).map(([k, fn]) => [k, (...args) => {
-      if (disposed || r !== revision || !equal2(owner, snapshot2())) {
-        wipe();
-        return null;
-      }
-      try {
-        return fn(...args);
-      } catch {
-        return null;
-      }
-    }])) };
+    if (!same()) {
+      owner = scope3();
+      state.set({ ready: false, items: [], busy: false, message, unavailable: true });
+    }
+    return { value: { ...state.get(), scope: owner }, actions };
   } };
 }
 
 // desktop/src/recovery.mjs
-var warning = (c) => c === false ? "\u041A\u043E\u043F\u0438\u044F \u043D\u0435\u043F\u043E\u043B\u043D\u0430\u044F. \u041D\u0435\u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0442." : c !== true ? "\u041F\u043E\u043B\u043D\u043E\u0442\u0430 \u043A\u043E\u043F\u0438\u0438 \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u0430. \u041D\u0435\u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043C\u043E\u0433\u0443\u0442 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C." : "";
-var primary = (c) => c === false ? "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u043D\u0435\u043F\u043E\u043B\u043D\u0443\u044E \u043A\u043E\u043F\u0438\u044E" : c !== true ? "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u043A\u043E\u043F\u0438\u044E \u0441 \u043D\u0435\u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0439 \u043F\u043E\u043B\u043D\u043E\u0442\u043E\u0439" : "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C";
 function Recovery({ recovery }) {
-  sdk5.useGatewayActivationEpoch?.();
   sdk5.useValue(recovery.state);
   sdk5.useValue(sdk5.host.state.profile);
   if (sdk5.host.state.connectionId) sdk5.useValue(sdk5.host.state.connectionId);
-  const { value: s, actions: a } = recovery.view(), selected = s.items.find((x) => x.id === s.candidate);
-  const { jsx: jsx6, jsxs: jsxs6 } = useLocalized(s.rollback ? s.displayLanguage : null);
-  sdk5.useQuery?.({ queryKey: ["finix", "recovery", "catalog", ...s.scope], queryFn: () => a.load(), enabled: !s.ready && !s.busy && !s.activated, retry: (count, error) => count < 3 && error?.message === "RECOVERY_PROFILE_UNAVAILABLE", retryDelay: 1e3, staleTime: Infinity, refetchOnWindowFocus: false });
-  sdk5.useQuery?.({ queryKey: ["finix", "recovery", "job", ...s.scope, s.job], queryFn: () => a.poll(), enabled: s.busy && s.polling, retry: false, refetchInterval: s.busy && s.polling ? 1e3 : false, refetchOnWindowFocus: false });
-  useEffect3(() => () => recovery.actions.clear(), [recovery]);
-  const disabled = s.busy && !s.awaitingKey || s.activated || s.rollback;
-  return jsxs6("section", { "aria-label": "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 Finix", style: { padding: "16px", overflow: "auto", height: "100%" }, children: [
-    jsx6("h1", { children: "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 Finix" }),
-    jsxs6("label", { children: ["\u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F", jsx6("select", { "aria-label": "\u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F", value: s.candidate ?? "", disabled: disabled || !s.ready, onChange: (e) => a.candidate(e.currentTarget.value), children: s.items.length ? s.items.map((x) => jsx6("option", { value: x.id, children: `${x.label} \u2014 ${x.created_at ?? x.date ?? "\u0434\u0430\u0442\u0430 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430"} \u2014 ${x.source ?? "\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D"} \u2014 ${x.complete === true ? "\u043F\u043E\u043B\u043D\u0430\u044F" : x.complete === false ? "\u043D\u0435\u043F\u043E\u043B\u043D\u0430\u044F" : "\u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u0430"}` }, x.id)) : jsx6("option", { value: "", children: s.ready ? "\u041D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u043A\u043E\u043F\u0438\u0439" : "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430\u2026" }) })] }),
-    jsx6("p", { role: "note", children: "\u041F\u0440\u0438 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0438 \u0447\u0435\u0440\u0435\u0437 \u043E\u0431\u0449\u0438\u0439 backend \u0434\u0440\u0443\u0433\u043E\u0439 \u043F\u0440\u043E\u0446\u0435\u0441\u0441 \u0432\u0430\u0448\u0435\u0439 \u0443\u0447\u0451\u0442\u043D\u043E\u0439 \u0437\u0430\u043F\u0438\u0441\u0438 \u041E\u0421 \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u043E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u0437\u0430\u043C\u0435\u043D\u044F\u0442\u044C \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0435\u043C\u044B\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C." }),
-    jsxs6("label", { children: ["\u0424\u0430\u0439\u043B \u043A\u043B\u044E\u0447\u0430 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F", jsx6("input", { "aria-label": "\u0424\u0430\u0439\u043B \u043A\u043B\u044E\u0447\u0430 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F", type: "file", accept: ".txt,text/plain", disabled: disabled || !s.ready && !s.awaitingKey, onChange: (e) => {
-      const f = e.currentTarget.files?.[0];
-      e.currentTarget.value = "";
-      return a.key(f);
-    } })] }),
-    selected && warning(selected.complete) && jsx6("p", { role: "note", children: warning(selected.complete) }),
-    jsx6(sdk5.Button, { type: "button", disabled: disabled || !s.awaitingKey && (!s.ready || !s.candidate) || !s.key, onClick: () => {
-      if (s.awaitingKey && s.key) return a.start({});
-      if (!disabled && s.ready && s.key && selected) return a.start({ candidate: selected.id, complete: selected.complete });
-    }, children: primary(selected ? selected.complete : true) }),
-    jsx6("p", { children: "\u0411\u0443\u0434\u0435\u0442 \u0441\u043E\u0437\u0434\u0430\u043D \u0438 \u043E\u0442\u043A\u0440\u044B\u0442 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C. \u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F." }),
-    jsx6("p", { role: "status", "aria-live": "polite", children: s.message }),
-    s.busy && jsx6("progress", { "aria-label": "\u0425\u043E\u0434 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F" }),
-    s.busy && jsx6(sdk5.Button, { type: "button", disabled: !s.cancellable, onClick: a.cancel, children: s.cancellable ? "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435" : "\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u0441\u0442\u0430\u0434\u0438\u044F \u043D\u0435 \u0434\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u043E\u0442\u043C\u0435\u043D\u0443" }),
-    s.rollback && (!s.busy || s.selectionFailed) && jsx6(sdk5.Button, { type: "button", onClick: a.back, children: "\u041D\u0430\u0437\u0430\u0434 \u043A \u043F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0435\u043C\u0443 \u043F\u0440\u043E\u0444\u0438\u043B\u044E" })
-  ] });
+  const { value: s, actions: a } = recovery.view();
+  const { jsx: jsx4, jsxs: jsxs4 } = useLocalized();
+  sdk5.useQuery?.({ queryKey: ["finix", "recovery", "catalog", ...s.scope], queryFn: () => a.load(), enabled: !s.loaded, retry: false, staleTime: Infinity, refetchOnWindowFocus: false });
+  return jsxs4("section", { "aria-label": "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 Finix", children: [jsx4("h1", { children: "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 Finix" }), jsx4("p", { role: "status", children: s.message }), jsx4("ul", { children: s.items.map((x) => jsx4("li", { children: x.label + (x.complete ? " \u2014 \u043F\u043E\u043B\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F" : " \u2014 \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0430") }, x.id)) })] });
 }
 
 // desktop/src/default-maintenance.mjs
 import * as sdk6 from "@hermes/plugin-sdk";
-import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
-import { useEffect as useEffect4 } from "react";
-var snapshot3 = () => ({ profile: sdk6.host.state.profile.get(), source: sdk6.host.activeConnectionId?.(), connection: sdk6.host.state.connectionId?.get(), transport: sdk6.host.state.gateway?.get(), epoch: sdk6.gatewayActivationEpoch?.() });
-var equal3 = (a, b) => a && b && Object.keys(a).every((k) => a[k] === b[k]);
-var local2 = (s) => s.source === "local" && s.connection === "local" && Number.isSafeInteger(s.epoch);
-var hex = (v, n = 64) => typeof v === "string" && new RegExp(`^[a-f0-9]{${n}}$`).test(v);
-var keys = (o, names) => o && typeof o === "object" && !Array.isArray(o) && Object.keys(o).sort().join("|") === [...names].sort().join("|");
-var INITIAL = () => ({ verified: false, ready: false, busy: false, polling: false, checkExisting: false, key: false, items: [], candidate: null, preview: null, cancellable: false, message: "Checking physical-default maintenance availability\u2026" });
-var HINT2 = "finix.default-maintenance.read-hint.v1";
-var states = /* @__PURE__ */ new Set(["prepared", "registered", "acknowledged", "draining", "stopped", "publishing", "published_offline", "ready", "rolling_back", "rolled_back_ready", "rollback_not_ready", "refused", "manual_required", "reconciliation_required"]);
-function validPreview(v) {
-  if (!keys(v, ["id", "state", "confirmation", "downtime", "rollback", "active_shared_autoruns_supported", "preservation", "preview", "apply_enabled"]) || !hex(v.id, 32) || v.state !== "prepared" || !hex(v.confirmation) || v.downtime !== true || v.rollback !== true || v.active_shared_autoruns_supported !== false || typeof v.apply_enabled !== "boolean") throw Error("preview");
-  const p = v.preview, r = v.preservation;
-  if (!keys(p, ["contract", "plan_digest", "root_binding", "scope", "replacement_policy", "replacement_roots", "affected_files", "removed_files", "kept_shared_members", "kept_inventory", "inert_only"]) || p.contract !== "default-maintenance-preview-v1" || !hex(p.plan_digest) || !hex(p.root_binding) || p.scope !== "replace-real-default" || p.replacement_policy !== "profile-context-v1" || JSON.stringify(p.replacement_roots) !== '["memories","skills"]' || p.kept_inventory !== "opaque-subtrees-not-cloned" || p.inert_only !== true || !["affected_files", "removed_files", "kept_shared_members"].every((k) => Number.isSafeInteger(p[k]) && p[k] >= 0)) throw Error("preview");
-  if (!keys(r, ["policy", "storage_format", "consent_notice", "retention", "storage_cost", "keepSharedResources"]) || r.storage_format !== "opaque-container-v2" || r.policy !== "runtime-attempt-preserve-v1" || r.retention !== "explicit-cleanup-only" || r.storage_cost !== "complete old copies + complete current copies and native originals" || r.keepSharedResources !== true || typeof r.consent_notice !== "string" || r.consent_notice.length > 1024) throw Error("policy");
-  return v;
-}
+var message2 = "\u0417\u0430\u043C\u0435\u043D\u0430 \u0444\u0438\u0437\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E default \u0438 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u043E\u0442\u043A\u0430\u0442 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B: Hermes \u043D\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442 \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u0443\u044E \u0443\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u0443\u044E \u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u043A\u0443 \u0432\u0441\u0435\u0445 \u043F\u0438\u0441\u0430\u0442\u0435\u043B\u0435\u0439 \u0438 \u0442\u043E\u0447\u043D\u0443\u044E \u0442\u0440\u0430\u043D\u0437\u0430\u043A\u0446\u0438\u043E\u043D\u043D\u0443\u044E \u0437\u0430\u043C\u0435\u043D\u0443. \u041A\u043B\u044E\u0447 \u043D\u0435 \u0437\u0430\u043F\u0440\u0430\u0448\u0438\u0432\u0430\u0435\u0442\u0441\u044F. \u041F\u0440\u0435\u0436\u043D\u0438\u0435 \u0436\u0443\u0440\u043D\u0430\u043B\u044B \u0438 \u0434\u0430\u043D\u043D\u044B\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B; \u0432\u043E\u0437\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0437\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E. \u041E\u0444\u043B\u0430\u0439\u043D-\u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0432 \u043F\u0443\u0441\u0442\u0443\u044E \u043F\u0430\u043F\u043A\u0443 \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u043C.";
 function createDefaultMaintenance(ctx) {
-  const state = sdk6.atom(INITIAL()), instance2 = crypto.randomUUID();
-  let keyGeneration = 0, owner = snapshot3(), revision = 0, disposed = false, file = null, buffer = null, loading = false, polling = false, job = null, maintenanceId = null, preview = null, previewSent = false, keySent = false, applySent = false, cancelPending = false, previewReadOnly = false, profileId = null, gate = false, rootToken = null, registryIdentity = null, anchor = null, reconnect = false, revoked = false;
-  const publish = (patch) => {
-    if (!disposed) state.set({ ...state.get(), ...patch });
-  };
-  function wipe() {
-    keyGeneration++;
-    file = null;
-    if (buffer) new Uint8Array(buffer).fill(0);
-    buffer = null;
-    publish({ key: false });
-  }
-  function reset() {
-    const next = snapshot3(), expected = anchor && applySent && local2(next) && next.profile === owner.profile && next.source === owner.source && next.connection === owner.connection;
-    revision++;
-    wipe();
-    owner = next;
-    loading = false;
-    polling = false;
-    gate = false;
-    preview = null;
-    if (state.get().busy || applySent || previewSent || keySent) {
-      revoked = revoked || !expected;
-      reconnect = !!expected && !revoked;
-      publish({ ...INITIAL(), busy: true, polling: reconnect, cancellable: false, message: "Hermes is restarting; reopen Finix to check the result. The existing operation is locked; Apply will not be retried." });
-      return;
-    }
-    job = null;
-    maintenanceId = null;
-    previewSent = false;
-    keySent = false;
-    applySent = false;
-    profileId = null;
-    rootToken = null;
-    registryIdentity = null;
-    anchor = null;
-    reconnect = false;
-    revoked = false;
-    cancelPending = false;
-    publish(INITIAL());
-  }
-  function fence(r = revision) {
-    if (disposed || revoked || r !== revision || !equal3(owner, snapshot3()) || !local2(owner)) {
-      wipe();
-      throw Error("scope");
-    }
-  }
-  async function registry(r) {
-    fence(r);
-    const rows = await sdk6.host.connections();
-    fence(r);
-    if (!Array.isArray(rows) || rows.filter((x) => x.id === "local").length !== 1 || !rows.some((x) => x.id === "local" && x.kind === "local")) throw Error("locality");
-    const identity = JSON.stringify(rows.find((x) => x.id === "local"));
-    if (registryIdentity !== null && identity !== registryIdentity) {
-      revoked = true;
-      throw Error("locality");
-    }
-    registryIdentity = identity;
-  }
-  async function authenticate(r) {
-    await registry(r);
-    const cap = await rest(r, "/recovery/default/capabilities");
-    fence(r);
-    if (cap?.code_version !== "default-recovery-v1" || cap.supported !== true || !hex(cap.serverRootToken)) throw Error("owner");
-    if (cap.serverRootToken !== anchor.rootToken) {
-      revoked = true;
-      throw Error("root");
-    }
-    if (cap.local_only !== true || cap.profile_id !== anchor.profileId) {
-      revoked = true;
-      throw Error("source");
-    }
-    reconnect = false;
-  }
-  function rest(r, path, options) {
-    fence(r);
-    return ctx.rest(path, options);
-  }
-  function hint(phase2) {
-    ctx.storage?.set(HINT2, { version: 1, profile: owner.profile, connection: "local", profileId, phase: phase2, job, maintenanceId, rootToken });
-  }
-  function uncertain(r) {
-    if (disposed || r !== revision) return;
-    wipe();
-    publish({ busy: true, polling: !!(job || maintenanceId), cancellable: false, message: "Acknowledgement uncertain. Only the exact existing job will be read; another maintenance operation is blocked." });
-  }
-  function decrypt(v) {
-    if (!v || !hex(v.id, 32) || v.id !== job || v.profile_id !== profileId || !["awaiting_key", "running", "succeeded", "failed", "cancelled"].includes(v.state)) throw Error("job");
-    return v;
-  }
-  async function consume(r, v) {
-    decrypt(v);
-    publish({ busy: true, polling: true, cancellable: !previewSent && !cancelPending && ["awaiting_key", "running"].includes(v.state), message: v.state === "running" ? "Downloading, decrypting and verifying in private staging\u2026" : "Preparing isolated decrypted copy\u2026" });
-    if (v.state === "awaiting_key") return;
-    if (v.state === "running") return;
-    wipe();
-    publish({ cancellable: false });
-    if (v.state !== "succeeded") {
-      hint("terminal");
-      publish({ busy: false, polling: false, ready: false, message: v.state === "cancelled" ? "Maintenance preparation cancelled; the physical default was not replaced." : "Decryption failed. The physical default was not replaced." });
-      return;
-    }
-    if (v.complete !== true) throw Error("incomplete");
-    if (previewSent) return;
-    previewSent = true;
-    hint("preview-pending");
-    const p = await rest(r, "/recovery/default/prepare", { method: "POST", body: { profile_id: profileId, recovery_job: job, consent_prepare: true, preview_contract: "default-preview-job-v1" } });
-    fence(r);
-    await consumePreview(r, p);
-  }
-  async function consumePreview(r, v) {
-    fence(r);
-    if (!keys(v, ["contract", "id", "state", "error", "result", "cancellable"]) || v.contract !== "default-preview-job-v1" || v.id !== job || !["running", "succeeded", "failed", "cancelled", "interrupted"].includes(v.state) || typeof v.cancellable !== "boolean") throw Error("preview-job");
-    if (v.state === "running") {
-      if (v.result !== null || v.error !== null) throw Error("preview-job");
-      publish({ busy: true, polling: true, cancellable: !previewReadOnly && !cancelPending && v.cancellable, message: "Sealing the exact physical-default preview in private staging\u2026" });
-      return;
-    }
-    if (v.state !== "succeeded") {
-      if (v.result !== null || !["PREVIEW_DEADLINE", "PREVIEW_CANCELLED", "PREVIEW_INTERRUPTED", "DEFAULT_RECOVERY_FAILED", "STALE_PROFILE", "BUSY", "INCOMPLETE_ACK_REQUIRED", "OWNER_NOT_VERIFIED", "DEFAULT_AUTORUN_NOT_SUPPORTED", "SIBLING_AUTORUN_NOT_SUPPORTED", "SDK_VERSION_NOT_SUPPORTED", "LOCAL_OWNER_REQUIRED", "INVALID_CAPABILITY", "INVALID_CANDIDATE", "INVALID_IDENTITY", "DECRYPT_FAILED", "JOB_NOT_PREPARED", "NOT_FOUND", "ROOT_EPOCH_CHANGED", "WRONG_DEFAULT_ROOT", "REOPEN_LIVE_OWNER_UNVERIFIED", "DEFAULT_RECOVERY_REVIEW_REQUIRED", "CONSENT_REQUIRED"].includes(v.error)) throw Error("preview-job");
-      if (v.state === "failed" && ["PREVIEW_DEADLINE", "DEFAULT_RECOVERY_FAILED"].includes(v.error) && v.cancellable === false && !applySent) {
-        const savedHint = JSON.stringify(ctx.storage?.get(HINT2, null));
-        const catalog = await rest(r, "/recovery/catalog");
-        fence(r);
-        if (savedHint !== JSON.stringify(ctx.storage?.get(HINT2, null)) || catalog?.profile_id !== profileId || !Array.isArray(catalog.items)) throw Error("scope");
-        const items = catalog.items.filter((x) => hex(x.id) && x.complete === true).map((x) => ({ id: x.id, complete: true }));
-        wipe();
-        job = null;
-        maintenanceId = null;
-        previewSent = false;
-        keySent = false;
-        previewReadOnly = false;
-        cancelPending = false;
-        publish({ ...INITIAL(), ready: true, items, candidate: items[0]?.id ?? null, message: "The previous preparation failed. Its records and staging are preserved. Select a backup and key, then Prepare a new preview. Nothing restarts automatically." });
-        return;
-      }
-      hint("preview-terminal");
-      publish({ busy: false, polling: false, ready: false, cancellable: false, message: `Preview preparation stopped (${v.error}). The physical default was not replaced; retained state requires reconciliation before another preparation.` });
-      return;
-    }
-    if (v.error !== null || v.cancellable !== false) throw Error("preview-job");
-    const p = validPreview(v.result);
-    if (p.preview.root_binding !== rootToken) throw Error("root");
-    if (previewReadOnly) {
-      maintenanceId = p.id;
-      applySent = true;
-      hint("preview-read-only");
-      publish({ busy: false, polling: false, cancellable: false, message: "Sealed preview retained. Reopened status grants no new Apply consent." });
-      return;
-    }
-    preview = JSON.parse(JSON.stringify(p));
-    maintenanceId = preview.id;
-    anchor = Object.freeze({ maintenanceId, planDigest: preview.preview.plan_digest, rootToken, profileId, registryIdentity, profile: owner.profile, source: owner.source, connection: owner.connection });
-    hint("preview");
-    publish({ preview: JSON.parse(JSON.stringify(preview)), busy: false, polling: false, cancellable: false, ready: false, message: gate && preview.apply_enabled ? "Review this exact sealed physical-default maintenance plan." : "Prepared preview only. Physical-default Apply is unavailable pending independent review." });
-  }
-  async function readPreview(r) {
-    const v = await rest(r, `/recovery/default/preview/${job}`);
-    fence(r);
-    await consumePreview(r, v);
-  }
-  async function readMaintenance(r) {
-    const v = await rest(r, `/recovery/default/status/${maintenanceId}`);
-    fence(r);
-    if (!keys(v, ["id", "state", "error"]) || v.id !== maintenanceId || !states.has(v.state) || ![null, "DEFAULT_RECOVERY_FAILED"].includes(v.error)) throw Error("status");
-    const running = ["registered", "acknowledged", "draining", "stopped", "publishing", "published_offline", "rolling_back"].includes(v.state);
-    const message = v.state === "ready" ? "Backend observed physical default READY. Stock default history-route verification is still required; usable recovery is not yet confirmed." : v.state === "rolled_back_ready" ? "Maintenance failed; the old default returned READY. Preserved failed-start data remains retained." : v.state === "prepared" ? "Sealed preview retained. Reopened status grants no new Apply consent." : running ? "Physical-default maintenance in progress. This phase cannot be cancelled." : "Maintenance requires manual review. Preserved data is retained; duplicate Apply is blocked.";
-    publish({ busy: running || !["ready", "rolled_back_ready", "prepared", "refused"].includes(v.state), polling: running, cancellable: false, verified: false, message });
-    if (v.state === "ready") {
-      try {
-        if (typeof sdk6.host.profileRoutes !== "function" || typeof sdk6.host.requestProfile !== "function") return;
-        await registry(r);
-        const routes = await sdk6.host.profileRoutes();
-        fence(r);
-        const matches = Array.isArray(routes) ? routes.filter((x) => x.profile === "default" || x.targetProfile === "default") : [];
-        if (matches.length !== 1) throw Error("route");
-        const route = matches[0];
-        if (route.mode !== "local" || route.connectionId !== "local" || route.profile !== "default" || route.targetProfile !== "default") throw Error("route");
-        const description = await sdk6.host.requestProfile(route, "profiles.describe", { name: "default" });
-        fence(r);
-        if (description?.name !== "default") throw Error("description");
-        const history = await sdk6.host.requestProfile(route, "session.list", { scope: "stored", limit: 200 });
-        fence(r);
-        if (history?.scope !== "stored" || !Array.isArray(history.sessions) || history.sessions.length > 200 || !history.sessions.every((x) => typeof x?.id === "string" && x.id.length > 0 && x.id.length <= 512)) throw Error("history");
-        publish({ verified: true, busy: false, polling: false, message: "Physical default READY observed and its exact stock stored-history route is readable. Full historical metadata equality and AI-turn readiness are not claimed." });
-        hint("terminal");
-      } catch {
-        fence(r);
-        publish({ verified: false, message: "Physical default READY was observed, but exact stock default/history-route verification failed. Usable recovery is not yet confirmed; duplicate Apply remains blocked." });
-      }
-    }
-  }
-  const actions = {
-    load: async () => {
-      if (disposed || revoked || applySent || loading || state.get().ready || state.get().busy || preview) return null;
-      const r = revision;
-      loading = true;
-      try {
-        await registry(r);
-        const cap = await rest(r, "/recovery/default/capabilities");
-        fence(r);
-        if (cap?.code_version !== "default-recovery-v1" || cap.preview_contract !== "default-preview-job-v1" || cap.supported !== true || cap.local_only !== true || !hex(cap.profile_id) || cap.active_shared_autoruns_supported !== false || typeof cap.apply_enabled !== "boolean" || !hex(cap.serverRootToken)) throw Error("unsupported");
-        gate = cap.apply_enabled;
-        rootToken = cap.serverRootToken;
-        profileId = cap.profile_id;
-        const saved = ctx.storage?.get(HINT2, null);
-        if (saved?.version === 1 && saved.profile === owner.profile && saved.connection === "local" && saved.profileId === profileId && saved.phase !== "terminal") {
-          if (hex(saved.maintenanceId, 32)) {
-            maintenanceId = saved.maintenanceId;
-            applySent = true;
-            anchor = Object.freeze({ maintenanceId, rootToken, profileId, registryIdentity, profile: owner.profile, source: owner.source, connection: owner.connection });
-            publish({ busy: true, polling: true });
-            await readMaintenance(r);
-            return null;
-          }
-          if (hex(saved.job, 32)) {
-            job = saved.job;
-            previewSent = true;
-            previewReadOnly = true;
-            if (saved.rootToken === rootToken && ["preview-pending", "preview-terminal"].includes(saved.phase)) {
-              publish({ busy: true, polling: true, cancellable: false, message: "Reattached for exact preview status only; no new preparation or Apply consent." });
-              await readPreview(r);
-            } else publish({ busy: true, polling: false, message: "Previous preparation requires exact-operation reconciliation. No creation or key request will be repeated." });
-            return null;
-          }
-          publish({ busy: true, polling: false, message: "Previous preparation acknowledgement is unknown. Reconcile the original operation before starting another." });
-          return null;
-        }
-        const catalog = await rest(r, "/recovery/catalog");
-        fence(r);
-        if (catalog?.profile_id !== profileId || !Array.isArray(catalog.items)) throw Error("catalog");
-        const items = catalog.items.filter((x) => hex(x.id) && x.complete === true).map((x) => ({ id: x.id, complete: true }));
-        publish({ ready: true, items, candidate: items[0]?.id ?? null, message: items.length ? "Select a complete copy and a local recovery-key file to prepare a sealed maintenance preview. This does not stop or replace the default." : "No complete backup is available for physical-default maintenance." });
-      } catch {
-        if (r === revision) publish({ ready: false, message: "Physical-default maintenance is unavailable for this source, device, owner or active scope. Ordinary Restore remains separate." });
-      } finally {
-        if (r === revision) loading = false;
-      }
-      return null;
-    },
-    candidate: (value) => {
-      fence();
-      if (state.get().busy || preview || !state.get().items.some((x) => x.id === value)) return;
-      wipe();
-      publish({ candidate: value });
-    },
-    key: (f) => {
-      fence();
-      if (!state.get().ready || state.get().busy || preview) return;
-      wipe();
-      if (!f || !Number.isSafeInteger(f.size) || f.size < 1 || f.size > 16384) return;
-      file = f;
-      publish({ key: true });
-    },
-    prepare: async (input) => {
-      const s = state.get();
-      if (disposed || s.busy || !s.ready || !file || !s.candidate || preview || input?.candidate !== s.candidate) return;
-      const r = revision, selected = file, generation = keyGeneration;
-      let data;
-      publish({ busy: true, polling: false, cancellable: false, message: "Preparing isolated maintenance decryption\u2026" });
-      hint("prepare-pending");
-      try {
-        await registry(r);
-        const v = await rest(r, "/recovery/default/prepare-auto", { method: "POST", body: { profile_id: profileId, candidate_id: s.candidate, consent_restore: true } });
-        fence(r);
-        if (!hex(v?.id, 32) || v.profile_id !== profileId || v.state !== "awaiting_key") throw Error("prepare");
-        job = v.id;
-        hint("decrypt");
-        data = await selected.arrayBuffer();
-        fence(r);
-        if (generation !== keyGeneration) throw Error("cleared");
-        buffer = data;
-        if (buffer.byteLength !== selected.size || buffer.byteLength < 1 || buffer.byteLength > 16384) throw Error("size");
-        await registry(r);
-        fence(r);
-        if (generation !== keyGeneration) throw Error("cleared");
-        keySent = true;
-        const ack = await rest(r, `/recovery/jobs/${job}/key`, { method: "POST", upload: { filename: "recovery.txt", contentType: "text/plain", bytes: buffer }, timeoutMs: 3e4 });
-        fence(r);
-        await consume(r, ack);
-      } catch {
-        uncertain(r);
-      } finally {
-        if (data) new Uint8Array(data).fill(0);
-        if (r === revision) wipe();
-      }
-    },
-    checkExisting: async () => {
-      if (disposed || revoked || polling || !state.get().checkExisting || !job || !keySent || previewSent || maintenanceId || applySent || cancelPending) return null;
-      const r = revision;
-      polling = true;
-      publish({ checkExisting: false });
-      try {
-        await registry(r);
-        const cap = await rest(r, "/recovery/default/capabilities");
-        fence(r);
-        if (cap?.code_version !== "default-recovery-v1" || cap.supported !== true || cap.serverRootToken !== rootToken) {
-          revoked = true;
-          throw Error("root");
-        }
-        if (cap.local_only !== true || cap.profile_id !== profileId) {
-          revoked = true;
-          throw Error("source");
-        }
-        publish({ polling: true, message: "Checking the exact existing preparation; no key or decryption request will be repeated." });
-      } catch {
-        if (r === revision) publish({ polling: false, checkExisting: !revoked && equal3(owner, snapshot3()) && local2(owner), message: "Existing preparation could not be authenticated for this exact source and physical root. No mutation was sent." });
-        return null;
-      } finally {
-        if (r === revision) polling = false;
-      }
-      return actions.poll();
-    },
-    poll: async () => {
-      if (disposed || revoked || polling || !state.get().busy || !state.get().polling) return null;
-      const r = revision;
-      let readingJob = false;
-      polling = true;
-      try {
-        await registry(r);
-        if (reconnect) await authenticate(r);
-        if (maintenanceId) await readMaintenance(r);
-        else if (previewSent && job) {
-          await readPreview(r);
-        } else if (job) {
-          readingJob = true;
-          const v = await rest(r, `/recovery/jobs/${job}`);
-          readingJob = false;
-          fence(r);
-          await consume(r, v);
-        }
-      } catch {
-        uncertain(r);
-        if (r === revision) {
-          reconnect = false;
-          const checkExisting = readingJob && !revoked && equal3(owner, snapshot3()) && local2(owner) && keySent && !previewSent && !maintenanceId && !applySent && !cancelPending;
-          publish({ polling: previewSent && !maintenanceId && !applySent, checkExisting, message: checkExisting ? "The existing preparation could not be read. Check it again on this same device; decryption and key submission will not be repeated." : "Hermes is restarting or the owner could not be verified; reopen Finix to check the result. The existing operation remains locked and Apply will not be retried." });
-        }
-      } finally {
-        if (r === revision) polling = false;
-      }
-      return null;
-    },
-    apply: async (rendered) => {
-      const s = state.get();
-      if (disposed || s.busy || applySent || !gate || !preview?.apply_enabled || !rendered || JSON.stringify(rendered) !== JSON.stringify(preview) || JSON.stringify(s.preview) !== JSON.stringify(preview)) return;
-      const r = revision;
-      applySent = true;
-      wipe();
-      publish({ busy: true, polling: false, cancellable: false, message: "Confirming this exact physical-default maintenance plan\u2026" });
-      hint("apply-pending");
-      try {
-        await registry(r);
-        const ack = await rest(r, "/recovery/default/apply", { method: "POST", body: { profile_id: profileId, id: preview.id, confirmation: preview.confirmation, consent_apply: true } });
-        fence(r);
-        if (!keys(ack, ["id", "state", "error"]) || ack.id !== maintenanceId || !states.has(ack.state) || ![null, "DEFAULT_RECOVERY_FAILED"].includes(ack.error)) throw Error("apply-ack");
-        if (["registered", "acknowledged", "draining", "stopped", "publishing", "published_offline"].includes(ack.state) && ack.error === null) {
-          publish({ polling: false, message: "Maintenance accepted. Closing this Desktop window to prevent automatic backend revival. Reopen Hermes to check the retained result." });
-          globalThis.close();
-          return;
-        }
-        await readMaintenance(r);
-      } catch {
-        uncertain(r);
-      }
-    },
-    cancel: async () => {
-      if (disposed || !state.get().busy || !state.get().cancellable || !job || maintenanceId || cancelPending || previewReadOnly) return;
-      const r = revision;
-      cancelPending = true;
-      wipe();
-      publish({ cancellable: false });
-      try {
-        await registry(r);
-        const v = await rest(r, previewSent ? `/recovery/default/preview/${job}/cancel` : `/recovery/jobs/${job}/cancel`, previewSent ? { method: "POST", body: { profile_id: profileId } } : { method: "POST" });
-        fence(r);
-        if (previewSent) await consumePreview(r, v);
-        else await consume(r, v);
-      } catch {
-        uncertain(r);
-      }
-    },
-    clear: () => wipe()
-  };
-  const subs = [sdk6.host.state.profile, sdk6.host.state.connectionId, sdk6.host.state.gateway].map((s) => s?.subscribe?.(() => {
-    if (!equal3(owner, snapshot3())) reset();
-  })).filter(Boolean);
-  ctx.onDispose(() => {
-    disposed = true;
-    revision++;
-    wipe();
-    subs.forEach((stop) => stop());
-  });
-  return { state, actions, view() {
-    if (!equal3(owner, snapshot3())) reset();
-    const r = revision;
-    return { value: { ...state.get(), applyEnabled: gate && preview?.apply_enabled === true && !applySent, confirmationConsumed: applySent, scope: [instance2, r, owner.profile, owner.source, owner.connection, owner.epoch] }, actions: Object.fromEntries(Object.entries(actions).map(([k, fn]) => [k, (...args) => {
-      if (disposed || r !== revision || !equal3(owner, snapshot3())) {
-        wipe();
-        return null;
-      }
-      try {
-        return fn(...args);
-      } catch {
-        return null;
-      }
-    }])) };
+  const state = sdk6.atom({ ready: false, busy: false, message: message2, unavailable: true });
+  const actions = { load: async () => null, clear: () => {
   } };
+  return { state, actions, view: () => ({ value: state.get(), actions }) };
 }
 function DefaultMaintenance({ maintenance }) {
-  sdk6.useGatewayActivationEpoch?.();
   sdk6.useValue(maintenance.state);
-  sdk6.useValue(sdk6.host.state.profile);
-  if (sdk6.host.state.connectionId) sdk6.useValue(sdk6.host.state.connectionId);
-  const { value: s, actions: a } = maintenance.view();
-  sdk6.useQuery?.({ queryKey: ["finix", "default-maintenance", "load", ...s.scope], queryFn: () => a.load(), enabled: !s.ready && !s.busy && !s.preview, retry: false, staleTime: Infinity, refetchOnWindowFocus: false });
-  sdk6.useQuery?.({ queryKey: ["finix", "default-maintenance", "job", ...s.scope], queryFn: () => a.poll(), enabled: s.busy && s.polling, retry: false, refetchInterval: s.busy && s.polling ? 1e3 : false, refetchIntervalInBackground: true, refetchOnWindowFocus: false });
-  useEffect4(() => () => maintenance.actions.clear(), [maintenance]);
-  const p = s.preview?.preview;
-  return jsxs4("section", { "aria-label": "Finix physical-default maintenance", style: { padding: 16, overflow: "auto", height: "100%" }, children: [
-    jsx4("h1", { children: "Physical-default maintenance" }),
-    jsx4("p", { children: "Separate maintenance of the actual SDK default, not ordinary Restore to a new profile. Available only from its verified local Finix source. No destination, profile-name or mode setup is required." }),
-    !p && jsxs4("label", { children: ["Complete backup", jsx4("select", { "aria-label": "Maintenance backup", value: s.candidate ?? "", disabled: !s.ready || s.busy, onChange: (e) => a.candidate(e.currentTarget.value), children: s.items.map((x, i) => jsx4("option", { value: x.id, children: `Complete backup ${i + 1} \xB7 ${x.id.slice(0, 12)}` }, x.id)) })] }),
-    !p && jsxs4("label", { children: ["Local recovery-key file", jsx4("input", { "aria-label": "Maintenance recovery key", type: "file", accept: ".txt,text/plain", disabled: !s.ready || s.busy, onChange: (e) => {
-      const f = e.currentTarget.files?.[0];
-      e.currentTarget.value = "";
-      return a.key(f);
-    } })] }),
-    !p && jsx4(sdk6.Button, { type: "button", disabled: s.busy || s.ready && (!s.key || !s.candidate), onClick: () => s.ready ? a.prepare({ candidate: s.candidate }) : a.load(), children: s.ready ? "Prepare physical-default maintenance preview" : "Check maintenance availability" }),
-    p && jsxs4("section", { "aria-label": "Sealed maintenance preview", children: [
-      jsx4("h2", { children: "Review this exact maintenance plan" }),
-      jsx4("p", { children: `Plan ${p.plan_digest} \xB7 physical-root binding ${p.root_binding}` }),
-      jsx4("p", { children: `Replace profile-owned memories and skills, including removal of old-only items: ${p.affected_files} existing members; ${p.removed_files} removals. Other planned incoming profile data is published under the sealed plan.` }),
-      jsx4("p", { children: `Keep shared host resources, installations, control plane and sibling profiles. ${p.kept_shared_members} retained top-level members are inventoried; opaque subtrees are not recursively verified or cloned.` }),
-      jsx4("p", { children: "Downtime: applying authorizes a scoped stop of the verified idle default owner and a restart. This Desktop window closes after acknowledgement to prevent automatic backend revival; reopen Hermes to check the result. Active work must be idle before proceeding. Active shared autoruns, supervisors and sibling-serving multiplexers are unsupported; only the admitted inert scope is supported." }),
-      jsx4("p", { children: "Rollback preserves OLD data. A failed new startup may write data before readiness; allowed late-write variants are preserved as inert custody before OLD is restored. Unknown variants or uncertain stop/ownership require manual preservation, not forced rollback." }),
-      jsx4("p", { children: "Storage cost: complete OLD copies, complete current copies and native originals. Custody is included in future backups and retained indefinitely until a separately authorized cleanup. There is no automatic retention expiry." }),
-      jsx4("p", { children: "Recovered cron, messaging, hooks, MCP, external secrets and executable plugins remain parked. Only the exact pinned current trusted Finix control plane is exempt; archived plugin code is not enabled for status." }),
-      jsx4(sdk6.Button, { type: "button", disabled: s.busy || !s.applyEnabled, onClick: () => a.apply(s.preview), children: s.confirmationConsumed ? "Maintenance confirmation already submitted" : s.applyEnabled ? "Confirm maintenance: replace this physical default" : "Physical-default Apply unavailable \u2014 independent review required" })
-    ] }),
-    s.checkExisting && jsx4(sdk6.Button, { type: "button", onClick: a.checkExisting, children: "Check existing preparation" }),
-    jsx4("p", { role: "status", "aria-live": "polite", children: s.message }),
-    s.busy && jsx4("progress", { "aria-label": "Default maintenance progress" }),
-    s.busy && jsx4(sdk6.Button, { type: "button", disabled: !s.cancellable, onClick: a.cancel, children: s.cancellable ? "Cancel preparation" : "This maintenance phase cannot be cancelled" })
-  ] });
+  const { jsx: jsx4, jsxs: jsxs4 } = useLocalized();
+  return jsxs4("section", { "aria-label": "Default recovery unavailable", children: [jsx4("h2", { children: "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 default" }), jsx4("p", { role: "status", children: maintenance.state.get().message })] });
 }
 
 // desktop/src/plugin.mjs
@@ -10335,34 +9534,34 @@ function createWorkflow(ctx) {
   return { state, actions, isCurrent: () => !disposed && owner !== null && sameScope(owner, scope2()) };
 }
 function Finix({ workflow }) {
-  const { jsx: jsx6, jsxs: jsxs6, language } = useLocalized();
+  const { jsx: jsx4, jsxs: jsxs4, language } = useLocalized();
   const value = sdk7.useValue(workflow.state);
   const profile = sdk7.useValue(sdk7.host.state.profile);
   const gateway = sdk7.useValue(sdk7.host.state.gateway);
   const epoch = sdk7.gatewayActivationEpoch?.();
-  useEffect5(() => {
+  useEffect3(() => {
     void workflow.actions.refresh();
   }, [workflow, profile, gateway, epoch]);
   const s = workflow.isCurrent() ? value : { ...value, recipient: null, backend: null, saved: false, verified: false };
   const a = workflow.actions;
-  const button = (label, onClick, disabled = false) => jsx6(sdk7.Button, { type: "button", disabled: s.busy || disabled, onClick, children: label });
+  const button = (label, onClick, disabled = false) => jsx4(sdk7.Button, { type: "button", disabled: s.busy || disabled, onClick, children: label });
   const locked = !!s.backend?.recipient;
-  return jsxs6("section", {
+  return jsxs4("section", {
     "aria-label": "Finix \u2014 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u043E\u0433\u043E \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
     style: { padding: "16px", overflow: "auto", height: "100%", color: "var(--ui-text-primary)" },
     children: [
-      jsx6("h1", { children: "Finix" }),
-      jsx6("p", { children: `Gateway profile: ${profile}. Keys are generated on this device, including when the backend is remote.` }),
-      jsx6("p", { children: "Store the private recovery file outside Hermes in a safe local folder. Never send it in chat. Registration sends only the public recipient. Clearing or generating again discards the in-memory key." }),
-      jsx6("h2", { children: "1. \u041A\u043B\u044E\u0447 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F" }),
-      locked && jsx6("p", { role: "status", children: "\u041F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043B\u044E\u0447 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043E\u0432\u0430\u043D. \u041F\u0440\u0438\u0432\u0430\u0442\u043D\u044B\u0439 \u043A\u043B\u044E\u0447 \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0443 \u0432\u0430\u0441. \u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043A\u043B\u044E\u0447\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E." }),
+      jsx4("h1", { children: "Finix" }),
+      jsx4("p", { children: `Gateway profile: ${profile}. Keys are generated on this device, including when the backend is remote.` }),
+      jsx4("p", { children: "Store the private recovery file outside Hermes in a safe local folder. Never send it in chat. Registration sends only the public recipient. Clearing or generating again discards the in-memory key." }),
+      jsx4("h2", { children: "1. \u041A\u043B\u044E\u0447 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F" }),
+      locked && jsx4("p", { role: "status", children: "\u041F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043B\u044E\u0447 \u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043E\u0432\u0430\u043D. \u041F\u0440\u0438\u0432\u0430\u0442\u043D\u044B\u0439 \u043A\u043B\u044E\u0447 \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0443 \u0432\u0430\u0441. \u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043A\u043B\u044E\u0447\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E." }),
       button("Generate new key", a.generate, locked || !s.backend),
       button("Clear key", a.clear, !s.recipient || locked),
-      jsx6("p", { children: "Public age recipient" }),
-      jsx6("output", { "aria-label": "Public age recipient", style: { overflowWrap: "anywhere", display: "block" }, children: s.recipient ?? s.backend?.recipient ?? (s.backend ? "No public recipient registered" : "Public recipient status unknown. Refresh backend status; saved keys are unchanged.") }),
+      jsx4("p", { children: "Public age recipient" }),
+      jsx4("output", { "aria-label": "Public age recipient", style: { overflowWrap: "anywhere", display: "block" }, children: s.recipient ?? s.backend?.recipient ?? (s.backend ? "No public recipient registered" : "Public recipient status unknown. Refresh backend status; saved keys are unchanged.") }),
       button("Copy public recipient", a.copy, !s.recipient && !locked),
       button("Save private key to local folder", a.save, !s.recipient),
-      jsxs6("label", { children: ["Verify saved recovery file (maximum 4096 bytes)", jsx6("input", {
+      jsxs4("label", { children: ["Verify saved recovery file (maximum 4096 bytes)", jsx4("input", {
         type: "file",
         accept: ".txt,text/plain",
         disabled: s.busy || !s.saved,
@@ -10372,13 +9571,13 @@ function Finix({ workflow }) {
           if (file) return a.verify(file);
         }
       })] }),
-      jsx6("p", { children: s.verified ? "Saved key: verified" : locked && !s.recipient ? "Private recovery file: not loaded in this session. This does not mean your saved file is missing or deleted. Cloud/setup uses the registered public recipient; no private file is required." : "Saved key: not verified" }),
+      jsx4("p", { children: s.verified ? "Saved key: verified" : locked && !s.recipient ? "Private recovery file: not loaded in this session. This does not mean your saved file is missing or deleted. Cloud/setup uses the registered public recipient; no private file is required." : "Saved key: not verified" }),
       button("Refresh backend status", a.refresh),
-      jsx6("p", { children: s.backend ? `Backend profile: ${s.backend.profile_id}; configured recipient: ${s.backend.recipient ?? "none"}` : "Backend registration unavailable until status is loaded." }),
+      jsx4("p", { children: s.backend ? `Backend profile: ${s.backend.profile_id}; configured recipient: ${s.backend.recipient ?? "none"}` : "Backend registration unavailable until status is loaded." }),
       button("Register public recipient", a.register, !s.saved || !s.verified || !s.backend || locked),
-      jsx6("p", { role: "status", "aria-live": "polite", children: s.message }),
-      jsx6(Cloud, { cloud: workflow.cloud, enabled: locked }),
-      jsx6(SetupCheck, { setup: workflow.setup, enabled: locked })
+      jsx4("p", { role: "status", "aria-live": "polite", children: s.message }),
+      jsx4(Cloud, { cloud: workflow.cloud, enabled: locked }),
+      jsx4(SetupCheck, { setup: workflow.setup, enabled: locked })
     ]
   });
 }
@@ -10391,17 +9590,17 @@ var plugin_default = {
     workflow.cloud = createCloud(ctx, () => workflow.isCurrent() && !!workflow.state.get().backend?.recipient);
     workflow.setup = createSetup(ctx);
     void workflow.actions.refresh();
-    const render = () => jsx5(Finix, { workflow });
+    const render = () => jsx3(Finix, { workflow });
     ctx.register({ id: "pane", area: "panes", title: "Finix", data: { placement: "right", width: "380px" }, render });
     ctx.register({ id: "page", area: sdk7.ROUTES_AREA, data: { path: "/finix" }, render });
     ctx.register({ id: "nav", area: sdk7.SIDEBAR_NAV_AREA, data: { path: "/finix", label: "Finix", codicon: "shield" } });
     ctx.register({ id: "open", area: sdk7.PALETTE_AREA, data: { id: "finix.open", label: "Open Finix", run: () => sdk7.host.navigate("/finix") } });
     const recovery = createRecovery(ctx);
     const maintenance = createDefaultMaintenance(ctx);
-    ctx.register({ id: "default-maintenance-page", area: sdk7.ROUTES_AREA, data: { path: "/finix/default-maintenance" }, render: () => jsx5(DefaultMaintenance, { maintenance }) });
+    ctx.register({ id: "default-maintenance-page", area: sdk7.ROUTES_AREA, data: { path: "/finix/default-maintenance" }, render: () => jsx3(DefaultMaintenance, { maintenance }) });
     ctx.register({ id: "default-maintenance-nav", area: sdk7.SIDEBAR_NAV_AREA, data: { path: "/finix/default-maintenance", label: "Finix \u2014 physical-default maintenance", codicon: "tools" } });
     ctx.register({ id: "default-maintenance-open", area: sdk7.PALETTE_AREA, data: { id: "finix.default-maintenance", label: "Finix: physical-default maintenance", run: () => sdk7.host.navigate("/finix/default-maintenance") } });
-    ctx.register({ id: "recovery-page", area: sdk7.ROUTES_AREA, data: { path: "/finix/restore" }, render: () => jsx5(Recovery, { recovery }) });
+    ctx.register({ id: "recovery-page", area: sdk7.ROUTES_AREA, data: { path: "/finix/restore" }, render: () => jsx3(Recovery, { recovery }) });
     ctx.register({ id: "recovery-nav", area: sdk7.SIDEBAR_NAV_AREA, data: { path: "/finix/restore", label: "Finix \u2014 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435", codicon: "history" } });
     ctx.register({ id: "recovery-open", area: sdk7.PALETTE_AREA, data: { id: "finix.restore", label: "Finix: \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u043A\u043E\u043F\u0438\u044E", run: () => sdk7.host.navigate("/finix/restore") } });
     let navLanguage = "ru";

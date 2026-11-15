@@ -43,12 +43,14 @@ jobs:
         env:
           # Runner metadata is trusted; no event text enters shell commands.
           TMPDIR: ${{ runner.temp }}
-        run: python -m pytest -q tests/test_connect_reply_language.py tests/test_workspace_skill_selection.py tests/test_removed_transport_setup.py tests/test_public_namespace.py tests/test_public_recovery_unavailable.py tests/test_recovery_catalog_history.py tests/test_windows_private_owner.py
+        run: python -m pytest -q --capture=tee-sys tests/test_connect_reply_language.py tests/test_workspace_skill_selection.py tests/test_removed_transport_setup.py tests/test_public_namespace.py tests/test_public_recovery_unavailable.py tests/test_recovery_catalog_history.py tests/test_windows_private_owner.py
       - name: Existing native Windows publication and ACL regressions
         if: runner.os == 'Windows'
         env:
           TMPDIR: ${{ runner.temp }}
-        run: python -m pytest -q tests/test_native_windows.py -k "directory_delete_child_acl_is_untrusted or private_directory_rejects_broad_acl or publication_does_not_replace_existing_destination"
+        # This unittest-only file imports its backend inside test methods. Pytest
+        # otherwise imports the root SDK entry as `finix` before the real package.
+        run: python -m unittest discover -s tests -p test_native_windows.py -k test_directory_delete_child_acl_is_untrusted -k test_private_directory_rejects_broad_acl -k test_publication_does_not_replace_existing_destination
       - name: Network-denied offline packaging gate
         run: python scripts/release/offline_gate.py --scratch "${{ runner.temp }}"
       - name: Desktop locale, transport and recovery contracts

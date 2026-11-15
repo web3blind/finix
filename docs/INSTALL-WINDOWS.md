@@ -5,9 +5,11 @@ resolution and reparse-point rejection; it is not a POSIX compatibility shim.
 Do not use FAT/exFAT, network shares, junctions/symlinks, relative tool directories,
 or an elevated account to bypass an ACL failure. WSL is not this installation.
 First-party licensing is confirmed MIT; third-party terms remain separate.
-This experimental beta includes the reviewed runtime composition. Archive
-decryption passed, but actual Desktop preview timed out before Plan/Apply;
-completed Windows restoration is not claimed. See [current status](PUBLICATION-STATUS.md).
+The current SDK-only candidate keeps encrypted backup and inert extraction.
+Automatic profile import, Desktop Plan/Apply, activation and physical-default
+replacement are unavailable until a supported public recovery contract exists.
+Earlier Workspace/private-integration acceptance does not validate this candidate.
+Completed Windows restoration is not claimed. See [current status](PUBLICATION-STATUS.md).
 
 ## Tools and separate Python environment
 
@@ -45,6 +47,12 @@ has the same root layout. Preserve it intact for an owner-approved Hermes plugin
 installation; do not overwrite an existing plugin or enable it during testing.
 
 ## Owner-only fixture directories
+
+New private files and directories explicitly use the current process account as
+owner, with a protected DACL granting full control only to that account and
+SYSTEM. This avoids an elevated process's default Administrators-group ownership.
+Existing objects with a different owner or broader ACL are still refused; Finix
+does not take ownership or repair them automatically.
 
 Create a **new** lab root on local NTFS. Inspect the resulting DACL, including
 inherited entries. An example for a new directory owned by your current account:
