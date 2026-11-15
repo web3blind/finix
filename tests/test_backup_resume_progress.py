@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 from finix import core
 from finix.integration import Profile
-from tests import test_backup_jobs_review as fixtures
+import test_backup_jobs_review as fixtures
 
 class ResumeProgress(unittest.TestCase):
     def test_pending_and_committed_resume_forward_real_runner_keywords(self):

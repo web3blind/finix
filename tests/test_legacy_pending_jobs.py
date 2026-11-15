@@ -12,7 +12,7 @@ from finix import core
 from finix.integration import Profile
 from finix.backup_jobs import BackupJobs, _busy
 from finix.rclone_storage import RcloneError
-from tests import test_backup_jobs_review as fixtures
+import test_backup_jobs_review as fixtures
 
 class LegacyPendingHTTP(unittest.TestCase):
     def finish_http(self, jobs, profile):

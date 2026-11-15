@@ -152,7 +152,7 @@ for i in range(5):
 
 
 class AdapterProgressTests(unittest.TestCase):
-    from tests.test_rclone_pending import PendingTests as _Fixture
+    from test_rclone_pending import PendingTests as _Fixture
     setUp = _Fixture.setUp
     adapter = _Fixture.adapter
     pending = _Fixture.pending

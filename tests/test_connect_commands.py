@@ -9,7 +9,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import tests.test_connections as fixtures
+import test_connections as fixtures
 from finix.connections import Connections
 from finix.integration import Profile
 from finix.integration import command

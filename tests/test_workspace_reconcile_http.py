@@ -8,7 +8,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
-from tests.test_workspace_reconcile import Transport, ACCOUNT_DIGEST
+from test_workspace_reconcile import Transport, ACCOUNT_DIGEST
 
 class WorkspaceHTTP(unittest.TestCase):
     def test_preintent_no_ledger_http_adopts_retained_cipher(self):

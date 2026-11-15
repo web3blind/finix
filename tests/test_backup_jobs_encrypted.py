@@ -95,7 +95,7 @@ class EncryptedBackupJobs(unittest.TestCase):
 
     def test_real_encryption_through_existing_memory_runner_ledger(self):
         from finix.rclone_storage import RcloneStorage
-        from tests.test_rclone_storage import MemoryRunner
+        from test_rclone_storage import MemoryRunner
         with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as tmp:
             base = Path(tmp)
             home = core.private_dir(base/'home')

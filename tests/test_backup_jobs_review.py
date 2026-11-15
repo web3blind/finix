@@ -29,7 +29,7 @@ class ReviewRegressions(unittest.TestCase):
     def fixture(self, root):
         from finix.integration import Profile
         from finix.rclone_storage import RcloneStorage
-        from tests.test_rclone_storage import MemoryRunner
+        from test_rclone_storage import MemoryRunner
         home = core.private_dir(root/'source')
         (home/'work').write_bytes(b'generated offline fixture'*100)
         auth = core.private_dir(root/'auth')

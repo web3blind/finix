@@ -96,7 +96,7 @@ class ConnectionTransition(unittest.TestCase):
         self.assertEqual(self.p.rclone().state,self.p.root/'rclone'/('d'*32))
 
     def test_real_age_http_transition_retention_preserves_old_owned_cipher_and_pending(self):
-        from tests.test_rclone_storage import MemoryRunner
+        from test_rclone_storage import MemoryRunner
         Storage=importlib.import_module(self.m._package+'.rclone_storage')
         self.pending.unlink()
         state=self.state();state['job']=None;self.core.atomic_json(self.p.root/'backup-jobs/state.json',state)

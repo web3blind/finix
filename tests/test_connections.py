@@ -245,7 +245,7 @@ class ConnectionsTests(unittest.TestCase):
         # only the remote Drive transport is synthetic.
         from finix import core
         from finix.workspace_drive import WorkspaceDrive
-        from tests.test_workspace_drive import FakeDrive
+        from test_workspace_drive import FakeDrive
         identity = self.base / 'recovery.key'
         recipient = core.keygen(identity)
         self.profile.recipient(self.profile.profile_id, recipient, None)
