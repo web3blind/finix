@@ -1,155 +1,110 @@
-> **Current catalog status — partial recovery only.** Automatic NEW named-profile
-> import/activation and physical-default Prepare/Apply/rollback/reopen are retired.
-> They depended on unsupported private Hermes gateway/CLI internals and source-SHA
-> pins. CLI/HTTP return `PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE` before key access;
-> Desktop displays the unavailable capability without a key picker. Old pending
-> state, journals, preimages and provenance are retained, never adopted or replayed.
-> Backup, source catalog/cloud previews and standalone inert offline extraction to
-> an empty directory remain available. This is **not completed working default recovery**.
->
-> Stock Hermes import is a **manual fallback only**, not exact transactional
-> replacement: ZIP import merges/overwrites, may auto-start a service, and may
-> restore external files. Named-profile import does not establish Finix's atomic
-> new-profile contract. Stop/status do not prove all writers quiescent. Re-enabling
-> automation requires a supported public publication/quiescence contract and new
-> review/runtime evidence. Earlier success reports below describe historical builds,
-> not current capability or consent to resume them.
+# Publication status — public-SDK experimental beta
 
-# Publication status — experimental beta
+## Current scope
 
-## Accepted development workflow, 2026-11-14
+Finix 0.1.0 provides encrypted profile backups, explicit cloud selection,
+full downloaded-object verification, native CLI/Desktop setup and opt-in
+scheduling. Google uses only the declared Hermes-owned `finix:google` provider
+with `drive.file` and the public credentialed-provider request API.
 
-This document supersedes older local-only and Windows-pending milestone prose,
-including historical status notes in the installation quickstarts. It describes
-actual development acceptance, not an independent maintainer audit, universal SDK
-compatibility or permission to bypass any runtime gate.
+The Workspace skill transport and private managed-gateway signing are removed.
+Legacy settings, journals and cloud provenance are preserved but are not silently
+migrated, adopted or replayed. Matching the same Google account does not give a
+new OAuth client access to every older object under `drive.file`.
 
-### Version and package identity
+Automatic NEW named-profile import/activation and physical-default
+Prepare/Apply/rollback/reopen are disabled. CLI/HTTP return
+`PUBLIC_RECOVERY_CONTRACT_UNAVAILABLE` before recovery-key access; Desktop shows
+the unavailable capability without a key picker. Standalone offline extraction
+to an empty directory remains available. Stock import is a manual fallback, not
+exact transactional replacement. Stop/status are not a held lease on all writers.
 
-- Finix source version: `0.1.0`, reviewed runtime build **B11**. The runtime was
-  subsequently published in source commit
-  [`d4cc0eb3adcd8f00946215c8179a0b89f2e967da`](https://github.com/web3blind/finix/commit/d4cc0eb3adcd8f00946215c8179a0b89f2e967da).
-  This documentation update does not change runtime code.
-- Hermes SDK on both hosts: `0.23.0`, source
-  `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`.
-- Tested native ZIP SHA-256:
-  `d973d4c479d4dd053cf0128d2e8713e5573357de0ada56a736c8ed485fb02b3a`.
-- Tested immutable source-map SHA-256:
-  `566c8da3106b8fd8b59531980680576c0f6ac535d80103334b8d9e476ea78698`.
-  A fresh source checkout may normalize line endings; the package digest identifies
-  the exact tested native bytes. Documentation commits are not new runtime builds.
-- Cloud transport used for these runs: **Google Drive through the explicitly
-  selected pinned Google Workspace skill bridge**, with the owning profile's grant.
-  These results must not be relabelled as `finix:google` acceptance.
+This follows the catalog review's permitted gated-path option. Re-enabling
+replacement requires a supported public contract and new implementation/review
+and runtime evidence; no private SDK bridge or core-source hash pin is retained.
 
-### Native Windows Desktop
+## Current runtime identity and real acceptance
 
-On an isolated synthetic genuine SDK default on local NTFS, the actual Desktop
-workflow completed encrypted backup and full remote ciphertext readback/hash
-verification. An explicitly selected cloud copy was downloaded/decrypted; a fresh
-sealed PREVIEW and separate one-shot Apply replaced the physical default, restarted
-its owner and reached `ready` without rollback in the final run.
+Tested runtime source:
+[`684a1e6e8694b5d66a7ee3d6b3acaae490bfd7aa`](https://github.com/web3blind/finix/commit/684a1e6e8694b5d66a7ee3d6b3acaae490bfd7aa).
+Subsequent documentation-only publication commits do not constitute new runtime
+builds. Hermes was released **v0.23.1** at
+`3b421578588243f920886e6fe79a6faa87ea026e`. This is test identity, not a runtime
+core-source compatibility hash gate.
 
-The Windows cloud archive was created and readback-verified by the earlier 0.1.0
-candidate B7, then reused unchanged for final B11 recovery (ciphertext SHA-256
-`9c24b45166699a29ddeb62262a7019f51d6849333a0bb4103a3c095be3381fda`).
-This is compatibility with that actual prior cloud copy, not a fresh B11 Windows
-backup claim. Linux, in contrast, created its new backup with B11.
+On 2026-11-15/16, an isolated Linux VM and synthetic profile completed:
 
-Verification found the original **3 conversations / 12 messages**, the memory note,
-the garden note and the original garden SQLite task rows. SQLite integrity was
-`ok`; post-backup file/conversation/database mutations were removed. The original
-garden conversation was opened in the reopened native Desktop. Current SDK
-coordination lock-file identities were retained, not replaced by archived markers.
-Earlier failed/rolled-back attempts remain historical failures, not success evidence.
+- Own Google consent and SDK-managed grant, without the Workspace skill or
+  copied legacy credentials.
+- Actual approved native plugin installation; installed runtime, manifest and
+  Desktop payload hashes matched the published source.
+- Native CLI `hermes finix check` and an actual Linux Desktop first-backup
+  action, each creating a new encrypted cloud archive with zero omissions.
+- Independent full downloads through the unchanged installed adapter. CLI copy:
+  139,750,345 bytes, SHA256
+  `a21e4d98ee7d9cea82116734b8d41fc4a711405627459c2d620a779217a30c59`.
+  Desktop copy: 139,748,145 bytes, SHA256
+  `b490657a17cfa632446c24dae26c39087cf4994e56b4dae34beb734d7f93bd81`.
+  Each matched its expected ciphertext hash and passed real age authentication
+  and full manifest validation: **19,846 files, complete=true, omitted_count=0**.
+- The actual downloaded Desktop bytes passed external offline cold-data recovery
+  into an absent canonical physical default-home on that VM. Normal SDK startup
+  and PM regeneration succeeded. All three synthetic public SessionDB exports
+  and the saved note matched; restored cron stayed disabled/paused with no next
+  run. Original home and external Finix state were then returned.
 
-### Ubuntu Linux CLI
+No candidate-media substitution or hybrid adapter was used in these final native
+runs. The earlier component experiment is separately documented in
+[TEST-SDK.md](TEST-SDK.md) and is not relabelled as native evidence.
 
-The ordinary registered CLI, under an unprivileged Linux account and normal OS
-home, completed a new encrypted cloud backup with zero omissions, complete remote
-readback and SHA-256 verification. After deliberate data mutations, a nonlocal cloud
-candidate was explicitly selected. Download/decryption, fresh PREVIEW, separate
-Apply and physical-default restart reached `ready`.
+The cold test used external disposable-VM exclusivity and an existing SDK/runtime
+outside the restored home. It does not prove automatic/live replacement,
+application-owned writer quiescence, fresh-machine restore or production recovery.
+No private recovery key was loaded into the backup UI and no schedule was enabled.
+The registered public key remained locked. The paid VM was subsequently terminated
+and provider billing reconciliation confirmed completion. Private evidence,
+profiles, grants and recovery material are not published in this repository.
 
-Verification found **6 conversations / 12 messages**, the saved note, the original
-Linux SQLite proof, and the garden note/database rows. Post-backup changes were
-removed; SQLite integrity was `ok`. Stock SDK stored-session listing, history and
-resume succeeded. No AI prompt/inference was submitted.
+## Automated and independent checks
 
-### Evidence and test boundaries
+[Source CI run 43751550235](https://github.com/web3blind/finix/actions/runs/43751550235)
+passed all four Linux/Windows focused and released-SDK validation jobs. The Linux
+SDK lane executed eight history/Drive/backup-progress files: **62 passed, zero
+failed**. Other focused gates cover public boundaries, locale defaults, real age,
+PM aliases, native Windows owner/DACL behavior and Desktop component contracts.
+See the workflow for exact files and explicit skips.
 
-The development operator retained exact-job status, package/source identities,
-cloud-object bindings, full readback hashes and data-verifier results outside the
-public repository. Private evidence/profiles/grants are not included here, and
-maintainers have not independently rerun these live workflows by virtue of this
-text. In particular, Linux success is not substituted for native Windows evidence.
+Independent source-only Claude Opus 5.5 reviews found no remaining substantive
+safety/correctness blocker in the runtime delta and no findings in the final
+fixture-import/CI delta. This is not maintainer approval, a whole-plugin security
+certification or a substitute for execution.
 
-Builds 11 and 12 were byte-identical. Affected component regressions on each
-platform reported **30 passed / 1 platform skip / 0 failures or errors**; a real
-Windows base-image/venv-launcher regression and installed controller-freezer
-admission also passed. Isolated wheel checks on Windows/Linux verified 49 namespace
-Python files, 79 embedded native members, `pip check` and CLI help. These narrow
-checks are not a new full-suite, all-platform or optional HTTP-import claim.
+## Still unverified or unavailable
 
-An 84-second English demonstration was assembled from actual post-run Windows
-screens and privacy-filtered Linux CLI recordings, retaining all seven original
-narration paragraphs. Unfilmed Windows start/confirmation/restart actions were not
-staged; verified notes/SQLite results are supported by acceptance checks, not
-invented terminal output. A video is not a replacement for these evidence boundaries.
+- Automatic default/new-profile restoration is intentionally unavailable.
+- Current native Windows GUI/cloud runtime acceptance has not been rerun. The
+  successful Windows CI jobs are not a claim of live Windows Desktop acceptance.
+- The unrestricted historical suite is **not green**. Diagnostic execution found
+  removed-private-API dependencies, required owned-fixture scope setup not
+  forwarded by the SDK's clean environment, and remaining assertion/fixture
+  failures. Sibling helper namespace collisions were repaired, but the rest is
+  not hidden behind blanket skips, import-error suppression or passing xfails.
+- Full Google revocation/account-change/cancellation matrices and every frontend,
+  optional backend, SDK version or screen-reader combination are not certified.
+- The Desktop success receipt was verified independently; unknown progress
+  counters and the fallback phase label are not claimed as complete UX acceptance.
 
-## Authorization and outstanding SDK-only requirement
+The retired B11/SDK 0.23.0 Workspace-based Windows/Linux replacement results are
+preserved only in [the historical record](history/acceptance-20261114.md). They
+must not be presented as current SDK-only or automatic-recovery acceptance.
 
-The default independent Google path already declares Hermes-managed `finix:google`
-with `drive.file` and uses public credentialed-provider requests. It is **partially
-implemented, not absent**, but the complete authorization lifecycle and the same
-Windows/Linux cloud/default recovery workflow still need acceptance with the
-Workspace skill absent.
+## Disclosure
 
-The optional Workspace bridge uses the external skill's pinned
-`build_service('drive', 'v3')` helper. It is **not a stable Hermes SDK provider API
-and does not satisfy the SDK-only review requirement**. Retaining this working
-compatibility route is not a maintainer-approved exception. The skill owns loading
-and refreshing its grant; Finix does not copy its token files, silently start broad
-Workspace consent or fall back to another profile/account. Some skill releases
-request broader scopes than `drive.file`; inspect the actual consent screen.
-
-Before replacing the bridge, validate client provisioning/consent, accessible
-Desktop/CLI and remote-browser onboarding, cancellation/callback ownership, offline
-refresh, expiry/revocation/reauthorization/disconnect, account/profile isolation and
-normal dependency-manager installation. Google client dependencies are currently
-unconditional. Migration must explicitly address object access and separate pending
-journals: the same Google account alone does not authorize another OAuth client to
-access old objects under `drive.file` or adopt their provenance.
-See [the compatibility contract](google-workspace-skill.md).
-
-## Remaining restrictions and risk disclosure
-
-- New-profile import/activation still refuses with
-  `HOST_IMPORT_CONTRACT_UNSUPPORTED`. The accepted physical-default replacement
-  is a separate operation, not proof of safe new-profile publication.
-- Active shared autoruns, supervising owners and sibling-serving multiplexers are
-  unsupported by default Apply. Ownership, no-follow/ACL checks, CURRENT source
-  admission, SQLite-family fences and root/plan-bound explicit consent remain.
-- Preparation and Apply are distinct. Interrupted legacy operations remain blocked;
-  never discard journals/locks or replay Apply to repair a lost status indicator.
-- After successful READY, a deliberately separate gateway stop/restart changed the
-  owner. The saved Desktop maintenance hint then required manual reconciliation.
-  Restored data and native conversation access were verified, but fully seamless
-  historical status and a new maintenance intent after arbitrary owner changes are
-  not claimed. No hint/journal rewrite or old Apply replay was used.
-- The README's cooperative same-OS-user/shared-root condition remains; this is not
-  atomic defense against hostile concurrent target replacement, a whole-plugin
-  security certification, all-SDK support, or AI-turn-readiness verification.
-
-Finix reads selected profile content outside its plugin directory, creates encrypted
-archives and private staging, and can replace profile data through admitted explicit
-maintenance. Backup content may include configuration and credentials: encryption
-is not permission to activate imported grants, executable plugins or autoruns.
-External age/age-keygen processes are required; configured cloud helpers make
-third-party network requests. Scheduling and recovery can run in the background.
-Keep independent backups and private recovery keys outside the backup host.
-No SDK, password manager, demo profiles, private evidence or recovery material is
-included in this source. This publication does not enable telemetry.
-
-Public author: [Denis Skripnik](https://github.com/denis-skripnik),
-[X](https://x.com/denis_skripnik), [blinddev.xyz](https://blinddev.xyz).
+Finix reads the selected profile and explicitly admitted external sources outside
+its plugin directory. Backups can contain conversations, configuration and
+credentials; encryption precedes cloud upload. External age/age-keygen processes
+are required; configured storage helpers make third-party network requests.
+Schedules and backup workers can run in the background. Keep private keys off the
+backup host and keep independent backups. Extraction is not consent to activate
+imported credentials, plugins or autoruns. No universal SDK compatibility,
+hostile-concurrent-writer defense or telemetry is claimed or introduced.

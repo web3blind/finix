@@ -44,7 +44,9 @@ skill transport, not the supported `finix:google` provider. Mixed modules also
 contain valid catalog, inert history and SQLite/custody invariants; they must
 not be excluded solely by their filename. No blanket recovery/workspace skip,
 import-error suppression or passing xfail policy has been added. Full legacy
-collection and replacement transaction coverage remain unverified.
+acceptance is not green: diagnostic execution also encountered missing declared
+owned-fixture scope setup under SDK `env -i` and remaining assertion/fixture
+failures. Replacement transaction coverage remains unavailable.
 
 ## Disposable-VM public-SDK verification
 
@@ -84,12 +86,27 @@ PM-interpreter-named file and paused an originally enabled future cron job witho
 mutating its source. The installed older reader accepted the candidate-produced
 cloud copy as well. Existing journals and inactive recovery state remain inert.
 
-Actual Linux Desktop loaded the approved payload in English, preserved the
-registered-key lock, verified/applied its own Google connection, and showed the
-automatic-default capability as unavailable without an identity picker. Native
-Windows GUI, final-candidate native CLI/UI backup, unrestricted legacy collection,
-and automatic recovery remain separate, uncompleted gates. A source-only,
-tool-less Claude Opus 5.5 review found no remaining substantive safety/correctness
-blocker after actual-layout evidence and regression fixes; it does not replace
-those acceptance gates. The chronological operator record and credential-free
-runtime reports are retained privately; the workflow declares the public CI gates.
+Actual Linux Desktop initially loaded the approved older payload in English,
+preserved the registered-key lock, verified/applied its own Google connection,
+and showed automatic-default recovery as unavailable without an identity picker.
+That observation did not establish final-candidate backup acceptance.
+
+### Final approved native run, 2026-11-15/16
+
+After explicit installation approval, the unchanged published `684a1e6` runtime
+passed real native CLI and Linux Desktop backup. Each created and uploaded its
+own new copy; independent downloads through the installed adapter matched SHA256
+and passed age/full-manifest validation: 19,846 files each, complete=true and
+omitted_count=0. No candidate media or hybrid runner was substituted. The actual
+Desktop download then passed the same externally orchestrated cold-data test:
+canonical empty physical home, normal SDK startup/PM regeneration, three complete
+SessionDB exports and a note matching, cron paused, originals returned.
+
+The paid VM was terminated after evidence preservation. SDK/runtime reuse and
+external exclusivity remain limits; this is not automatic recovery or a fresh
+machine. Native Windows GUI, full legacy-suite acceptance and automatic
+replacement remain uncompleted gates. The final source CI passed all four jobs;
+its Linux SDK lane executed eight history/protocol/backup-progress files with
+62 passed and zero failed. Source-only tool-less Claude Opus 5.5 review is separate
+from this execution and from maintainer approval. See
+[publication status](PUBLICATION-STATUS.md) for identities and exact hashes.
